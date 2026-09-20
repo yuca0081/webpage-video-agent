@@ -1,0 +1,523 @@
+<template>
+  <style>
+/* system font declarations (satisfy lint; resolved locally by the OS) */
+@font-face{font-family:"KaiTi";src:local("KaiTi"),local("楷体"),local("SimKai");}
+@font-face{font-family:"STKaiti";src:local("STKaiti"),local("华文楷体");}
+@font-face{font-family:"Microsoft YaHei";src:local("Microsoft YaHei"),local("微软雅黑");}
+
+    @font-face {
+      font-family: "CourierPrime";
+      src: url("assets/fonts/courier-prime-700.woff2") format("woff2");
+      font-weight: 700;
+      font-display: block;
+    }
+
+    #root {
+      position: relative;
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      background: transparent;
+      container-type: size;
+      font-family: "KaiTi", "STKaiti", "Microsoft YaHei", serif;
+      color: #2d2d2d;
+    }
+
+    /* ---- full-bleed paper ground (lowest clip, never on #root) ---- */
+    .w08-bg {
+      position: absolute;
+      inset: 0;
+      background: #f5f0e6;
+    }
+    .w08-margin {
+      position: absolute;
+      left: 96px;
+      top: 30px;
+      width: 3px;
+      height: 830px;
+      background: #f7c8d4;
+      opacity: 0.5;
+      border-radius: 2px;
+    }
+
+    /* ---- ornament layer (own clip -> parallax vs content layer) ---- */
+    .w08-ornclip,
+    .w08-contentclip {
+      position: absolute;
+      inset: 0;
+    }
+    #w08-orn,
+    #w08-content {
+      position: absolute;
+      inset: 0;
+      transform-origin: 50% 45%;
+    }
+    .w08-orn {
+      position: absolute;
+    }
+    .w08-orn path,
+    .w08-orn circle,
+    .w08-orn ellipse {
+      fill: none;
+      stroke: #2d2d2d;
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    /* ---- eyebrow slogan (Scene 1) ---- */
+    .w08-eyebrow {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 116px;
+      text-align: center;
+    }
+    .w08-eyebrow-in {
+      position: relative;
+      display: inline-block;
+      font-size: 82px;
+      line-height: 1.15;
+      letter-spacing: 0.06em;
+      color: #2d2d2d;
+      -webkit-text-stroke: 1.8px #2d2d2d;
+    }
+    .w08-squiggle {
+      position: absolute;
+      left: -8px;
+      right: -8px;
+      bottom: -12px;
+      width: calc(100% + 16px);
+      height: 30px;
+      overflow: visible;
+      display: block;
+    }
+
+    /* ---- hero slogan lines (Scenes 2-3) ---- */
+    .w08-slogan {
+      position: absolute;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 118px;
+      line-height: 1.2;
+      letter-spacing: 0.05em;
+      color: #2d2d2d;
+      -webkit-text-stroke: 2.5px #2d2d2d;
+    }
+    #w08-l1 {
+      top: 300px;
+    }
+    #w08-l2 {
+      top: 474px;
+    }
+    .w08-g {
+      display: inline-block;
+      will-change: transform, opacity, filter;
+    }
+
+    /* ---- doodles ---- */
+    .w08-doodle {
+      position: absolute;
+    }
+    .w08-doodle path,
+    .w08-doodle circle {
+      fill: none;
+      stroke: #2d2d2d;
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .w08-bk-stitch {
+      stroke: #f8635f !important;
+      stroke-width: 4 !important;
+    }
+    #w08-pzwrap {
+      position: absolute;
+      left: 1500px;
+      top: 372px;
+      width: 210px;
+      height: 210px;
+      will-change: transform, opacity;
+    }
+    #w08-pzwrap svg {
+      overflow: visible;
+      display: block;
+    }
+
+    /* ---- Terminal-Bench scorecard + compat pills (Scene 4) ---- */
+    .w08-pill {
+      position: absolute;
+      height: 50px;
+      line-height: 44px;
+      padding: 0 18px;
+      border: 3px solid #2d2d2d;
+      border-radius: 50px;
+      box-shadow: 4px 4px 0 #2d2d2d;
+      font-family: "CourierPrime", "Courier New", monospace;
+      font-weight: 700;
+      font-size: 27px;
+      color: #2d2d2d;
+      white-space: nowrap;
+      will-change: transform, opacity;
+    }
+    #w08-pill1 {
+      left: 1500px;
+      top: 590px;
+      background: #a8e6cf;
+    }
+    #w08-pill2 {
+      left: 1528px;
+      top: 646px;
+      background: #a8d8f0;
+    }
+    #w08-note {
+      position: absolute;
+      left: 1500px;
+      top: 700px;
+      width: 345px;
+      height: 164px;
+      background: #fde68a;
+      border: 3px solid #2d2d2d;
+      border-radius: 10px;
+      box-shadow: 6px 6px 0 #2d2d2d;
+      padding: 14px 16px;
+      will-change: transform, opacity;
+    }
+    .w08-tape {
+      position: absolute;
+      left: 50%;
+      top: -13px;
+      width: 92px;
+      height: 26px;
+      margin-left: -46px;
+      background: #7ecdc0;
+      opacity: 0.9;
+      border: 2px solid #2d2d2d;
+      border-radius: 4px;
+      transform: rotate(3deg);
+    }
+    .w08-tb-label {
+      font-family: "CourierPrime", "Courier New", monospace;
+      font-weight: 700;
+      font-size: 29px;
+      letter-spacing: 0.01em;
+      color: #2d2d2d;
+      white-space: nowrap;
+    }
+    .w08-bars {
+      display: flex;
+      align-items: flex-end;
+      gap: 16px;
+      height: 78px;
+      margin-top: 8px;
+      padding: 0 2px;
+      border-bottom: 3px solid #2d2d2d;
+    }
+    .w08-bar {
+      width: 42px;
+      background: #a8d8f0;
+      border: 2.5px solid #2d2d2d;
+      border-radius: 6px 6px 2px 2px;
+      transform-origin: bottom center;
+      will-change: transform;
+    }
+  </style>
+
+  <div
+    id="root"
+    data-composition-id="08-why"
+    data-start="0"
+    data-duration="14.516"
+    data-width="1920"
+    data-height="1080"
+  >
+    <!-- track 0: paper ground -->
+    <div class="clip w08-bg" data-start="0" data-duration="14.516" data-track-index="0">
+      <div class="w08-margin"></div>
+    </div>
+
+    <!-- track 1: ornament wreath (hand-drawn, quiet) -->
+    <div class="clip w08-ornclip" data-start="0" data-duration="14.516" data-track-index="1">
+      <div id="w08-orn">
+        <svg class="w08-orn" id="w08-o-daisy" style="left: 110px; top: 90px" width="150" height="150" viewBox="0 0 150 150">
+          <g>
+            <ellipse cx="75" cy="38" rx="10" ry="24" />
+            <ellipse cx="75" cy="38" rx="10" ry="24" transform="rotate(45 75 75)" />
+            <ellipse cx="75" cy="38" rx="10" ry="24" transform="rotate(90 75 75)" />
+            <ellipse cx="75" cy="38" rx="10" ry="24" transform="rotate(135 75 75)" />
+            <ellipse cx="75" cy="38" rx="10" ry="24" transform="rotate(180 75 75)" />
+            <ellipse cx="75" cy="38" rx="10" ry="24" transform="rotate(225 75 75)" />
+            <ellipse cx="75" cy="38" rx="10" ry="24" transform="rotate(270 75 75)" />
+            <ellipse cx="75" cy="38" rx="10" ry="24" transform="rotate(315 75 75)" />
+            <circle cx="75" cy="75" r="13" style="fill: #fde68a" />
+          </g>
+        </svg>
+        <svg class="w08-orn" id="w08-o-sun" style="left: 1745px; top: 12px" width="160" height="160" viewBox="0 0 160 160">
+          <g>
+            <circle cx="80" cy="80" r="34" />
+            <line x1="80" y1="10" x2="80" y2="28" />
+            <line x1="80" y1="132" x2="80" y2="150" />
+            <line x1="10" y1="80" x2="28" y2="80" />
+            <line x1="132" y1="80" x2="150" y2="80" />
+            <line x1="30" y1="30" x2="43" y2="43" />
+            <line x1="117" y1="117" x2="130" y2="130" />
+            <line x1="130" y1="30" x2="117" y2="43" />
+            <line x1="43" y1="117" x2="30" y2="130" />
+          </g>
+        </svg>
+        <svg class="w08-orn" id="w08-o-star" style="left: 108px; top: 690px" width="130" height="130" viewBox="0 0 130 130">
+          <path
+            d="M65 8 L79 46 L120 48 L88 72 L100 112 L65 88 L30 112 L42 72 L10 48 L51 46 Z"
+          />
+        </svg>
+        <svg class="w08-orn" id="w08-o-cloud" style="left: 235px; top: 762px" width="150" height="90" viewBox="0 0 150 90">
+          <path
+            d="M20 72 Q6 46 32 38 Q38 12 66 20 Q84 2 102 20 Q128 14 130 42 Q144 60 118 70 Z"
+          />
+        </svg>
+        <svg class="w08-orn" id="w08-o-sparkle" style="left: 588px; top: 148px" width="56" height="56" viewBox="0 0 56 56">
+          <path d="M28 4 L33 23 L52 28 L33 33 L28 52 L23 33 L4 28 L23 23 Z" style="stroke: #f8635f" />
+        </svg>
+      </div>
+    </div>
+
+    <!-- track 2: content -->
+    <div class="clip w08-contentclip" data-start="0" data-duration="14.516" data-track-index="2">
+      <div id="w08-content">
+        <!-- Scene 1: 小，不是抠门 -->
+        <div class="w08-eyebrow" id="w08-eyebrow">
+          <span class="w08-eyebrow-in">
+            小，不是抠门
+            <svg class="w08-squiggle" viewBox="0 0 560 26" preserveAspectRatio="none">
+              <path
+                id="w08-squiggle"
+                d="M4,16 Q44,4 84,15 Q124,26 164,15 Q204,4 244,15 Q284,26 324,15 Q364,4 404,15 Q444,26 484,15 Q514,6 552,14"
+                fill="none"
+                stroke="#f8635f"
+                stroke-width="5"
+                stroke-linecap="round"
+              />
+            </svg>
+          </span>
+        </div>
+
+        <!-- Scene 2 / 3: the paired slogans -->
+        <div class="w08-slogan" id="w08-l1">
+          <span class="w08-g">读</span><span class="w08-g">得</span><span class="w08-g">完</span><span class="w08-g">，</span><span class="w08-g">才</span><span class="w08-g">敢</span><span class="w08-g">信</span>
+        </div>
+        <div class="w08-slogan" id="w08-l2">
+          <span class="w08-g">拆</span><span class="w08-g">得</span><span class="w08-g">开</span><span class="w08-g">，</span><span class="w08-g">就</span><span class="w08-g">能</span><span class="w08-g">改</span>
+        </div>
+
+        <!-- Scene 2: thread-bound book doodle, draw-on -->
+        <svg class="w08-doodle" style="left: 320px; top: 300px" width="190" height="235" viewBox="0 0 190 235">
+          <rect id="w08-bk-cover" x="52" y="20" width="92" height="195" rx="10" />
+          <path id="w08-bk-spine" d="M66,24 L66,211" />
+          <rect id="w08-bk-label" x="82" y="64" width="44" height="62" rx="6" style="stroke-width: 2.2" />
+          <path id="w08-bk-l1" d="M96,80 L96,112" style="stroke-width: 2.2" />
+          <path id="w08-bk-l2" d="M110,80 L110,112" style="stroke-width: 2.2" />
+          <path id="w08-bk-s1" class="w08-bk-stitch" d="M57,55 L76,55" />
+          <path id="w08-bk-s2" class="w08-bk-stitch" d="M57,95 L76,95" />
+          <path id="w08-bk-s3" class="w08-bk-stitch" d="M57,135 L76,135" />
+          <path id="w08-bk-s4" class="w08-bk-stitch" d="M57,175 L76,175" />
+        </svg>
+
+        <!-- Scene 3: four-piece puzzle doodle -->
+        <div id="w08-pzwrap">
+          <svg width="210" height="210" viewBox="0 0 210 210">
+            <g class="w08-pzc">
+              <rect x="6" y="6" width="97" height="97" rx="16" style="fill: #7ecdc0" />
+              <circle cx="103" cy="54" r="13" style="fill: #7ecdc0" />
+            </g>
+            <g class="w08-pzc">
+              <rect x="112" y="6" width="97" height="97" rx="16" style="fill: #fde68a" />
+              <circle cx="160" cy="109" r="13" style="fill: #fde68a" />
+            </g>
+            <g class="w08-pzc">
+              <rect x="6" y="112" width="97" height="97" rx="16" style="fill: #a8d8f0" />
+              <circle cx="54" cy="109" r="13" style="fill: #a8d8f0" />
+            </g>
+            <g class="w08-pzc">
+              <rect x="112" y="112" width="97" height="97" rx="16" style="fill: #a8e6cf" />
+              <circle cx="109" cy="160" r="13" style="fill: #a8e6cf" />
+            </g>
+          </svg>
+        </div>
+
+        <!-- Scene 4: compat pills + Terminal-Bench scorecard -->
+        <div class="w08-pill" id="w08-pill1">Claude Code</div>
+        <div class="w08-pill" id="w08-pill2">Codex</div>
+        <div id="w08-note">
+          <div class="w08-tape"></div>
+          <div class="w08-tb-label" id="w08-tb-label">Terminal-Bench 2.0</div>
+          <div class="w08-bars">
+            <div class="w08-bar" style="height: 26px"></div>
+            <div class="w08-bar" style="height: 42px"></div>
+            <div class="w08-bar" style="height: 34px"></div>
+            <div class="w08-bar" style="height: 54px"></div>
+            <div class="w08-bar" style="height: 76px; background: #f8635f"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script>
+    (function () {
+      var DUR = 14.016;
+      var tl = gsap.timeline({ paused: true });
+
+      /* ---- macro camera: slow settle push underneath, still by the final read ---- */
+      tl.fromTo(
+        "#w08-content",
+        { scale: 1 },
+        { scale: 1.03, duration: 12.4, ease: "sine.inOut" },
+        0
+      );
+      tl.fromTo(
+        "#w08-orn",
+        { scale: 1 },
+        { scale: 1.05, duration: 12.4, ease: "sine.inOut" },
+        0
+      );
+
+      /* ---- ornament wreath fades in (paper settles) ---- */
+      var ORNS = [
+        ["#w08-o-daisy", 0.25, 0.55],
+        ["#w08-o-sun", 0.42, 0.5],
+        ["#w08-o-star", 0.6, 0.5],
+        ["#w08-o-cloud", 0.78, 0.45],
+        ["#w08-o-sparkle", 0.95, 0.85],
+      ];
+      ORNS.forEach(function (o) {
+        tl.fromTo(
+          o[0],
+          { opacity: 0 },
+          { opacity: o[2], duration: 0.5, ease: "power2.out" },
+          o[1]
+        );
+      });
+
+      /* ---- Scene 1 (0.0-2.8): 小，不是抠门 — pop lands, coral squiggle follows ---- */
+      tl.fromTo(
+        "#w08-eyebrow",
+        { opacity: 0, scale: 0.62, y: -16, rotation: -3 },
+        { opacity: 1, scale: 1, y: 0, rotation: -1.2, duration: 0.5, ease: "power3.out" },
+        0.12
+      );
+
+      var squiggle = document.querySelector("#w08-squiggle");
+      var sqLen = squiggle.getTotalLength();
+      gsap.set(squiggle, { strokeDasharray: sqLen + " " + sqLen, strokeDashoffset: sqLen });
+      tl.to(squiggle, { strokeDashoffset: 0, duration: 0.75, ease: "power2.out" }, 1.0);
+
+      /* ---- Scene 2 (2.8-6.5): 读得完，才敢信 — per-glyph blur-rise reveal ---- */
+      gsap.utils.toArray("#w08-l1 .w08-g").forEach(function (el, i) {
+        tl.fromTo(
+          el,
+          { opacity: 0, y: 30, filter: "blur(8px)" },
+          { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.45, ease: "power3.out" },
+          2.85 + i * 0.1
+        );
+      });
+
+      /* book doodle: thread-bound 线装书 draws on, stroke by stroke */
+      var BOOK = [
+        "#w08-bk-cover",
+        "#w08-bk-spine",
+        "#w08-bk-label",
+        "#w08-bk-l1",
+        "#w08-bk-l2",
+        "#w08-bk-s1",
+        "#w08-bk-s2",
+        "#w08-bk-s3",
+        "#w08-bk-s4",
+      ];
+      BOOK.forEach(function (sel, i) {
+        var p = document.querySelector(sel);
+        var len = p.getTotalLength();
+        gsap.set(p, { strokeDasharray: len + " " + len, strokeDashoffset: len });
+        tl.to(p, { strokeDashoffset: 0, duration: 0.3, ease: "power2.out" }, 4.35 + i * 0.16);
+      });
+
+      /* ---- Scene 3 (6.5-9.5): 拆得开，就能改 — distinct entrance: side snap ---- */
+      gsap.utils.toArray("#w08-l2 .w08-g").forEach(function (el, i) {
+        tl.fromTo(
+          el,
+          { opacity: 0, x: -44, rotation: -5 },
+          { opacity: 1, x: 0, rotation: 0, duration: 0.5, ease: "expo.out" },
+          6.55 + i * 0.1
+        );
+      });
+
+      /* puzzle: pops assembled, four pieces burst apart, snap back once */
+      tl.fromTo(
+        "#w08-pzwrap",
+        { scale: 0, opacity: 0, rotation: 5 },
+        { scale: 1, opacity: 1, rotation: 0, duration: 0.45, ease: "power3.out" },
+        7.2
+      );
+      var PX = [-36, 36, -32, 34];
+      var PY = [-27, -27, 31, 29];
+      var PR = [-8, 7, 6, -7];
+      tl.fromTo(
+        ".w08-pzc",
+        { x: 0, y: 0, rotation: 0, transformOrigin: "50% 50%" },
+        {
+          x: function (i) { return PX[i]; },
+          y: function (i) { return PY[i]; },
+          rotation: function (i) { return PR[i]; },
+          transformOrigin: "50% 50%",
+          duration: 0.5,
+          ease: "power2.out",
+          stagger: 0.06,
+        },
+        7.8
+      );
+      tl.to(
+        ".w08-pzc",
+        { x: 0, y: 0, rotation: 0, duration: 0.34, ease: "power2.in", stagger: { each: 0.04, from: "end" } },
+        8.6
+      );
+
+      /* ---- Scene 4 (9.5-14.02): scorecard slams on, bars grow, pills pop, then still ---- */
+      tl.fromTo(
+        "#w08-note",
+        { opacity: 0, scale: 1.45, rotation: -18 },
+        { opacity: 1, scale: 1, rotation: -3, duration: 0.42, ease: "power4.out" },
+        9.55
+      );
+      tl.fromTo(
+        "#w08-tb-label",
+        { opacity: 0, y: 10 },
+        { opacity: 1, y: 0, duration: 0.3, ease: "power2.out" },
+        10.05
+      );
+      tl.fromTo(
+        ".w08-bar",
+        { scaleY: 0 },
+        { scaleY: 1, duration: 0.55, ease: "power3.out", stagger: 0.08 },
+        10.25
+      );
+      tl.fromTo(
+        "#w08-pill1",
+        { scale: 0, opacity: 0, rotation: 9 },
+        { scale: 1, opacity: 1, rotation: -1.5, duration: 0.45, ease: "back.out(1.6)" },
+        11.6
+      );
+      tl.fromTo(
+        "#w08-pill2",
+        { scale: 0, opacity: 0, rotation: -9 },
+        { scale: 1, opacity: 1, rotation: 1.5, duration: 0.45, ease: "back.out(1.6)" },
+        11.85
+      );
+
+      /* final beat holds — 全场静止读; no exit (root transition owns it) */
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["08-why"] = tl;
+    })();
+  </script>
+</template>

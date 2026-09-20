@@ -1,0 +1,1255 @@
+<template>
+  <div id="root" data-composition-id="04-parts" data-width="1920" data-height="1080" data-duration="18.591">
+    <!-- Frame 4 — 四个零件 · blueprint grid-card-assemble (staggered cascade, each card on its VO point)
+         Scene 1 0.0–2.3   title per-word + faint dashed 2×2 slots
+         Scene 2 2.3–5.2   card1 pi-ai (turquoise) paste + mono name + duty + vendor dots
+         Scene 3 5.2–8.1   card2 pi-agent-core (pink) paste + loop doodle draw-on
+         Scene 4 8.1–11.1  card3 pi-tui (butter) paste + terminal doodle + cursor
+         Scene 5 11.1–14.0 card4 pi-coding-agent (peach) paste + 3 wobble arrows converging in
+         Scene 6 14.0–end  coral count-up 「4」(counting-dynamic-scale) + one synced card beat, still read -->
+
+    <!-- full-bleed workbench paper (ground lives on a clip, never on #root) -->
+    <div class="clip p04-bg" data-start="0" data-duration="18.591" data-track-index="0"></div>
+
+    <div class="clip p04-stage" data-start="0" data-duration="18.591" data-track-index="1">
+      <!-- hand-drawn ornament wreath (quiet, corners) -->
+      <div class="p04-orn" id="p04-orn-star" style="left: 96px; top: 96px; width: 96px; height: 96px">
+        <svg viewBox="0 0 96 96">
+          <path d="M 48 10 L 57 36 L 84 37 L 62 53 L 70 80 L 48 64 L 26 80 L 34 53 L 12 37 L 39 36 Z"></path>
+        </svg>
+      </div>
+      <div class="p04-orn" style="left: 152px; top: 750px; width: 112px; height: 112px">
+        <svg id="p04-daisy" viewBox="0 0 112 112"></svg>
+      </div>
+      <div class="p04-orn" style="left: 1738px; top: 446px; width: 130px; height: 130px">
+        <svg id="p04-sun" viewBox="0 0 130 130"></svg>
+      </div>
+      <div class="p04-orn" id="p04-orn-spark" style="left: 1732px; top: 788px; width: 72px; height: 72px">
+        <svg viewBox="0 0 70 70">
+          <path d="M 35 6 L 41 25 L 61 26 L 45 38 L 51 58 L 35 46 L 19 58 L 25 38 L 9 26 L 29 25 Z"></path>
+        </svg>
+      </div>
+
+      <!-- Scene 1 — top headline, per-word reveal -->
+      <div class="p04-title">
+        <span class="p04-tw">Pi</span><span class="p04-tw">是</span><span class="p04-tw">搭出来</span><span class="p04-tw">的</span>
+      </div>
+
+      <!-- Scene 1 — faint dashed slot placeholders -->
+      <div class="p04-slot" id="p04-slot-1" style="left: 378px; top: 246px; width: 548px; height: 258px">
+        <span class="p04-slotnum">01</span>
+      </div>
+      <div class="p04-slot" id="p04-slot-2" style="left: 1034px; top: 246px; width: 548px; height: 258px">
+        <span class="p04-slotnum">02</span>
+      </div>
+      <div class="p04-slot" id="p04-slot-3" style="left: 378px; top: 572px; width: 548px; height: 258px">
+        <span class="p04-slotnum">03</span>
+      </div>
+      <div class="p04-slot" id="p04-slot-4" style="left: 1034px; top: 572px; width: 548px; height: 258px">
+        <span class="p04-slotnum">04</span>
+      </div>
+
+      <!-- Scene 2 — card 1 · pi-ai (turquoise face) -->
+      <div class="hw-box p04-card" id="p04-card-1" style="left: 372px; top: 240px; width: 560px; height: 270px">
+        <div class="hw-bx-deform">
+          <div class="hw-bx-boil">
+            <svg class="p04-boxsvg" viewBox="0 0 560 270"><path class="p04-boxpath"></path></svg>
+            <div class="p04-marker" style="background: #f8635f">1</div>
+            <div class="p04-inner">
+              <div class="p04-name">pi-ai</div>
+              <div class="p04-duty">一个接口接通所有大模型</div>
+              <div class="p04-visual">
+                <div class="p04-vendors">
+                  <div class="p04-vchip"><span class="p04-vdot" style="background: #f8635f"></span><span class="p04-vlabel">OpenAI</span></div>
+                  <div class="p04-vchip"><span class="p04-vdot" style="background: #a8e6cf"></span><span class="p04-vlabel">Anthropic</span></div>
+                  <div class="p04-vchip"><span class="p04-vdot" style="background: #a8d8f0"></span><span class="p04-vlabel">Google</span></div>
+                  <div class="p04-vchip"><span class="p04-vdot" style="background: #d4a5e8"></span><span class="p04-vlabel">…</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene 3 — card 2 · pi-agent-core (pink face) -->
+      <div class="hw-box p04-card" id="p04-card-2" style="left: 1028px; top: 240px; width: 560px; height: 270px">
+        <div class="hw-bx-deform">
+          <div class="hw-bx-boil">
+            <svg class="p04-boxsvg" viewBox="0 0 560 270"><path class="p04-boxpath"></path></svg>
+            <div class="p04-marker" style="background: #a8e6cf">2</div>
+            <div class="p04-inner">
+              <div class="p04-name">pi-agent-core</div>
+              <div class="p04-duty">包住 agent 循环</div>
+              <div class="p04-visual">
+                <svg class="p04-doodle" id="p04-loop" width="200" height="84" viewBox="0 0 200 84"><path></path></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene 4 — card 3 · pi-tui (butter face) -->
+      <div class="hw-box p04-card" id="p04-card-3" style="left: 372px; top: 566px; width: 560px; height: 270px">
+        <div class="hw-bx-deform">
+          <div class="hw-bx-boil">
+            <svg class="p04-boxsvg" viewBox="0 0 560 270"><path class="p04-boxpath"></path></svg>
+            <div class="p04-marker" style="background: #a8d8f0">3</div>
+            <div class="p04-inner">
+              <div class="p04-name">pi-tui</div>
+              <div class="p04-duty">画出终端界面</div>
+              <div class="p04-visual">
+                <svg class="p04-doodle p04-term" width="232" height="80" viewBox="0 0 232 80">
+                  <path id="p04-term-rect"></path>
+                  <path id="p04-term-div" d="M 7 27 C 70 24, 160 30, 225 26"></path>
+                  <circle id="p04-td1" cx="20" cy="14" r="5.5" fill="#f8635f"></circle>
+                  <circle id="p04-td2" cx="36" cy="14" r="5.5" fill="#fde68a"></circle>
+                  <circle id="p04-td3" cx="52" cy="14" r="5.5" fill="#a8e6cf"></circle>
+                  <text id="p04-tdollar" x="16" y="63">$</text>
+                  <rect id="p04-tcur" x="44" y="40" width="17" height="26" rx="3" fill="#2d2d2d"></rect>
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene 5 — card 4 · pi-coding-agent (peach face) -->
+      <div class="hw-box p04-card" id="p04-card-4" style="left: 1028px; top: 566px; width: 560px; height: 270px">
+        <div class="hw-bx-deform">
+          <div class="hw-bx-boil">
+            <svg class="p04-boxsvg" viewBox="0 0 560 270"><path class="p04-boxpath"></path></svg>
+            <div class="p04-marker" style="background: #d4a5e8">4</div>
+            <div class="p04-inner">
+              <div class="p04-name">pi-coding-agent</div>
+              <div class="p04-duty">把它们接成命令行工具</div>
+              <div class="p04-visual"><div class="p04-pichip" id="p04-pichip">$ pi</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene 5 — wobble arrows: cards 1/2/3 converge into card 4 -->
+      <div class="p04-arrwrap" style="left: 869px; top: 460px; width: 230px; height: 130px; transform: rotate(47deg)">
+        <div class="hw-arrow p04-arrow" id="p04-ar-1"><svg viewBox="0 0 230 130"></svg></div>
+      </div>
+      <div class="p04-arrwrap" style="left: 1034px; top: 514px; width: 130px; height: 70px; transform: rotate(155deg)">
+        <div class="hw-arrow p04-arrow" id="p04-ar-2"><svg viewBox="0 0 130 70"></svg></div>
+      </div>
+      <div class="p04-arrwrap" style="left: 933px; top: 662px; width: 100px; height: 60px; transform: rotate(23deg)">
+        <div class="hw-arrow p04-arrow" id="p04-ar-3"><svg viewBox="0 0 100 60"></svg></div>
+      </div>
+
+      <!-- Scene 6 — coral tally count-up, top-right -->
+      <div class="p04-count" id="p04-count">
+        <div class="p04-cnum" id="p04-cnum" data-layout-allow-overlap>0</div>
+        <div class="p04-clabel" id="p04-clabel">个零件</div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+/* system font declarations (satisfy lint; resolved locally by the OS) */
+@font-face{font-family:"KaiTi";src:local("KaiTi"),local("楷体"),local("SimKai");}
+@font-face{font-family:"STKaiti";src:local("STKaiti"),local("华文楷体");}
+@font-face{font-family:"Microsoft YaHei";src:local("Microsoft YaHei"),local("微软雅黑");}
+
+    /* Fonts ship as project files — root-relative src, no network fonts.
+       Chinese renders via the system KaiTi stack authorized by frame.md
+       (KaiTi / STKaiti / Microsoft YaHei are installed on the render host). */
+    @font-face {
+      font-family: "Caveat";
+      src: url("assets/fonts/Caveat-700-latin.woff2") format("woff2");
+      font-weight: 700;
+      font-display: block;
+    }
+    @font-face {
+      font-family: "CourierPrime";
+      src: url("assets/fonts/courier-prime-700.woff2") format("woff2");
+      font-weight: 700;
+      font-display: block;
+    }
+
+    #root {
+      position: relative;
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      container-type: size;
+    }
+
+    /* workbench paper: cream + two-pitch seeded dot grain */
+    .p04-bg {
+      position: absolute;
+      inset: 0;
+      background-color: #f5f0e6;
+      background-image:
+        radial-gradient(rgba(45, 45, 45, 0.05) 2.2px, transparent 2.4px),
+        radial-gradient(rgba(45, 45, 45, 0.032) 1.5px, transparent 1.7px);
+      background-size: 46px 46px, 46px 46px;
+      background-position: 0 0, 23px 23px;
+    }
+    .p04-stage {
+      position: absolute;
+      inset: 0;
+    }
+
+    .p04-orn {
+      position: absolute;
+      opacity: 0.5;
+      pointer-events: none;
+      z-index: 2;
+    }
+    .p04-orn svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+    .p04-orn path {
+      fill: none;
+      stroke: #2d2d2d;
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .p04-title {
+      position: absolute;
+      left: 0;
+      top: 56px;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      gap: 22px;
+      z-index: 6;
+      font-family: "Caveat", "KaiTi", "STKaiti", cursive;
+      font-weight: 700;
+      font-size: 84px;
+      color: #2d2d2d;
+      line-height: 1.05;
+      white-space: nowrap;
+    }
+    .p04-tw {
+      display: inline-block;
+    }
+
+    .p04-slot {
+      position: absolute;
+      border: 2.5px dashed rgba(45, 45, 45, 0.55);
+      border-radius: 30px;
+      opacity: 0;
+      z-index: 3;
+    }
+    .p04-slotnum {
+      position: absolute;
+      left: 18px;
+      top: 12px;
+      font-family: "CourierPrime", monospace;
+      font-weight: 700;
+      font-size: 22px;
+      color: rgba(45, 45, 45, 0.5);
+      letter-spacing: 0.08em;
+    }
+
+    /* hw-box card anatomy: wrapper > deform > boil > (svg + marker + inner) */
+    .p04-card {
+      position: absolute;
+      pointer-events: none;
+    }
+    .p04-card .hw-bx-deform,
+    .p04-card .hw-bx-boil {
+      position: absolute;
+      inset: 0;
+    }
+    .p04-card svg.p04-boxsvg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+    .p04-boxpath {
+      stroke: #2d2d2d;
+      stroke-width: 6;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .p04-marker {
+      position: absolute;
+      left: -16px;
+      top: -16px;
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      border: 3px solid #2d2d2d;
+      box-shadow: 4px 4px 0 #2d2d2d;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: "Caveat", "KaiTi", "STKaiti", cursive;
+      font-weight: 700;
+      font-size: 38px;
+      color: #ffffff;
+    }
+    .p04-inner {
+      position: absolute;
+      inset: 0;
+    }
+    .p04-name {
+      position: absolute;
+      left: 38px;
+      top: 30px;
+      font-family: "CourierPrime", monospace;
+      font-weight: 700;
+      font-size: 46px;
+      color: #2d2d2d;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+    }
+    .p04-duty {
+      position: absolute;
+      left: 38px;
+      top: 92px;
+      font-family: "KaiTi", "STKaiti", "Microsoft YaHei", sans-serif;
+      font-weight: 700;
+      font-size: 37px;
+      color: #2d2d2d;
+      line-height: 1.15;
+      white-space: nowrap;
+    }
+    .p04-visual {
+      position: absolute;
+      left: 38px;
+      bottom: 24px;
+    }
+
+    .p04-vendors {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+    .p04-vchip {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+    .p04-vdot {
+      display: inline-block;
+      width: 21px;
+      height: 21px;
+      border-radius: 50%;
+      border: 2.5px solid #2d2d2d;
+    }
+    .p04-vlabel {
+      display: inline-block;
+      font-family: "CourierPrime", monospace;
+      font-weight: 700;
+      font-size: 23px;
+      color: #2d2d2d;
+      white-space: nowrap;
+    }
+
+    .p04-doodle {
+      overflow: visible;
+    }
+    .p04-doodle path {
+      fill: none;
+      stroke: #2d2d2d;
+      stroke-width: 4.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .p04-term circle {
+      stroke: #2d2d2d;
+      stroke-width: 2.5;
+    }
+    .p04-term text {
+      font-family: "CourierPrime", monospace;
+      font-weight: 700;
+      font-size: 30px;
+      fill: #2d2d2d;
+    }
+    .p04-pichip {
+      display: inline-block;
+      background: #ffffff;
+      border: 3px solid #2d2d2d;
+      border-radius: 12px;
+      box-shadow: 4px 4px 0 #2d2d2d;
+      padding: 7px 18px;
+      font-family: "CourierPrime", monospace;
+      font-weight: 700;
+      font-size: 30px;
+      color: #2d2d2d;
+      white-space: nowrap;
+    }
+
+    /* arrows: outer wrap carries the static aim rotation (never GSAP-touched),
+       the inner .hw-arrow is the boiled hwArrowBuild target */
+    .p04-arrwrap {
+      position: absolute;
+      z-index: 20;
+      pointer-events: none;
+    }
+    .p04-arrwrap .hw-arrow {
+      position: absolute;
+      inset: 0;
+    }
+    .p04-arrwrap svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+    .p04-arrow path {
+      fill: none;
+      stroke: #2d2d2d;
+      stroke-width: 5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .p04-count {
+      position: absolute;
+      left: 1602px;
+      top: 66px;
+      width: 240px;
+      text-align: center;
+      z-index: 22;
+    }
+    .p04-cnum {
+      display: inline-block;
+      width: 150px;
+      font-family: "Caveat", "KaiTi", "STKaiti", cursive;
+      font-weight: 700;
+      font-size: 215px;
+      line-height: 0.9;
+      color: #f8635f;
+      font-variant-numeric: tabular-nums;
+      transform-origin: 50% 50%;
+    }
+    .p04-clabel {
+      margin-top: 2px;
+      font-family: "KaiTi", "STKaiti", "Microsoft YaHei", sans-serif;
+      font-weight: 700;
+      font-size: 50px;
+      color: #2d2d2d;
+      letter-spacing: 0.22em;
+      text-indent: 0.22em;
+    }
+  </style>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script>
+    (function () {
+      function boot() {
+        window.__timelines = window.__timelines || {};
+
+        /* ============ hw family runtime (pasted from compositions/components:
+           hw-boil.html + hw-box-label.html + hw-arrow.html) ============ */
+        window.hwOnUpdate = function (tl, fn) {
+          if (!tl.__hwRenders) {
+            tl.__hwRenders = [];
+            tl.eventCallback("onUpdate", function () {
+              for (var i = 0; i < tl.__hwRenders.length; i++) tl.__hwRenders[i]();
+            });
+          }
+          tl.__hwRenders.push(fn);
+          fn();
+        };
+        window.hwHash = function (n, seed) {
+          var x = Math.sin(n * 127.1 + (seed || 1) * 311.7) * 43758.5453;
+          return (x - Math.floor(x)) * 2 - 1;
+        };
+        window.hwBoil = function (tl, target, opts) {
+          opts = opts || {};
+          var amp = opts.amp !== undefined ? opts.amp : 1.6;
+          var rot = opts.rot !== undefined ? opts.rot : 0.5;
+          var fps = opts.fps || 30;
+          var drop = opts.frameDrop || 3;
+          var seed = opts.seed || 1;
+          var els = gsap.utils.toArray(target);
+          window.hwOnUpdate(tl, function () {
+            var step = Math.floor((tl.time() * fps) / drop);
+            for (var i = 0; i < els.length; i++) {
+              gsap.set(els[i], {
+                x: window.hwHash(step * 3 + i * 97, seed) * amp,
+                y: window.hwHash(step * 3 + 1 + i * 97, seed) * amp,
+                rotation: (opts.baseRot || 0) + window.hwHash(step * 3 + 2 + i * 97, seed) * rot,
+              });
+            }
+          });
+        };
+        window.hwBoilPose = function (tl, target, pose, opts) {
+          opts = opts || {};
+          var poses = { calm: { amp: 1.6, rot: 0.5 }, lively: { amp: 2.6, rot: 0.9 } };
+          if (pose === "off") return;
+          var p = poses[pose];
+          if (!p) {
+            console.error('hw: unknown boil pose "' + pose + '" — falling back to "calm"');
+            p = poses.calm;
+          }
+          window.hwBoil(tl, target, { amp: p.amp, rot: p.rot, frameDrop: 3, seed: opts.seed || 1 });
+        };
+        var LN1000 = Math.log(1000);
+        var FEELS = {
+          snappy: { zeta: 0.9, response: 0.22 },
+          bouncy: { zeta: 0.5, response: 0.4 },
+        };
+        window.springEase = function (opts) {
+          var f = opts.feel ? FEELS[opts.feel] : opts;
+          var zeta = f.zeta,
+            response = f.response;
+          var w0 = (2 * Math.PI) / response;
+          var T = LN1000 / (zeta * w0);
+          var x;
+          if (zeta < 1) {
+            var wd = w0 * Math.sqrt(1 - zeta * zeta);
+            x = function (t) {
+              return (
+                1 -
+                Math.exp(-zeta * w0 * t) *
+                  (Math.cos(wd * t) + ((zeta * w0) / wd) * Math.sin(wd * t))
+              );
+            };
+          } else {
+            x = function (t) {
+              return 1 - Math.exp(-w0 * t) * (1 + w0 * t);
+            };
+          }
+          var xT = x(T);
+          return {
+            ease: function (p) {
+              return p >= 1 ? 1 : x(p * T) / xT;
+            },
+            duration: T,
+            zeta: zeta,
+            response: response,
+          };
+        };
+        window.hwPenEase = function (pathEl, opts) {
+          opts = opts || {};
+          var kCurve = opts.kCurve !== undefined ? opts.kCurve : 10;
+          var L = pathEl.getTotalLength();
+          if (L <= 0)
+            return {
+              ease: function (t) {
+                return t;
+              },
+              samples: 2,
+              inkTime: 1,
+              len: 0,
+            };
+          var PRE = 48;
+          var pts = [];
+          for (var i = 0; i <= PRE; i++) pts.push(pathEl.getPointAtLength((L * i) / PRE));
+          var curv = [0];
+          for (i = 1; i < PRE; i++) {
+            var ax = pts[i].x - pts[i - 1].x,
+              ay = pts[i].y - pts[i - 1].y;
+            var bx = pts[i + 1].x - pts[i].x,
+              by = pts[i + 1].y - pts[i].y;
+            var la = Math.hypot(ax, ay) || 1e-6,
+              lb = Math.hypot(bx, by) || 1e-6;
+            var dot = Math.max(-1, Math.min(1, (ax * bx + ay * by) / (la * lb)));
+            curv.push(Math.acos(dot) / ((la + lb) / 2));
+          }
+          curv.push(0);
+          var mass = 0;
+          for (i = 0; i < curv.length; i++) mass += curv[i];
+          var N = Math.max(25, Math.min(75, Math.round(25 + mass * 18)));
+          var seg = L / N;
+          var times = [0];
+          var t = 0;
+          for (i = 1; i <= N; i++) {
+            var u = ((i - 0.5) / N) * PRE;
+            var i0 = Math.floor(u),
+              f = u - i0;
+            var c = curv[Math.min(i0, PRE)] * (1 - f) + curv[Math.min(i0 + 1, PRE)] * f;
+            var speed = Math.max(1 / (1 + kCurve * c * 14), 0.22);
+            t += seg / speed;
+            times.push(t);
+          }
+          var total = times[N];
+          for (i = 0; i <= N; i++) times[i] /= total;
+          var easeFn = function (p) {
+            if (p <= 0) return 0;
+            if (p >= 1) return 1;
+            var lo = 0,
+              hi = N;
+            while (hi - lo > 1) {
+              var mid = (lo + hi) >> 1;
+              if (times[mid] <= p) lo = mid;
+              else hi = mid;
+            }
+            var span = times[hi] - times[lo] || 1e-9;
+            return (lo + (p - times[lo]) / span) / N;
+          };
+          return { ease: easeFn, samples: N, inkTime: total, len: L };
+        };
+        window.hwStrokeTypes = {
+          plain: {},
+          soft: { blur: 0.6 },
+          sharp: { dash: [3.0, 1.55] },
+          spray: {
+            coreOpacity: 0.5,
+            coreBlur: 0.4,
+            density: 0.16,
+            scatter: 2.6,
+            rMin: 1.1,
+            rMax: 2.6,
+          },
+        };
+        window.hwStrokeApply = function (pathEl, type, opts) {
+          opts = opts || {};
+          var cfg = window.hwStrokeTypes[type];
+          if (!cfg) {
+            console.error('hw: unknown strokeType "' + type + '" — falling back to "plain"');
+            type = "plain";
+            cfg = window.hwStrokeTypes.plain;
+          }
+          var svg = pathEl.ownerSVGElement;
+          var ns = "http://www.w3.org/2000/svg";
+          var w = parseFloat(getComputedStyle(pathEl).strokeWidth) || 6;
+          if (type === "plain") return { draw: pathEl, group: null, type: type };
+          if (type === "soft") {
+            pathEl.style.filter = "blur(" + cfg.blur + "px)";
+            return { draw: pathEl, group: null, type: type };
+          }
+          var id =
+            opts.id ||
+            "hwsm-" + Math.abs(Math.round(window.hwHash((opts.seed || 1) * 13.7, 5) * 1e6));
+          var defs = svg.querySelector("defs");
+          if (!defs) {
+            defs = document.createElementNS(ns, "defs");
+            svg.insertBefore(defs, svg.firstChild);
+          }
+          var mask = document.createElementNS(ns, "mask");
+          mask.setAttribute("id", id);
+          mask.setAttribute("maskUnits", "userSpaceOnUse");
+          var clone = document.createElementNS(ns, "path");
+          clone.setAttribute("d", pathEl.getAttribute("d"));
+          clone.setAttribute("fill", "none");
+          clone.setAttribute("stroke", "#fff");
+          clone.setAttribute(
+            "stroke-width",
+            w * (type === "spray" ? 2 + (cfg.scatter * 2) / w : 1.7),
+          );
+          clone.setAttribute("stroke-linecap", "round");
+          clone.setAttribute("stroke-linejoin", "round");
+          mask.appendChild(clone);
+          defs.appendChild(mask);
+          var group = document.createElementNS(ns, "g");
+          group.setAttribute("mask", "url(#" + id + ")");
+          pathEl.parentNode.insertBefore(group, pathEl);
+          group.appendChild(pathEl);
+          if (type === "sharp") {
+            pathEl.setAttribute(
+              "stroke-dasharray",
+              (cfg.dash[0] * w).toFixed(1) + " " + (cfg.dash[1] * w).toFixed(1),
+            );
+          } else {
+            pathEl.setAttribute("stroke-opacity", cfg.coreOpacity);
+            pathEl.style.filter = "blur(" + cfg.coreBlur + "px)";
+            var len = pathEl.getTotalLength();
+            var n = Math.round(len * cfg.density * (opts.densityScale || 1));
+            var seed = opts.seed || 1;
+            var dots = document.createElementNS(ns, "g");
+            for (var i = 0; i < n; i++) {
+              var t = Math.min(
+                1,
+                Math.max(0, (i + 0.5) / n + (window.hwHash(i * 7, seed) * 0.35) / n),
+              );
+              var pt = pathEl.getPointAtLength(t * len);
+              var pt2 = pathEl.getPointAtLength(Math.min(len, t * len + 0.5));
+              var tx = pt2.x - pt.x,
+                ty = pt2.y - pt.y;
+              var tl2 = Math.hypot(tx, ty) || 1;
+              var nx = -ty / tl2,
+                nyv = tx / tl2;
+              var off = window.hwHash(i * 7 + 1, seed) * (cfg.scatter + w * 0.55);
+              var r = cfg.rMin + Math.abs(window.hwHash(i * 7 + 2, seed)) * (cfg.rMax - cfg.rMin);
+              var c = document.createElementNS(ns, "circle");
+              c.setAttribute("cx", (pt.x + nx * off).toFixed(1));
+              c.setAttribute("cy", (pt.y + nyv * off).toFixed(1));
+              c.setAttribute("r", r.toFixed(2));
+              c.setAttribute("fill", getComputedStyle(pathEl).stroke);
+              dots.appendChild(c);
+            }
+            group.appendChild(dots);
+          }
+          return { draw: clone, group: group, type: type };
+        };
+        window.hwDrawOn = function (tl, applied, at, dur, opts) {
+          opts = opts || {};
+          var p = applied.draw;
+          var len = p.getTotalLength();
+          p.setAttribute("stroke-dasharray", len + " " + len);
+          p.setAttribute("stroke-dashoffset", len);
+          gsap.set(p, { opacity: 0 });
+          var ease = opts.pen ? window.hwPenEase(p, opts).ease : opts.ease || "power2.inOut";
+          tl.set(p, { opacity: 1 }, at);
+          tl.to(
+            p,
+            { strokeDashoffset: 0, duration: dur === undefined ? 0.7 : dur, ease: ease },
+            at,
+          );
+        };
+        window.hwWobbleRect = function (w, h, r, seed, amp) {
+          amp = amp === undefined ? 3.5 : amp;
+          function wob(n) {
+            return window.hwHash(n, seed) * amp;
+          }
+          var d = "M " + (r + wob(1)) + " " + wob(2);
+          d += " L " + (w / 2 + wob(3)) + " " + wob(4);
+          d += " L " + (w - r + wob(5)) + " " + wob(6);
+          d += " Q " + (w + wob(7)) + " " + wob(8) + " " + (w + wob(9)) + " " + (r + wob(10));
+          d += " L " + (w + wob(11)) + " " + (h / 2 + wob(12));
+          d += " L " + (w + wob(13)) + " " + (h - r + wob(14));
+          d +=
+            " Q " +
+            (w + wob(15)) +
+            " " +
+            (h + wob(16)) +
+            " " +
+            (w - r + wob(17)) +
+            " " +
+            (h + wob(18));
+          d += " L " + (w / 2 + wob(19)) + " " + (h + wob(20));
+          d += " L " + (r + wob(21)) + " " + (h + wob(22));
+          d += " Q " + wob(23) + " " + (h + wob(24)) + " " + wob(25) + " " + (h - r + wob(26));
+          d += " L " + wob(27) + " " + (h / 2 + wob(28));
+          d += " L " + wob(29) + " " + (r + wob(30));
+          d += " Q " + wob(31) + " " + wob(32) + " " + (r + wob(33)) + " " + wob(34);
+          return d;
+        };
+        window.hwWobbleEllipse = function (cx, cy, rx, ry, seed, wobblePct) {
+          wobblePct = wobblePct === undefined ? 3 : wobblePct;
+          var N = 14,
+            pts = [];
+          for (var i = 0; i < N; i++) {
+            var a = (i / N) * Math.PI * 2;
+            var wr = 1 + window.hwHash(i * 13 + 5, seed) * (wobblePct / 100);
+            pts.push([cx + Math.cos(a) * rx * wr, cy + Math.sin(a) * ry * wr]);
+          }
+          var mx = (pts[0][0] + pts[N - 1][0]) / 2,
+            my = (pts[0][1] + pts[N - 1][1]) / 2;
+          var d = "M" + mx.toFixed(1) + " " + my.toFixed(1);
+          for (var j = 0; j < N; j++) {
+            var p = pts[j],
+              q = pts[(j + 1) % N];
+            d +=
+              " Q" +
+              p[0].toFixed(1) +
+              " " +
+              p[1].toFixed(1) +
+              " " +
+              ((p[0] + q[0]) / 2).toFixed(1) +
+              " " +
+              ((p[1] + q[1]) / 2).toFixed(1);
+          }
+          return d;
+        };
+        window.hwImpactSquash = function (tl, opts) {
+          var wrap = opts.wrap;
+          var label = opts.label || null;
+          var travel = opts.travel;
+          var at = opts.at;
+          var dur = opts.dur;
+          var softness = opts.softness !== undefined ? opts.softness : 0.11;
+          var V_REF = 2000;
+          var E = 0.55 * softness;
+          var FPS = opts.fps || 30;
+          var dropEase = opts.dropEase || gsap.parseEase("power2.in");
+          var eps = 1e-4;
+          var v = ((dropEase(1) - dropEase(1 - eps)) / eps) * (travel / dur);
+          var S = Math.min(softness * (v / V_REF), 0.25);
+          var rec = window.springEase({ feel: opts.feel || "bouncy" });
+          var st = { ph: 0, s: 0 };
+          gsap.set(wrap, { transformOrigin: "50% 100%" });
+          var setBoth = function (along) {
+            gsap.set(wrap, { scaleY: along, scaleX: 1 / along });
+            if (label) gsap.set(label, { scaleY: 1 / along, scaleX: along });
+            var ay = parseFloat(gsap.getProperty(wrap, "scaleY"));
+            var ax = parseFloat(gsap.getProperty(wrap, "scaleX"));
+            if (Math.abs(ax * ay - 1) > 0.01)
+              console.error("hw volume law violated: scaleX*scaleY=" + (ax * ay).toFixed(4));
+          };
+          window.hwOnUpdate(tl, function () {
+            if (st.ph > 0 && st.ph < 1) {
+              var p = st.ph;
+              var vp = ((dropEase(Math.min(p + eps, 1)) - dropEase(p)) / eps) * (travel / dur);
+              setBoth(1 + E * Math.min(Math.abs(vp) / V_REF, 1));
+            } else {
+              setBoth(1 - st.s);
+            }
+          });
+          gsap.set(opts.moveTarget || wrap, { y: -travel });
+          tl.fromTo(
+            opts.moveTarget || wrap,
+            { y: -travel },
+            { y: 0, duration: dur, ease: dropEase, immediateRender: false },
+            at,
+          );
+          tl.fromTo(st, { ph: 0 }, { ph: 1, duration: dur, ease: "none" }, at);
+          tl.to(st, { s: S, duration: 2 / FPS, ease: "power3.out" }, at + dur);
+          tl.to(st, { s: 0, duration: rec.duration, ease: rec.ease }, at + dur + 3 / FPS);
+          return {
+            v: Math.round(v),
+            S: +S.toFixed(3),
+            T: +rec.duration.toFixed(3),
+            feel: opts.feel || "bouncy",
+          };
+        };
+        window.hwArrowBuild = function (target, CONFIG, seed) {
+          CONFIG = CONFIG || {};
+          var el = typeof target === "string" ? document.querySelector(target) : target;
+          var svg = el.querySelector("svg");
+          if (!el.id)
+            console.error(
+              'hw: hwArrowBuild target has no id — falling back to the shared "hw-arrow" seed/mask slot; give each built target a unique id',
+            );
+          if (seed === undefined) {
+            var idStr = el.id || "hw-arrow";
+            seed = 0;
+            for (var si = 0; si < idStr.length; si++)
+              seed = (seed * 31 + idStr.charCodeAt(si)) % 997;
+            seed = (seed % 96) + 1;
+          }
+          var style = CONFIG.arrowStyle === undefined ? "gentle" : CONFIG.arrowStyle;
+          if (style !== "straight" && style !== "gentle" && style !== "swoop") {
+            console.error('hw: unknown arrowStyle "' + style + '" — falling back to "gentle"');
+            style = "gentle";
+          }
+          var vb = svg.viewBox.baseVal;
+          var w = vb && vb.width ? vb.width : el.clientWidth;
+          var h = vb && vb.height ? vb.height : el.clientHeight;
+          var bend = style === "swoop" ? 0.55 : style === "gentle" ? 0.28 : 0.06;
+          function wob(v, n, range) {
+            return v + window.hwHash(n, seed) * range;
+          }
+          var x0 = wob(4, 1, 3),
+            y0 = wob(h * 0.72, 2, 4),
+            x1 = wob(w - 10, 3, 4),
+            y1 = wob(h * 0.3, 4, 4);
+          var cx1 = wob(w * 0.35, 5, 10),
+            cy1 = wob(h * (0.72 + bend * 0.5), 6, 8);
+          var cx2 = wob(w * 0.7, 7, 10),
+            cy2 = wob(h * (0.3 + bend), 8, 8);
+          var ang = Math.atan2(y1 - cy2, x1 - cx2);
+          function headSeg(da, len) {
+            var a = ang + Math.PI + da;
+            return (
+              "M " +
+              x1.toFixed(1) +
+              " " +
+              y1.toFixed(1) +
+              " l " +
+              (Math.cos(a) * len).toFixed(1) +
+              " " +
+              (Math.sin(a) * len).toFixed(1)
+            );
+          }
+          var ns = "http://www.w3.org/2000/svg";
+          var curve = document.createElementNS(ns, "path");
+          curve.setAttribute(
+            "d",
+            "M " +
+              x0.toFixed(1) +
+              " " +
+              y0.toFixed(1) +
+              " C " +
+              cx1.toFixed(1) +
+              " " +
+              cy1.toFixed(1) +
+              ", " +
+              cx2.toFixed(1) +
+              " " +
+              cy2.toFixed(1) +
+              ", " +
+              x1.toFixed(1) +
+              " " +
+              y1.toFixed(1),
+          );
+          svg.appendChild(curve);
+          var headG = document.createElementNS(ns, "g");
+          var headInner = document.createElementNS(ns, "g");
+          var head = document.createElementNS(ns, "path");
+          head.setAttribute("d", headSeg(0.5, wob(34, 9, 6)) + " " + headSeg(-0.5, wob(34, 10, 6)));
+          headInner.appendChild(head);
+          headG.appendChild(headInner);
+          svg.appendChild(headG);
+          var applied = window.hwStrokeApply(
+            curve,
+            CONFIG.strokeType === undefined ? "plain" : CONFIG.strokeType,
+            { seed: seed, id: (el.id || "hw-arrow") + "-sm" },
+          );
+          if (applied.group) {
+            applied.draw.style.stroke = "#fff";
+            applied.draw.style.strokeWidth = applied.draw.getAttribute("stroke-width");
+          }
+          var angDeg = (ang * 180) / Math.PI;
+          gsap.set(headG, { transformOrigin: "50% 50%", rotation: angDeg, opacity: 0 });
+          gsap.set(headInner, { transformOrigin: "50% 50%", rotation: -angDeg });
+          el.__hwArrowBuild = {
+            el: el,
+            applied: applied,
+            headG: headG,
+            headInner: headInner,
+            seed: seed,
+            boil: CONFIG.boil === undefined ? "calm" : CONFIG.boil,
+            boiled: false,
+          };
+          return el.__hwArrowBuild;
+        };
+        window.hwArrowOn = function (tl, target, at, dur) {
+          var el = typeof target === "string" ? document.querySelector(target) : target;
+          var b = el && el.__hwArrowBuild;
+          if (!b) {
+            var p = document.querySelector(target + " path");
+            var len = p.getTotalLength();
+            gsap.set(p, { strokeDasharray: len, strokeDashoffset: len });
+            tl.to(
+              p,
+              {
+                strokeDashoffset: 0,
+                duration: dur === undefined ? 0.7 : dur,
+                ease: "power2.inOut",
+              },
+              at,
+            );
+            return;
+          }
+          if (dur !== undefined)
+            console.error(
+              "hw: hwArrowOn draw duration is locked for built targets — ignoring dur=" + dur,
+            );
+          dur = 0.7;
+          var drawEase = gsap.parseEase("power2.in");
+          window.hwDrawOn(tl, b.applied, at, dur, { ease: drawEase });
+          var dlen = b.applied.draw.getTotalLength();
+          var eps = 1e-4;
+          var v = ((drawEase(1) - drawEase(1 - eps)) / eps) * (dlen / dur);
+          var S = Math.min(0.06 * (v / 2000), 0.25);
+          var rec = window.springEase({ feel: "snappy" });
+          var FPS = 30;
+          var st = { s: 0 };
+          var hg = b.headG;
+          window.hwOnUpdate(tl, function () {
+            var along = 1 + st.s;
+            gsap.set(hg, { scaleX: along, scaleY: 1 / along });
+            var ax = parseFloat(gsap.getProperty(hg, "scaleX"));
+            var ay = parseFloat(gsap.getProperty(hg, "scaleY"));
+            if (Math.abs(ax * ay - 1) > 0.01)
+              console.error("hw volume law violated (arrowhead): " + (ax * ay).toFixed(4));
+          });
+          tl.set(hg, { opacity: 1 }, at + dur);
+          tl.to(st, { s: S, duration: 2 / FPS, ease: "power3.out" }, at + dur);
+          tl.to(st, { s: 0, duration: rec.duration, ease: rec.ease }, at + dur + 3 / FPS);
+          if (!b.boiled) {
+            b.boiled = true;
+            window.hwBoilPose(tl, el, b.boil, { seed: b.seed });
+          }
+        };
+
+        /* ============ the frame ============ */
+        var DUR = 18.091;
+        var tl = gsap.timeline({ paused: true });
+
+        // full-length driver: timeline spans the whole clip, onUpdate (boils) stays alive
+        var drv = { v: 0 };
+        tl.to(drv, { v: 1, duration: DUR, ease: "none" }, 0);
+
+        /* ---- Scene 1 (0.0–2.3): title per-word + dashed slot grid ---- */
+        gsap.utils.toArray(".p04-tw").forEach(function (el, i) {
+          tl.fromTo(
+            el,
+            { y: 34, opacity: 0, rotation: i % 2 ? 2.5 : -2.5 },
+            { y: 0, opacity: 1, rotation: 0, duration: 0.55, ease: "power3.out" },
+            0.15 + i * 0.14
+          );
+        });
+        ["#p04-slot-1", "#p04-slot-2", "#p04-slot-3", "#p04-slot-4"].forEach(function (id, i) {
+          tl.fromTo(
+            id,
+            { opacity: 0, y: 12 },
+            { opacity: 0.38, y: 0, duration: 0.45, ease: "power2.out" },
+            0.7 + i * 0.18
+          );
+        });
+
+        // ornaments draw in
+        window.hwDrawOn(
+          tl,
+          window.hwStrokeApply(document.querySelector("#p04-orn-star path"), "plain", {
+            seed: 21,
+            id: "p04-m-star",
+          }),
+          0.9,
+          0.5
+        );
+        var NS = "http://www.w3.org/2000/svg";
+        var daisySvg = document.querySelector("#p04-daisy");
+        for (var pi = 0; pi < 8; pi++) {
+          var petal = document.createElementNS(NS, "path");
+          petal.setAttribute("d", window.hwWobbleEllipse(56, 26, 10.5, 17, 40 + pi, 6));
+          petal.setAttribute("transform", "rotate(" + pi * 45 + " 56 56)");
+          daisySvg.appendChild(petal);
+          window.hwDrawOn(
+            tl,
+            window.hwStrokeApply(petal, "plain", { seed: 40 + pi, id: "p04-m-d" + pi }),
+            1.15 + pi * 0.04,
+            0.4
+          );
+        }
+        var dcenter = document.createElementNS(NS, "path");
+        dcenter.setAttribute("d", window.hwWobbleEllipse(56, 56, 10, 10, 49, 8));
+        daisySvg.appendChild(dcenter);
+        window.hwDrawOn(
+          tl,
+          window.hwStrokeApply(dcenter, "plain", { seed: 49, id: "p04-m-dc" }),
+          1.38,
+          0.3
+        );
+        var sunSvg = document.querySelector("#p04-sun");
+        var sunCircle = document.createElementNS(NS, "path");
+        sunCircle.setAttribute("d", window.hwWobbleEllipse(65, 65, 23, 23, 8, 4));
+        sunSvg.appendChild(sunCircle);
+        window.hwDrawOn(
+          tl,
+          window.hwStrokeApply(sunCircle, "plain", { seed: 8, id: "p04-m-sc" }),
+          1.4,
+          0.45
+        );
+        for (var ri = 0; ri < 8; ri++) {
+          var ra = ri * Math.PI * 0.25 + window.hwHash(ri, 3) * 0.05;
+          var ray = document.createElementNS(NS, "path");
+          ray.setAttribute(
+            "d",
+            "M " +
+              (65 + Math.cos(ra) * 31).toFixed(1) +
+              " " +
+              (65 + Math.sin(ra) * 31).toFixed(1) +
+              " L " +
+              (65 + Math.cos(ra) * 46 + window.hwHash(ri, 12) * 2).toFixed(1) +
+              " " +
+              (65 + Math.sin(ra) * 46 + window.hwHash(ri, 13) * 2).toFixed(1)
+          );
+          sunSvg.appendChild(ray);
+          window.hwDrawOn(
+            tl,
+            window.hwStrokeApply(ray, "plain", { seed: 60 + ri, id: "p04-m-sr" + ri }),
+            1.55 + ri * 0.03,
+            0.25
+          );
+        }
+        window.hwDrawOn(
+          tl,
+          window.hwStrokeApply(document.querySelector("#p04-orn-spark path"), "plain", {
+            seed: 22,
+            id: "p04-m-spark",
+          }),
+          1.65,
+          0.35
+        );
+
+        /* ---- cards: build wobble boxes, paste each on its VO cue ---- */
+        var CARDS = [
+          { id: "#p04-card-1", fill: "#7ECDC0", seed: 2, at: 2.45 },
+          { id: "#p04-card-2", fill: "#F7C8D4", seed: 3, at: 5.35 },
+          { id: "#p04-card-3", fill: "#FDE68A", seed: 5, at: 8.3 },
+          { id: "#p04-card-4", fill: "#FFCBA4", seed: 7, at: 11.3 },
+        ];
+        CARDS.forEach(function (c, i) {
+          var el = document.querySelector(c.id);
+          var svg = el.querySelector("svg.p04-boxsvg");
+          var vb = svg.getAttribute("viewBox").split(" ");
+          var W = parseFloat(vb[2]),
+            H = parseFloat(vb[3]);
+          var path = el.querySelector(".p04-boxpath");
+          path.setAttribute("d", window.hwWobbleRect(W, H, 30, c.seed, 4.5));
+          path.style.fill = c.fill; // inline style beats any CSS fill
+
+          // paste entrance: hw-box "drop" — travel 1.9×h into 0.5s power2.in,
+          // contact squash on the deform wrapper, content counter-scaled rigid
+          tl.fromTo(el, { opacity: 0 }, { opacity: 1, duration: 0.14, ease: "power1.out" }, c.at);
+          window.hwImpactSquash(tl, {
+            wrap: el.querySelector(".hw-bx-deform"),
+            moveTarget: el,
+            label: el.querySelector(".p04-inner"),
+            travel: Math.round(el.offsetHeight * 1.9),
+            at: c.at,
+            dur: 0.5,
+            softness: 0.11,
+            feel: "bouncy",
+          });
+          window.hwBoilPose(tl, c.id + " .hw-bx-boil", "calm", { seed: c.seed });
+
+          // slot retires as the paper covers it
+          tl.to("#p04-slot-" + (i + 1), { opacity: 0, duration: 0.35, ease: "power1.in" }, c.at + 0.3);
+          // numbered corner marker pops (playful spring, hand-placed)
+          tl.fromTo(
+            c.id + " .p04-marker",
+            { scale: 0, opacity: 0, rotation: -24 },
+            { scale: 1, opacity: 1, rotation: 0, duration: 0.45, ease: "back.out(1.6)" },
+            c.at + 0.6
+          );
+          // mono package name wipes in
+          tl.fromTo(
+            c.id + " .p04-name",
+            { clipPath: "inset(0 100% 0 0)" },
+            { clipPath: "inset(0 0% 0 0)", duration: 0.5, ease: "power2.out" },
+            c.at + 0.7
+          );
+          // handwritten duty note
+          tl.fromTo(
+            c.id + " .p04-duty",
+            { opacity: 0, y: 16 },
+            { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" },
+            c.at + 0.95
+          );
+        });
+
+        /* ---- Scene 2 extras: vendor dots staggered light-up ---- */
+        gsap.utils.toArray("#p04-card-1 .p04-vchip").forEach(function (chip, i) {
+          var t = 3.6 + i * 0.22;
+          tl.fromTo(
+            chip.querySelector(".p04-vdot"),
+            { scale: 0 },
+            { scale: 1, duration: 0.35, ease: "back.out(1.7)" },
+            t
+          );
+          tl.fromTo(
+            chip.querySelector(".p04-vlabel"),
+            { opacity: 0, x: -10 },
+            { opacity: 1, x: 0, duration: 0.3, ease: "power2.out" },
+            t + 0.05
+          );
+        });
+
+        /* ---- Scene 3 extras: loop doodle draw-on (pen-velocity) ---- */
+        var loopPath = document.querySelector("#p04-loop path");
+        loopPath.setAttribute(
+          "d",
+          window.hwWobbleEllipse(100, 42, 68, 31, 6, 3) + " M 168 42 l -22 -4 M 168 42 l 5 -21"
+        );
+        window.hwDrawOn(
+          tl,
+          window.hwStrokeApply(loopPath, "plain", { seed: 6, id: "p04-m-loop" }),
+          6.45,
+          1.0,
+          { pen: true }
+        );
+
+        /* ---- Scene 4 extras: terminal doodle + one-blink cursor ---- */
+        var termRect = document.querySelector("#p04-term-rect");
+        termRect.setAttribute("d", window.hwWobbleRect(230, 78, 14, 11));
+        termRect.style.fill = "#FFFFFF";
+        window.hwDrawOn(
+          tl,
+          window.hwStrokeApply(termRect, "plain", { seed: 11, id: "p04-m-tr" }),
+          9.4,
+          0.6
+        );
+        window.hwDrawOn(
+          tl,
+          { draw: document.querySelector("#p04-term-div") },
+          9.75,
+          0.35
+        );
+        ["#p04-td1", "#p04-td2", "#p04-td3"].forEach(function (id, i) {
+          gsap.set(id, { transformOrigin: "50% 50%" });
+          tl.fromTo(
+            id,
+            { scale: 0, opacity: 0 },
+            { scale: 1, opacity: 1, duration: 0.3, ease: "back.out(1.8)" },
+            9.95 + i * 0.07
+          );
+        });
+        tl.fromTo(
+          "#p04-tdollar",
+          { opacity: 0 },
+          { opacity: 1, duration: 0.3, ease: "power1.out" },
+          10.15
+        );
+        gsap.set("#p04-tcur", { transformOrigin: "50% 50%" });
+        tl.fromTo(
+          "#p04-tcur",
+          { scale: 0, opacity: 0 },
+          { scale: 1, opacity: 1, duration: 0.22, ease: "back.out(1.6)" },
+          10.35
+        );
+        // one deterministic blink (discrete sets — no repeat/yoyo)
+        tl.set("#p04-tcur", { opacity: 0.12 }, 10.68);
+        tl.set("#p04-tcur", { opacity: 1 }, 10.86);
+
+        /* ---- Scene 5 extras: $ pi chip + three converging wobble arrows ---- */
+        tl.fromTo(
+          "#p04-pichip",
+          { scale: 0.55, opacity: 0 },
+          { scale: 1, opacity: 1, duration: 0.4, ease: "back.out(1.5)" },
+          12.4
+        );
+        window.hwArrowBuild("#p04-ar-1", { arrowStyle: "swoop", strokeType: "plain", boil: "calm" });
+        window.hwArrowBuild("#p04-ar-2", { arrowStyle: "gentle", strokeType: "plain", boil: "calm" });
+        window.hwArrowBuild("#p04-ar-3", { arrowStyle: "gentle", strokeType: "plain", boil: "calm" });
+        window.hwArrowOn(tl, "#p04-ar-1", 12.55);
+        window.hwArrowOn(tl, "#p04-ar-2", 12.85);
+        window.hwArrowOn(tl, "#p04-ar-3", 13.15);
+
+        /* ---- Scene 6 (14.0–end): coral tally 4 (counting-dynamic-scale) + one synced beat ---- */
+        var cnum = document.querySelector("#p04-cnum");
+        var cstate = { value: 0 };
+        // value counts up (text only) while the numeral grows into its final size
+        tl.to(
+          cstate,
+          {
+            value: 4,
+            duration: 1.2,
+            ease: "power3.out",
+            onUpdate: function () {
+              cnum.textContent = Math.round(cstate.value);
+            },
+          },
+          14.1
+        );
+        tl.fromTo(
+          cnum,
+          { scale: 0.55, opacity: 0 },
+          { scale: 1, opacity: 1, duration: 1.2, ease: "power3.out" },
+          14.1
+        );
+        // label fades in early (before the count peaks)
+        tl.fromTo(
+          "#p04-clabel",
+          { opacity: 0, y: 14 },
+          { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" },
+          14.3
+        );
+        // 全卡同步 boil 一拍 — one synchronized pulse across all four cards
+        var cardEls = CARDS.map(function (c) {
+          return document.querySelector(c.id);
+        });
+        tl.to(cardEls, { scale: 1.03, duration: 0.12, ease: "power2.out" }, 14.2);
+        tl.to(cardEls, { scale: 1, duration: 0.4, ease: "power2.inOut" }, 14.32);
+        // 15.5 → 18.09: deliberate still read (calm boil keeps it alive via the driver)
+
+        window.__timelines["04-parts"] = tl;
+      }
+
+      // gsap loads from the script tag above; if the host executes template
+      // scripts out of order, poll briefly instead of crashing.
+      if (window.gsap && window.gsap.timeline) {
+        boot();
+        return;
+      }
+      var tries = 0;
+      var iv = setInterval(function () {
+        tries++;
+        if (window.gsap && window.gsap.timeline) {
+          clearInterval(iv);
+          boot();
+        } else if (tries > 600) {
+          clearInterval(iv);
+        }
+      }, 16);
+    })();
+  </script>
+</template>

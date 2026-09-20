@@ -1,0 +1,893 @@
+<template>
+  <style>
+/* system font declarations (satisfy lint; resolved locally by the OS) */
+@font-face{font-family:"KaiTi";src:local("KaiTi"),local("楷体"),local("SimKai");}
+@font-face{font-family:"STKaiti";src:local("STKaiti"),local("华文楷体");}
+@font-face{font-family:"Microsoft YaHei";src:local("Microsoft YaHei"),local("微软雅黑");}
+
+    /* Fonts ship as project files — root-relative (renderer resolves from project root). */
+    @font-face {
+      font-family: "Caveat";
+      src: url("assets/fonts/Caveat-700-latin.woff2") format("woff2");
+      font-weight: 700;
+      font-display: block;
+    }
+    @font-face {
+      font-family: "Courier Prime";
+      src: url("assets/fonts/courier-prime-700.woff2") format("woff2");
+      font-weight: 700;
+      font-display: block;
+    }
+
+    #root {
+      position: relative;
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      background: transparent; /* full-bleed ground lives on the #o9-bg clip, never on #root */
+      font-family: "KaiTi", "STKaiti", "Microsoft YaHei", sans-serif;
+      color: #2d2d2d;
+    }
+    #root * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    /* ---- background paper ------------------------------------------------ */
+    #o9-bg {
+      position: absolute;
+      inset: 0;
+      background: #f5f0e6;
+    }
+    /* clip layers: full-frame positioned containers */
+    #o9-orn,
+    #o9-open,
+    #o9-hero,
+    #o9-cta,
+    #o9-end {
+      position: absolute;
+      inset: 0;
+    }
+
+    /* ---- ornament wreath (chrome, quiet) ---------------------------------- */
+    .o9-orn {
+      position: absolute;
+    }
+    .o9-orn svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      display: block;
+    }
+    .o9-orn path,
+    .o9-orn circle,
+    .o9-orn ellipse,
+    .o9-orn line {
+      fill: none;
+      stroke: #2d2d2d;
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .o9-ornb {
+      position: absolute;
+      inset: 0;
+    }
+
+    /* ---- Scene 1: opening doodles (thick stack vs tiny pi) ----------------- */
+    .o9-doodle {
+      position: absolute;
+    }
+    #o9-dl {
+      left: 330px;
+      top: 230px;
+      width: 220px;
+      height: 210px;
+    }
+    #o9-dr {
+      left: 1455px;
+      top: 222px;
+      width: 180px;
+      height: 160px;
+    }
+    .o9-note-w {
+      position: absolute;
+      width: 150px;
+      height: 96px;
+    }
+    .o9-note-b {
+      position: absolute;
+      inset: 0;
+    }
+    .o9-note {
+      width: 100%;
+      height: 100%;
+      border: 3px solid #2d2d2d;
+      border-radius: 10px;
+      box-shadow: 4px 4px 0 #2d2d2d;
+      padding-top: 20px;
+    }
+    .o9-note i {
+      display: block;
+      height: 3px;
+      background: #6b6b6b;
+      border-radius: 2px;
+      margin: 9px 16px 0;
+    }
+    .o9-arw {
+      position: absolute;
+      left: 566px;
+      top: 236px;
+      width: 40px;
+      height: 62px;
+    }
+    .o9-arwb,
+    .o9-rboil,
+    .o9-magb {
+      position: absolute;
+      inset: 0;
+    }
+    .o9-arw svg,
+    .o9-dr svg,
+    .o9-mag svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      display: block;
+    }
+    .o9-doodle-path {
+      fill: none;
+      stroke: #2d2d2d;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .o9-cap {
+      position: absolute;
+      font-size: 32px;
+      font-weight: 600;
+      color: #6b6b6b;
+      white-space: nowrap;
+    }
+    #o9-cap-l {
+      left: 428px;
+      top: 452px;
+    }
+    #o9-cap-r {
+      left: 1530px;
+      top: 398px;
+    }
+
+    /* ---- Scene 2: hero pi lockup ------------------------------------------ */
+    #o9-markb {
+      position: absolute;
+      inset: 0;
+    }
+    #o9-mark-svg {
+      position: absolute;
+      left: 740px;
+      top: 160px;
+      overflow: visible;
+    }
+    .o9-pip {
+      fill: none;
+      stroke: #2d2d2d;
+      stroke-width: 21;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .o9-marku {
+      position: absolute;
+      left: 730px;
+      top: 548px;
+      width: 460px;
+      height: 34px;
+    }
+    .o9-marku svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      display: block;
+    }
+    .o9-marku path {
+      fill: none;
+      stroke: #f8635f;
+      stroke-width: 7;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .o9-sub {
+      position: absolute;
+      left: 0;
+      width: 100%;
+      text-align: center;
+      font-size: 46px;
+      font-weight: 600;
+      line-height: 1.2;
+      color: #2d2d2d;
+    }
+    #o9-sub1 {
+      top: 610px;
+    }
+    #o9-sub2 {
+      top: 676px;
+    }
+    .o9-subb {
+      display: inline-block;
+    }
+    .o9-ch {
+      display: inline-block;
+    }
+
+    /* ---- Scene 3: repo address card ---------------------------------------- */
+    #o9-cta {
+      position: absolute;
+      inset: 0;
+    }
+    .o9-card-w {
+      position: absolute;
+      left: 530px;
+      top: 758px;
+      width: 860px;
+    }
+    .o9-card {
+      height: 92px;
+      background: #ffffff;
+      border: 3px solid #2d2d2d;
+      border-radius: 20px;
+      box-shadow: 6px 6px 0 #2d2d2d;
+      display: flex;
+      align-items: center;
+      padding: 0 26px;
+      transform: rotate(-0.8deg);
+    }
+    .o9-gh {
+      font-family: "Caveat", cursive;
+      font-weight: 700;
+      font-size: 34px;
+      color: #2d2d2d;
+      margin-right: 16px;
+      white-space: nowrap;
+    }
+    .o9-url-w {
+      display: inline-flex;
+      align-items: center;
+      white-space: nowrap;
+    }
+    .o9-url {
+      font-family: "Courier Prime", monospace;
+      font-weight: 700;
+      font-size: 38px;
+      color: #2d2d2d;
+      white-space: pre;
+    }
+    .o9-caret {
+      display: inline-block;
+      width: 12px;
+      height: 40px;
+      margin-left: 5px;
+      background: #2d2d2d;
+      opacity: 0;
+    }
+    .o9-mag {
+      position: absolute;
+      left: 430px;
+      top: 760px;
+      width: 92px;
+      height: 92px;
+    }
+    .o9-mag path {
+      fill: none;
+      stroke: #2d2d2d;
+      stroke-width: 5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    /* ---- Scene 4: coral stamp ---------------------------------------------- */
+    .o9-stamp-w {
+      position: absolute;
+      left: 1344px;
+      top: 686px;
+      width: 252px;
+      height: 104px;
+    }
+    .o9-stamp-in {
+      width: 100%;
+      height: 100%;
+      transform: rotate(-7deg);
+      border: 4px solid #f8635f;
+      border-radius: 16px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0.95;
+    }
+    .o9-stamp-in::after {
+      content: "";
+      position: absolute;
+      inset: 5px;
+      border: 2px solid #f8635f;
+      border-radius: 11px;
+    }
+    .o9-stamp-txt {
+      font-family: "KaiTi", "STKaiti", "Microsoft YaHei", sans-serif;
+      font-weight: 700;
+      font-size: 38px;
+      letter-spacing: 0.1em;
+      color: #f8635f;
+      white-space: nowrap;
+    }
+  </style>
+
+  <div
+    id="root"
+    data-composition-id="09-outro"
+    data-start="0"
+    data-duration="13.803"
+    data-width="1920"
+    data-height="1080"
+  >
+    <!-- track 0 · paper ground -->
+    <div id="o9-bg" class="clip" data-start="0" data-duration="13.803" data-track-index="0"></div>
+
+    <!-- track 1 · ornament wreath -->
+    <div id="o9-orn" class="clip" data-start="0" data-duration="13.803" data-track-index="1">
+      <div class="o9-orn" style="left: 128px; top: 132px; width: 120px; height: 120px">
+        <div class="o9-ornb"
+          ><svg viewBox="0 0 120 120">
+            <ellipse cx="60" cy="32" rx="10" ry="17" />
+            <ellipse cx="60" cy="32" rx="10" ry="17" transform="rotate(45 60 60)" />
+            <ellipse cx="60" cy="32" rx="10" ry="17" transform="rotate(90 60 60)" />
+            <ellipse cx="60" cy="32" rx="10" ry="17" transform="rotate(135 60 60)" />
+            <ellipse cx="60" cy="32" rx="10" ry="17" transform="rotate(180 60 60)" />
+            <ellipse cx="60" cy="32" rx="10" ry="17" transform="rotate(225 60 60)" />
+            <ellipse cx="60" cy="32" rx="10" ry="17" transform="rotate(270 60 60)" />
+            <ellipse cx="60" cy="32" rx="10" ry="17" transform="rotate(315 60 60)" />
+            <circle cx="60" cy="60" r="11" style="fill: #fde68a" />
+          </svg></div
+        >
+      </div>
+      <div class="o9-orn" style="left: 1820px; top: 140px; width: 104px; height: 104px">
+        <div class="o9-ornb"
+          ><svg viewBox="0 0 104 104">
+            <circle cx="52" cy="52" r="20" />
+            <line x1="52" y1="10" x2="52" y2="24" />
+            <line x1="52" y1="10" x2="52" y2="24" transform="rotate(45 52 52)" />
+            <line x1="52" y1="10" x2="52" y2="24" transform="rotate(90 52 52)" />
+            <line x1="52" y1="10" x2="52" y2="24" transform="rotate(135 52 52)" />
+            <line x1="52" y1="10" x2="52" y2="24" transform="rotate(180 52 52)" />
+            <line x1="52" y1="10" x2="52" y2="24" transform="rotate(225 52 52)" />
+            <line x1="52" y1="10" x2="52" y2="24" transform="rotate(270 52 52)" />
+            <line x1="52" y1="10" x2="52" y2="24" transform="rotate(315 52 52)" />
+          </svg></div
+        >
+      </div>
+      <div class="o9-orn" style="left: 96px; top: 512px; width: 72px; height: 72px">
+        <div class="o9-ornb"
+          ><svg viewBox="0 0 80 80">
+            <path
+              d="M 40 8 L 49 30 L 73 32 L 55 47 L 61 71 L 40 58 L 19 71 L 25 47 L 7 32 L 31 30 Z"
+            />
+          </svg></div
+        >
+      </div>
+      <div class="o9-orn" style="left: 1808px; top: 596px; width: 130px; height: 84px">
+        <div class="o9-ornb"
+          ><svg viewBox="0 0 130 84">
+            <path
+              d="M 24 66 C 10 66, 4 52, 16 46 C 10 30, 28 20, 40 28 C 46 10, 72 8, 80 24 C 96 18, 110 32, 100 46 C 114 50, 112 66, 96 66 Z"
+              style="fill: #ffffff"
+            />
+          </svg></div
+        >
+      </div>
+      <div class="o9-orn" style="left: 1742px; top: 800px; width: 56px; height: 56px">
+        <div class="o9-ornb"
+          ><svg viewBox="0 0 80 80">
+            <path
+              d="M 40 8 L 49 30 L 73 32 L 55 47 L 61 71 L 40 58 L 19 71 L 25 47 L 7 32 L 31 30 Z"
+            />
+          </svg></div
+        >
+      </div>
+      <div class="o9-orn" style="left: 110px; top: 780px; width: 90px; height: 90px">
+        <div class="o9-ornb"
+          ><svg viewBox="0 0 120 120">
+            <ellipse cx="60" cy="32" rx="10" ry="17" />
+            <ellipse cx="60" cy="32" rx="10" ry="17" transform="rotate(60 60 60)" />
+            <ellipse cx="60" cy="32" rx="10" ry="17" transform="rotate(120 60 60)" />
+            <ellipse cx="60" cy="32" rx="10" ry="17" transform="rotate(180 60 60)" />
+            <ellipse cx="60" cy="32" rx="10" ry="17" transform="rotate(240 60 60)" />
+            <ellipse cx="60" cy="32" rx="10" ry="17" transform="rotate(300 60 60)" />
+            <circle cx="60" cy="60" r="11" style="fill: #fde68a" />
+          </svg></div
+        >
+      </div>
+    </div>
+
+    <!-- track 2 · Scene 1 opening doodles -->
+    <div id="o9-open" class="clip" data-start="0" data-duration="13.803" data-track-index="2">
+      <div class="o9-doodle" id="o9-dl">
+        <div class="o9-note-w" style="left: 0; top: 100px">
+          <div class="o9-note-b"
+            ><div class="o9-note" style="background: #fde68a; transform: rotate(-6deg)">
+              <i></i><i></i> </div></div
+          >
+        </div>
+        <div class="o9-note-w" style="left: 20px; top: 66px">
+          <div class="o9-note-b"
+            ><div class="o9-note" style="background: #a8d8f0; transform: rotate(3deg)">
+              <i></i><i></i> </div></div
+          >
+        </div>
+        <div class="o9-note-w" style="left: 40px; top: 33px">
+          <div class="o9-note-b"
+            ><div class="o9-note" style="background: #a8e6cf; transform: rotate(-2deg)">
+              <i></i><i></i> </div></div
+          >
+        </div>
+        <div class="o9-note-w" style="left: 60px; top: 0">
+          <div class="o9-note-b"
+            ><div class="o9-note" style="background: #ffcba4; transform: rotate(5deg)">
+              <i></i><i></i> </div></div
+          >
+        </div>
+      </div>
+      <div class="o9-arw" id="o9-arw">
+        <div class="o9-arwb"
+          ><svg viewBox="0 0 40 62">
+            <path
+              class="o9-doodle-path"
+              id="o9-arw-p"
+              style="stroke-width: 5"
+              d="M 20 58 C 21 40, 21 20, 20 2 M 4 20 C 10 15, 16 8, 20 2 M 36 18 C 30 13, 24 7, 20 2"
+            ></path>
+          </svg></div
+        >
+      </div>
+      <div class="o9-cap" id="o9-cap-l">厚</div>
+      <div class="o9-doodle" id="o9-dr">
+        <div class="o9-rboil"
+          ><svg viewBox="0 0 180 150">
+            <!-- one continuous pen stroke: up the left leg, across the bar, down the right leg -->
+            <path
+              class="o9-doodle-path"
+              id="o9-pi-s"
+              style="stroke-width: 9"
+              d="M 55 128 C 51 96, 49 62, 45 30 C 75 22, 110 20, 138 28 C 136 58, 137 92, 142 126"
+            ></path>
+          </svg></div
+        >
+      </div>
+      <div class="o9-cap" id="o9-cap-r">小</div>
+    </div>
+
+    <!-- track 3 · Scene 2 hero pi lockup -->
+    <div id="o9-hero" class="clip" data-start="0" data-duration="13.803" data-track-index="3">
+      <div id="o9-markb">
+        <svg id="o9-mark-svg" width="440" height="400" viewBox="0 0 440 400">
+          <!-- true pen order: left leg, right leg, bar last with a closing flick -->
+          <path class="o9-pip" id="o9-pi-a" d="M 148 58 C 141 165, 137 262, 120 368"></path>
+          <path class="o9-pip" id="o9-pi-b" d="M 300 56 C 303 168, 308 258, 324 364"></path>
+          <path
+            class="o9-pip"
+            id="o9-pi-c"
+            d="M 52 64 C 140 42, 315 42, 390 60 C 398 63, 402 70, 400 82"
+          ></path>
+        </svg>
+        <div class="o9-marku" id="o9-under">
+          <svg viewBox="0 0 460 34"><path id="o9-under-p"></path></svg>
+        </div>
+      </div>
+      <div class="o9-sub" id="o9-sub1"><div class="o9-subb"></div></div>
+      <div class="o9-sub" id="o9-sub2"><div class="o9-subb"></div></div>
+    </div>
+
+    <!-- track 4 · Scene 3 repo address -->
+    <div id="o9-cta" class="clip" data-start="0" data-duration="13.803" data-track-index="4">
+      <div class="o9-mag" id="o9-mag">
+        <div class="o9-magb"
+          ><svg viewBox="0 0 96 96">
+            <path id="o9-mag-lens"></path>
+            <path
+              id="o9-mag-handle"
+              d="M 57 57 C 68 67, 78 78, 87 88"
+            ></path>
+          </svg></div
+        >
+      </div>
+      <div class="o9-card-w" id="o9-card-w">
+        <div class="o9-card">
+          <span class="o9-gh" id="o9-gh">GitHub</span>
+          <span class="o9-url-w" id="o9-url-w"
+            ><span class="o9-url" id="o9-url"></span><span class="o9-caret" id="o9-caret"></span
+          ></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- track 5 · Scene 4 stamp -->
+    <div id="o9-end" class="clip" data-start="0" data-duration="13.803" data-track-index="5">
+      <div class="o9-stamp-w" id="o9-stamp-w">
+        <div class="o9-stamp-in"><span class="o9-stamp-txt">自己读一遍</span></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script>
+    (function () {
+      var ID = "09-outro";
+      var DUR = 13.803;
+      window.__timelines = window.__timelines || {};
+
+      /* ---- hw family runtime (local copies — zero cross-frame collisions) ---- */
+      function hwOnUpdate(tl, fn) {
+        if (!tl.__hwRenders) {
+          tl.__hwRenders = [];
+          tl.eventCallback("onUpdate", function () {
+            for (var i = 0; i < tl.__hwRenders.length; i++) tl.__hwRenders[i]();
+          });
+        }
+        tl.__hwRenders.push(fn);
+        fn();
+      }
+      function hwHash(n, seed) {
+        var x = Math.sin(n * 127.1 + (seed || 1) * 311.7) * 43758.5453;
+        return (x - Math.floor(x)) * 2 - 1;
+      }
+      function hwBoil(tl, target, opts) {
+        opts = opts || {};
+        var amp = opts.amp !== undefined ? opts.amp : 1.6;
+        var rot = opts.rot !== undefined ? opts.rot : 0.5;
+        var fps = opts.fps || 30;
+        var drop = opts.frameDrop || 3;
+        var seed = opts.seed || 1;
+        var els = gsap.utils.toArray(target);
+        hwOnUpdate(tl, function () {
+          var step = Math.floor((tl.time() * fps) / drop);
+          for (var i = 0; i < els.length; i++) {
+            gsap.set(els[i], {
+              x: hwHash(step * 3 + i * 97, seed) * amp,
+              y: hwHash(step * 3 + 1 + i * 97, seed) * amp,
+              rotation: (opts.baseRot || 0) + hwHash(step * 3 + 2 + i * 97, seed) * rot,
+            });
+          }
+        });
+      }
+      /* curvature-adaptive pen-velocity ease (hw-write-title / hw-boil family) */
+      function hwPenEase(pathEl, opts) {
+        opts = opts || {};
+        var kCurve = opts.kCurve !== undefined ? opts.kCurve : 10;
+        var L = pathEl.getTotalLength();
+        if (L <= 0)
+          return { ease: function (t) { return t; }, samples: 2, inkTime: 1, len: 0 };
+        var PRE = 48;
+        var pts = [];
+        for (var i = 0; i <= PRE; i++) pts.push(pathEl.getPointAtLength((L * i) / PRE));
+        var curv = [0];
+        for (i = 1; i < PRE; i++) {
+          var ax = pts[i].x - pts[i - 1].x, ay = pts[i].y - pts[i - 1].y;
+          var bx = pts[i + 1].x - pts[i].x, by = pts[i + 1].y - pts[i].y;
+          var la = Math.hypot(ax, ay) || 1e-6, lb = Math.hypot(bx, by) || 1e-6;
+          var dot = Math.max(-1, Math.min(1, (ax * bx + ay * by) / (la * lb)));
+          curv.push(Math.acos(dot) / ((la + lb) / 2));
+        }
+        curv.push(0);
+        var mass = 0;
+        for (i = 0; i < curv.length; i++) mass += curv[i];
+        var N = Math.max(25, Math.min(75, Math.round(25 + mass * 18)));
+        var seg = L / N;
+        var times = [0];
+        var t = 0;
+        for (i = 1; i <= N; i++) {
+          var u = ((i - 0.5) / N) * PRE;
+          var i0 = Math.floor(u), f = u - i0;
+          var c = curv[Math.min(i0, PRE)] * (1 - f) + curv[Math.min(i0 + 1, PRE)] * f;
+          var speed = Math.max(1 / (1 + kCurve * c * 14), 0.22);
+          t += seg / speed;
+          times.push(t);
+        }
+        var total = times[N];
+        for (i = 0; i <= N; i++) times[i] /= total;
+        var easeFn = function (p) {
+          if (p <= 0) return 0;
+          if (p >= 1) return 1;
+          var lo = 0, hi = N;
+          while (hi - lo > 1) {
+            var mid = (lo + hi) >> 1;
+            if (times[mid] <= p) lo = mid;
+            else hi = mid;
+          }
+          var span = times[hi] - times[lo] || 1e-9;
+          return (lo + (p - times[lo]) / span) / N;
+        };
+        return { ease: easeFn, samples: N, inkTime: total, len: L };
+      }
+      /* seeded squiggle underline path (hw-underline family) */
+      function hwMarkPath(w, h, seed) {
+        function wob(n, range) {
+          return hwHash(n, seed) * (range === undefined ? 5 : range);
+        }
+        var mid = h / 2;
+        var segs = Math.max(5, Math.round(w / 95));
+        var d = "M 2 " + (mid + wob(0, 4));
+        for (var i = 1; i <= segs; i++) {
+          var x = (w / segs) * i;
+          d +=
+            " Q " +
+            (x - w / segs / 2 + wob(i * 4 + 1, 9)) +
+            " " +
+            (mid + (i % 2 ? -1 : 1) * (9 + wob(i * 4 + 2, 4))) +
+            " " +
+            x.toFixed(1) +
+            " " +
+            (mid + wob(i * 4 + 3, 4));
+        }
+        return d;
+      }
+      /* seeded hand-wobbled ellipse (hw-boil family) */
+      function hwWobbleEllipse(cx, cy, rx, ry, seed, wobblePct) {
+        wobblePct = wobblePct === undefined ? 3 : wobblePct;
+        var N = 14, pts = [];
+        for (var i = 0; i < N; i++) {
+          var a = (i / N) * Math.PI * 2;
+          var wr = 1 + hwHash(i * 13 + 5, seed) * (wobblePct / 100);
+          pts.push([cx + Math.cos(a) * rx * wr, cy + Math.sin(a) * ry * wr]);
+        }
+        var mx = (pts[0][0] + pts[N - 1][0]) / 2, my = (pts[0][1] + pts[N - 1][1]) / 2;
+        var d = "M" + mx.toFixed(1) + " " + my.toFixed(1);
+        for (var j = 0; j < N; j++) {
+          var p = pts[j], q = pts[(j + 1) % N];
+          d +=
+            " Q" +
+            p[0].toFixed(1) +
+            " " +
+            p[1].toFixed(1) +
+            " " +
+            ((p[0] + q[0]) / 2).toFixed(1) +
+            " " +
+            ((p[1] + q[1]) / 2).toFixed(1);
+        }
+        return d;
+      }
+
+      /* ---- setup: geometry that must exist before measuring ---------------- */
+      document
+        .getElementById("o9-under-p")
+        .setAttribute("d", hwMarkPath(460, 34, 5));
+      document
+        .getElementById("o9-mag-lens")
+        .setAttribute("d", hwWobbleEllipse(40, 40, 24, 24, 3, 3.5));
+
+      var tl = gsap.timeline({ paused: true });
+      /* master spacer — the shot is exactly 13.803s */
+      tl.to({ v: 0 }, { v: 1, duration: DUR, ease: "none" }, 0);
+
+      /* ---- svg-path-draw helper (measured, never guessed) ------------------ */
+      function drawOn(el, at, dur, ease) {
+        var len = el.getTotalLength() * 1.02;
+        gsap.set(el, { strokeDasharray: len, strokeDashoffset: len, opacity: 0 });
+        tl.set(el, { opacity: 1 }, at);
+        tl.to(el, { strokeDashoffset: 0, duration: dur, ease: ease || "power2.out" }, at);
+      }
+
+      /* ======================================================================
+         Scene 1 (0.0–3.5s) — 厚壳越摞越高 vs 一笔小 π
+         ====================================================================== */
+
+      /* ornament wreath settles in quietly */
+      var ornEls = gsap.utils.toArray("#o9-orn .o9-orn");
+      ornEls.forEach(function (el, i) {
+        tl.fromTo(
+          el,
+          { opacity: 0 },
+          { opacity: 0.4, duration: 0.5, ease: "power2.out" },
+          0.25 + i * 0.15
+        );
+      });
+
+      /* left: stack of thick-shell notes piles up (staggered 叠高) */
+      var notes = gsap.utils.toArray("#o9-dl .o9-note-w");
+      notes.forEach(function (el, i) {
+        tl.fromTo(
+          el,
+          { scale: 0.55, opacity: 0 },
+          { scale: 1, opacity: 1, duration: 0.42, ease: "back.out(1.8)" },
+          0.35 + i * 0.28
+        );
+      });
+      drawOn(document.getElementById("o9-arw-p"), 1.55, 0.45);
+      tl.fromTo(
+        "#o9-cap-l",
+        { opacity: 0 },
+        { opacity: 1, duration: 0.35, ease: "power2.out" },
+        1.9
+      );
+
+      /* right: a tiny pi, one unbroken pen stroke */
+      drawOn(document.getElementById("o9-pi-s"), 1.75, 0.78);
+      tl.fromTo(
+        "#o9-cap-r",
+        { opacity: 0 },
+        { opacity: 1, duration: 0.35, ease: "power2.out" },
+        2.5
+      );
+
+      /* doodles step back as the hero arrives (de-emphasis, not an exit) */
+      tl.to(
+        ["#o9-dl", "#o9-arw", "#o9-cap-l", "#o9-dr", "#o9-cap-r"],
+        { opacity: 0.3, duration: 0.55, ease: "power2.inOut" },
+        3.75
+      );
+
+      /* ======================================================================
+         Scene 2 (3.5–7.3s) — 中央大 π 真笔迹 write-on 收笔 + 两行副标
+         ====================================================================== */
+
+      /* hw-write-title trace choreography: per-stroke pen-velocity reveals,
+         60ms pen lifts, duration proportional to ink time */
+      function penTrace(paths, at, totalDur) {
+        var lift = 0.06;
+        var metas = [];
+        var inkSum = 0;
+        paths.forEach(function (p) {
+          var pe = hwPenEase(p);
+          var len = p.getTotalLength();
+          metas.push({ pe: pe, len: len, st: { p: 0 } });
+          inkSum += pe.inkTime;
+          p.setAttribute("stroke-dasharray", len + " " + len);
+          p.setAttribute("stroke-dashoffset", String(len));
+          p.style.opacity = "0";
+        });
+        var drawTotal = Math.max(0.1, totalDur - lift * (paths.length - 1));
+        var t = at;
+        metas.forEach(function (m) {
+          var d = (m.pe.inkTime / inkSum) * drawTotal;
+          m.d = d;
+          tl.to(m.st, { p: 1, duration: d, ease: m.pe.ease }, t);
+          t += d + lift;
+        });
+        hwOnUpdate(tl, function () {
+          for (var i = 0; i < metas.length; i++) {
+            var m = metas[i];
+            paths[i].style.strokeDashoffset = m.len * (1 - m.st.p);
+            paths[i].style.opacity = m.st.p > 0 ? "1" : "0";
+          }
+        });
+        return t - lift;
+      }
+      penTrace(
+        [
+          document.getElementById("o9-pi-a"),
+          document.getElementById("o9-pi-b"),
+          document.getElementById("o9-pi-c"),
+        ],
+        3.85,
+        2.4
+      );
+
+      /* two sub-lines land per-word (per-char), on the voice */
+      function landChars(lineEl, text, at) {
+        var wrap = lineEl.querySelector(".o9-subb");
+        var spans = [];
+        for (var i = 0; i < text.length; i++) {
+          var s = document.createElement("span");
+          s.className = "o9-ch";
+          s.textContent = text.charAt(i);
+          wrap.appendChild(s);
+          spans.push(s);
+        }
+        spans.forEach(function (s, i) {
+          tl.fromTo(
+            s,
+            { opacity: 0, y: 26, rotation: hwHash(i * 3 + 1, 31) * 4 },
+            { opacity: 1, y: 0, rotation: 0, duration: 0.42, ease: "back.out(1.6)" },
+            at + i * 0.085
+          );
+        });
+      }
+      landChars(document.getElementById("o9-sub1"), "内核读得完", 4.35);
+      landChars(document.getElementById("o9-sub2"), "零件换得动", 5.75);
+
+      /* coral squiggle underline seals the lockup */
+      drawOn(document.getElementById("o9-under-p"), 6.55, 0.7, "power2.inOut");
+
+      /* ======================================================================
+         Scene 3 (7.3–10.8s) — mono 地址 type-on with caret
+         ====================================================================== */
+
+      tl.fromTo(
+        "#o9-card-w",
+        { scale: 0.88, opacity: 0, y: 18 },
+        { scale: 1, opacity: 1, y: 0, duration: 0.45, ease: "back.out(1.6)" },
+        7.35
+      );
+      tl.fromTo(
+        "#o9-gh",
+        { opacity: 0 },
+        { opacity: 1, duration: 0.3, ease: "power2.out" },
+        7.6
+      );
+      /* magnifier doodle: lens then handle, staggered ~70% */
+      drawOn(document.getElementById("o9-mag-lens"), 7.75, 0.38);
+      drawOn(document.getElementById("o9-mag-handle"), 7.99, 0.22);
+
+      /* discrete-text-sequence: whole-state replacement at time thresholds —
+         keystroke clusters, pauses at the slashes, no per-char animation */
+      var SEQ = [
+        { t: 0, text: "" },
+        { t: 8.1, text: "gith" },
+        { t: 8.24, text: "github" },
+        { t: 8.38, text: "github." },
+        { t: 8.52, text: "github.com" },
+        { t: 8.86, text: "github.com/" },
+        { t: 9.12, text: "github.com/bad" },
+        { t: 9.44, text: "github.com/badlogic" },
+        { t: 9.78, text: "github.com/badlogic/" },
+        { t: 9.96, text: "github.com/badlogic/pi" },
+        { t: 10.1, text: "github.com/badlogic/pi-" },
+        { t: 10.26, text: "github.com/badlogic/pi-mono" },
+      ];
+      function textAt(time) {
+        for (var i = SEQ.length - 1; i >= 0; i--) {
+          if (time >= SEQ[i].t) return SEQ[i].text;
+        }
+        return "";
+      }
+      var urlEl = document.getElementById("o9-url");
+      var caretEl = document.getElementById("o9-caret");
+      var BLINK0 = 7.95, BLINK1 = 10.6, CYCLE = 0.55; /* 有限拍数 blink */
+      hwOnUpdate(tl, function () {
+        var t = tl.time();
+        urlEl.textContent = textAt(t);
+        var on = 0;
+        if (t >= BLINK0 && t <= BLINK1) {
+          on = Math.sin(((t - BLINK0) / CYCLE) * Math.PI * 2) > 0 ? 1 : 0;
+        }
+        caretEl.style.opacity = on ? "1" : "0";
+      });
+
+      /* completion pulse (two chained tweens — no repeat/yoyo) */
+      gsap.set("#o9-url-w", { transformOrigin: "0% 50%" });
+      tl.to("#o9-url-w", { scale: 1.04, duration: 0.18, ease: "power2.out" }, 10.45);
+      tl.to("#o9-url-w", { scale: 1, duration: 0.22, ease: "power2.inOut" }, 10.63);
+
+      /* ======================================================================
+         Scene 4 (10.8–13.8s) — coral stamp 落定, then stillness (boil only)
+         ====================================================================== */
+      tl.fromTo(
+        "#o9-stamp-w",
+        { scale: 1.9, opacity: 0 },
+        { scale: 1, opacity: 1, duration: 0.32, ease: "power3.in" },
+        11.15
+      );
+      tl.to("#o9-stamp-w", { scale: 0.94, duration: 0.1, ease: "power2.out" }, 11.47);
+      tl.to("#o9-stamp-w", { scale: 1.04, duration: 0.12, ease: "power2.inOut" }, 11.57);
+      tl.to("#o9-stamp-w", { scale: 1, duration: 0.16, ease: "power2.out" }, 11.69);
+
+      /* ---- boils: the hand-drawn life, seek-safe through one dispatcher ---- */
+      hwBoil(tl, "#o9-markb", { amp: 1.6, rot: 0.5, frameDrop: 3, seed: 7 });
+      hwBoil(tl, gsap.utils.toArray("#o9-dl .o9-note-b"), {
+        amp: 1.8,
+        rot: 0.8,
+        frameDrop: 3,
+        seed: 11,
+      });
+      hwBoil(tl, "#o9-rboil", { amp: 1.6, rot: 0.6, frameDrop: 3, seed: 13 });
+      hwBoil(tl, "#o9-arwb", { amp: 1.4, rot: 0.5, frameDrop: 3, seed: 15 });
+      hwBoil(tl, "#o9-magb", { amp: 1.4, rot: 0.5, frameDrop: 3, seed: 17 });
+      hwBoil(tl, gsap.utils.toArray("#o9-orn .o9-ornb"), {
+        amp: 1.1,
+        rot: 0.35,
+        frameDrop: 3,
+        seed: 19,
+      });
+      hwBoil(tl, gsap.utils.toArray(".o9-subb"), { amp: 0.8, rot: 0.25, frameDrop: 3, seed: 21 });
+
+      window.__timelines[ID] = tl;
+    })();
+  </script>
+</template>

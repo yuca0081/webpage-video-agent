@@ -1,0 +1,13 @@
+# Python / Node 工具链缓存
+.venv/
+npm-cache/
+node_modules/
+__pycache__/
+
+# 平台运行时产物（M1 起启用，按项目落盘）
+data/
+
+# OS / 编辑器
+.DS_Store
+Thumbs.db
+*.log

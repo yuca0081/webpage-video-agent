@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>帧述 · 创作工作台（交互演示）</title>
+<script src="./vue.global.prod.js"></script>
+<style>
+:root{
+  --bg:#FAF9F6; --side:#F5F3EF; --card:#FFFFFF;
+  --ink:#111827; --sub:#4B5563; --muted:#9CA3AF;
+  --line:#E5E7EB; --brand:#F97316; --brand-deep:#EA580C;
+  --grad:linear-gradient(93deg,#F97316,#EF4444);
+  --ok:#10B981; --shadow:0 1px 3px rgba(17,24,39,.06);
+  --shadow-lg:0 8px 28px rgba(17,24,39,.10);
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+[v-cloak]{display:none;}
+body{
+  font-family:"PingFang SC","Microsoft YaHei","Segoe UI",system-ui,sans-serif;
+  background:var(--bg); color:var(--ink); font-size:14px; line-height:1.6;
+}
+button{font:inherit;}
+
+/* ===== 顶栏 ===== */
+.nav{
+  position:sticky; top:0; z-index:30; background:#fff; height:58px;
+  display:flex; align-items:center; gap:26px; padding:0 24px;
+  border-bottom:1px solid #F0EEE9;
+}
+.logo{display:flex; align-items:center; gap:8px; font-weight:800; font-size:16px; letter-spacing:.5px;}
+.logo-mark{
+  width:25px; height:25px; border-radius:8px; background:var(--grad);
+  box-shadow:0 4px 12px rgba(249,115,22,.35);
+  display:flex; align-items:center; justify-content:center; color:#fff; font-size:12px; font-weight:900;
+}
+.nav-menu{display:flex; gap:24px; flex:1;}
+.nav-menu a{color:var(--sub); text-decoration:none; font-size:13.5px; cursor:pointer; padding:4px 2px;}
+.nav-menu a.active{color:var(--brand); font-weight:600;}
+.nav-menu a:hover{color:var(--ink);}
+.pill-orange{
+  border:1.5px solid var(--brand); background:linear-gradient(93deg,rgba(249,115,22,.08),rgba(239,68,68,.08));
+  border-radius:999px; padding:5px 18px; font-size:13px; color:var(--brand-deep); font-weight:600; cursor:pointer;
+}
+
+/* ===== 三栏工作台 ===== */
+.shell{display:grid; grid-template-columns:232px minmax(0,1fr) 400px; height:calc(100vh - 58px);}
+@media (max-width:1100px){ .shell{grid-template-columns:200px minmax(0,1fr) 340px;} }
+@media (max-width:920px){ .shell{grid-template-columns:1fr; height:auto;} .panelL,.panelR{display:none;} }
+
+/* 左：工作空间 */
+.panelL{background:var(--side); border-right:1px solid #ECE9E2; display:flex; flex-direction:column; overflow:hidden;}
+.ws-name{padding:14px 16px 10px; display:flex; align-items:center; gap:8px; cursor:pointer;}
+.ws-name b{font-size:14px; border-bottom:1px dashed var(--muted);}
+.ws-tabs{display:flex; padding:0 10px; gap:2px; border-bottom:1px solid #E7E4DD;}
+.ws-tabs button{
+  flex:1; border:none; background:transparent; padding:7px 2px; font-size:12px; color:var(--sub);
+  cursor:pointer; border-bottom:2px solid transparent;
+}
+.ws-tabs button.on{color:var(--brand-deep); font-weight:600; border-bottom-color:var(--brand);}
+.ws-body{flex:1; overflow-y:auto; padding:12px 12px;}
+.hist-card{
+  background:#fff; border:1px solid var(--line); border-radius:10px; padding:8px; margin-bottom:9px;
+  cursor:pointer; box-shadow:var(--shadow);
+}
+.hist-thumb{height:52px; border-radius:7px; margin-bottom:7px; position:relative; overflow:hidden;}
+.hist-thumb .tag{position:absolute; left:5px; bottom:5px; background:rgba(17,24,39,.72); color:#fff; font-size:9.5px; padding:1px 7px; border-radius:99px;}
+.hist-name{font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.hist-meta{font-size:10.5px; color:var(--muted);}
+.ws-mini{font-size:12px; color:var(--sub); line-height:1.9;}
+.ws-mini b{color:var(--ink);}
+
+/* 中：Agent 对话 */
+.panelC{display:flex; flex-direction:column; overflow:hidden; background:var(--bg);}
+.agent-head{
+  display:flex; align-items:center; gap:10px; padding:12px 20px; background:#fff; border-bottom:1px solid #F0EEE9;
+}
+.agent-avatar{
+  width:32px; height:32px; border-radius:10px; background:var(--grad); color:#fff;
+  display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:800;
+  box-shadow:0 4px 12px rgba(249,115,22,.35);
+}
+.agent-title{font-size:14px; font-weight:700;}
+.agent-status{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted);}
+.agent-status .dot{width:7px; height:7px; border-radius:50%; background:#D1D5DB;}
+.agent-status.work .dot{background:var(--brand); animation:blink 1.2s infinite;}
+@keyframes blink{50%{opacity:.35;}}
+.agent-head .credit{margin-left:auto; font-size:12px; color:var(--muted);}
+
+.chat{flex:1; overflow-y:auto; padding:20px 22px 8px;}
+.msg{display:flex; gap:10px; margin-bottom:16px; max-width:92%;}
+.msg .av{
+  width:30px; height:30px; border-radius:50%; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600;
+}
+.msg.agent .av{background:var(--grad); color:#fff;}
+.msg.user{flex-direction:row-reverse; margin-left:auto;}
+.msg.user .av{background:#E5E7EB; color:#374151;}
+.bubble{
+  border-radius:14px; padding:11px 15px; box-shadow:var(--shadow); max-width:calc(100% - 44px); font-size:13.5px;
+}
+.msg.agent .bubble{background:#fff; border:1px solid var(--line); border-top-left-radius:4px;}
+.msg.user .bubble{background:#FFF7ED; border:1px solid #FED7AA; border-top-right-radius:4px; color:#7C2D12;}
+.bubble .mt{font-weight:600; margin-bottom:3px; font-size:13px;}
+
+/* 聊天里的步骤列表 */
+.steps-line{margin:6px 0 2px;}
+.steps-line .li{display:flex; align-items:center; gap:8px; padding:2.5px 0; font-size:12.5px; color:var(--sub);}
+.steps-line .li .ic{width:18px; text-align:center;}
+.steps-line .li.done{color:var(--ok);}
+.steps-line .li.run{color:var(--brand-deep); font-weight:600;}
+.spin{
+  display:inline-block; width:11px; height:11px; border:2px solid var(--brand); border-top-color:transparent;
+  border-radius:50%; animation:rot .7s linear infinite; vertical-align:-1px;
+}
+@keyframes rot{to{transform:rotate(360deg);}}
+
+/* 聊天里的分镜卡 */
+.sb-card{border:1px solid var(--line); border-radius:10px; overflow:hidden; margin-top:8px;}
+.sb-row{
+  display:flex; align-items:center; gap:8px; padding:7px 10px; border-bottom:1px solid #F3F4F6; font-size:12.5px;
+}
+.sb-row:last-child{border-bottom:none;}
+.sb-row .no{
+  width:20px; height:20px; border-radius:6px; background:#111827; color:#fff; font-size:11px; font-weight:700;
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+}
+.sb-row .k{font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:120px;}
+.sb-row .n{color:var(--sub); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:12px;}
+.sb-row .d{color:var(--muted); font-size:11.5px; flex-shrink:0;}
+.sb-edit .sb-row{display:block;}
+.sb-edit textarea{
+  width:100%; border:1px solid var(--line); border-radius:7px; padding:5px 8px; font:inherit; font-size:12px;
+  color:var(--ink); resize:vertical; margin:3px 0;
+}
+.plan-chips{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;}
+.plan-chip{background:#FFF7ED; border:1px solid #FED7AA; border-radius:7px; padding:2px 9px; font-size:11.5px; color:#9A3412;}
+.plan-chip b{color:var(--brand-deep);}
+.bubble .ops{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;}
+.btn{
+  border:1px solid var(--line); background:#fff; color:var(--ink); border-radius:9px;
+  padding:6px 14px; font-size:13px; cursor:pointer; transition:.15s;
+}
+.btn:hover{border-color:var(--brand); color:var(--brand-deep);}
+.btn.primary{background:var(--grad); border:none; color:#fff; font-weight:700; box-shadow:0 5px 16px rgba(249,115,22,.3);}
+.btn.primary:hover{opacity:.92; color:#fff;}
+.btn.small{padding:3px 10px; font-size:12px; border-radius:7px;}
+.btn.ghost{border-color:transparent; color:var(--muted);}
+.btn.ghost:hover{color:var(--brand-deep);}
+.btn.mini-brand{background:#FFF7ED; border:1px solid #FDBA74; color:#C2410C; font-weight:600;}
+.btn:disabled{opacity:.5; cursor:not-allowed;}
+
+/* 场景风格条 */
+.scene-bar{padding:8px 22px 4px; display:flex; align-items:center; gap:10px; background:var(--bg);}
+.scene-bar .lb{font-size:11.5px; color:var(--muted); flex-shrink:0;}
+.scene-row{display:flex; gap:8px; overflow-x:auto; padding-bottom:6px;}
+.scene-chip{
+  display:flex; align-items:center; gap:7px; border:1.5px solid var(--line); background:#fff; border-radius:999px;
+  padding:3px 12px 3px 4px; cursor:pointer; flex-shrink:0; box-shadow:var(--shadow);
+}
+.scene-chip.sel{border-color:var(--brand); box-shadow:0 4px 14px rgba(249,115,22,.25);}
+.scene-chip .th{width:26px; height:26px; border-radius:50%; border:1px solid rgba(0,0,0,.06);}
+.scene-chip .nm{font-size:12px; font-weight:600;}
+.scene-chip .ck{color:var(--brand); font-size:11px;}
+
+/* 输入栏 */
+.inputbar{padding:10px 22px 16px; background:var(--bg);}
+.input-card{
+  background:#fff; border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow-lg); padding:10px 12px 8px;
+}
+.input-card textarea{
+  width:100%; border:none; outline:none; resize:none; min-height:52px; max-height:140px;
+  font:inherit; font-size:13.5px; color:var(--ink); background:transparent; line-height:1.6;
+}
+.input-card textarea::placeholder{color:var(--muted);}
+.input-foot{display:flex; align-items:center; gap:10px; margin-top:4px;}
+.tool-icon{
+  width:30px; height:30px; border-radius:50%; border:1px solid var(--line); background:#fff;
+  color:var(--sub); cursor:pointer; font-size:13px;
+}
+.tool-icon:hover{border-color:var(--brand); color:var(--brand);}
+.input-foot .cnt{font-size:11px; color:var(--muted);}
+.send-btn{
+  margin-left:auto; border:none; border-radius:10px; padding:7px 18px; font-size:13.5px; font-weight:700;
+  background:var(--grad); color:#fff; cursor:pointer; box-shadow:0 5px 16px rgba(249,115,22,.35);
+  display:flex; align-items:center; gap:5px;
+}
+.send-btn:disabled{background:#E5E7EB; color:#9CA3AF; box-shadow:none; cursor:not-allowed;}
+.ratio-group{display:flex; border:1px solid var(--line); border-radius:999px; overflow:hidden;}
+.ratio-group button{border:none; background:#fff; padding:4px 11px; font-size:11.5px; color:var(--sub); cursor:pointer;}
+.ratio-group button.on{background:var(--brand); color:#fff;}
+
+/* 右：实时预览 */
+.panelR{background:#fff; border-left:1px solid #ECE9E2; display:flex; flex-direction:column; overflow:hidden;}
+.pr-tabs{display:flex; border-bottom:1px solid var(--line);}
+.pr-tabs button{
+  flex:1; border:none; background:transparent; padding:11px 4px; font-size:12.5px; color:var(--sub);
+  cursor:pointer; border-bottom:2px solid transparent;
+}
+.pr-tabs button.on{color:var(--brand-deep); font-weight:600; border-bottom-color:var(--brand);}
+.pr-body{flex:1; overflow-y:auto; padding:14px 16px;}
+.pr-empty{
+  margin-top:30px; text-align:center; color:var(--muted); font-size:12.5px;
+}
+.pr-empty .big{font-size:34px; margin-bottom:8px;}
+.gen-line{margin-bottom:10px;}
+.gen-line .t{display:flex; justify-content:space-between; font-size:11.5px; color:var(--muted); margin-bottom:4px;}
+.gen-line .t b{color:var(--brand-deep);}
+.gen-bar{height:5px; background:var(--line); border-radius:99px; overflow:hidden;}
+.gen-bar .fill{height:100%; background:var(--grad); border-radius:99px; transition:width .4s;}
+
+.player{
+  position:relative; border-radius:14px; overflow:hidden; box-shadow:0 10px 30px rgba(2,6,23,.30);
+  margin:0 auto 12px; width:100%; max-width:250px; aspect-ratio:9/16; background:#000;
+}
+.p-stage{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:0 14px;}
+.p-bgdeco{position:absolute; border-radius:50%; filter:blur(2px); opacity:.35; animation:float 6s ease-in-out infinite;}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+.p-segnum{
+  position:absolute; top:10px; left:10px; font-size:10.5px; color:rgba(255,255,255,.9);
+  background:rgba(0,0,0,.35); padding:1px 9px; border-radius:99px;
+}
+.p-badge{position:absolute; top:10px; right:10px; font-size:10.5px; color:rgba(255,255,255,.9); background:rgba(0,0,0,.35); padding:1px 9px; border-radius:99px;}
+.p-key{font-size:22px; font-weight:800; line-height:1.35; position:relative;}
+.p-sub{
+  position:absolute; left:8px; right:8px; bottom:46px; text-align:center; padding:6px 10px;
+  font-size:12.5px; font-weight:600; color:#fff; line-height:1.65;
+  background:rgba(8,12,24,.4); border-radius:9px;
+}
+.p-sub span{opacity:.68; transition:.12s;}
+.p-sub span.lit{opacity:1;}
+.p-sub span.now{opacity:1; transform:scale(1.15) translateY(-1px); display:inline-block;}
+.p-controls{
+  position:absolute; left:0; right:0; bottom:0; display:flex; align-items:center; gap:8px;
+  padding:8px 10px; background:linear-gradient(transparent, rgba(0,0,0,.6)); color:#fff; font-size:10.5px;
+}
+.p-play{
+  width:26px; height:26px; border-radius:50%; border:none; background:rgba(255,255,255,.95); color:#0f172a;
+  font-size:10px; cursor:pointer; flex-shrink:0;
+}
+.p-bar{flex:1; height:4px; background:rgba(255,255,255,.25); border-radius:99px; position:relative; cursor:pointer;}
+.p-fill{height:100%; background:#fff; border-radius:99px; position:relative;}
+.p-fill::after{content:''; position:absolute; right:-3px; top:-2px; width:8px; height:8px; background:#fff; border-radius:50%;}
+.p-tick{position:absolute; top:-1px; width:2px; height:6px; background:rgba(255,255,255,.6);}
+
+/* 多轨时间轴 */
+.mtl{
+  background:#0B1220; border-radius:12px; padding:9px 10px 8px; margin-bottom:10px;
+  box-shadow:0 6px 18px rgba(2,6,23,.28); user-select:none;
+}
+.mtl-head{display:flex; align-items:center; gap:8px; margin-bottom:5px; padding-left:38px;}
+.mtl-head .cap{font-size:10px; color:rgba(255,255,255,.5); letter-spacing:1px;}
+.mtl-head .zo{
+  margin-left:auto; font-size:9.5px; color:rgba(255,255,255,.4); border:1px solid rgba(255,255,255,.16);
+  border-radius:5px; padding:0 7px; cursor:pointer;
+}
+/* 标签列 30px + 列间距 8px = 38px，与 phStyle 里的 calc 保持一致 */
+.mtl-grid{position:relative; display:grid; grid-template-columns:30px 1fr; column-gap:8px; row-gap:4px;}
+.tl-lab{
+  font-size:9.5px; color:rgba(255,255,255,.48); display:flex; align-items:center; justify-content:flex-end;
+  padding-right:2px; letter-spacing:1px; white-space:nowrap;
+}
+.tl-lane{position:relative; border-radius:5px; background:rgba(255,255,255,.045);}
+.tl-ruler{height:15px; cursor:ew-resize;}
+.tl-ruler .maj{position:absolute; top:0; font-size:8.5px; color:rgba(255,255,255,.55); transform:translateX(-50%); line-height:15px;}
+.tl-ruler .min{position:absolute; bottom:0; width:1px; height:3px; background:rgba(255,255,255,.2);}
+.tl-v{height:30px;} .tl-a{height:21px; cursor:pointer;} .tl-b{height:17px; cursor:pointer;} .tl-s{height:18px; cursor:pointer;}
+.blk{
+  position:absolute; top:2px; bottom:2px; border-radius:4px; overflow:hidden; font-size:9px; line-height:1;
+  color:rgba(255,255,255,.92); cursor:pointer; border:1px solid rgba(255,255,255,.14); white-space:nowrap;
+}
+.blk .bx{position:absolute; inset:0; padding:2px 5px; display:flex; align-items:center; gap:3px; overflow:hidden;}
+.blk .bx i{font-style:normal; opacity:.8; flex-shrink:0;}
+.blk.on{border-color:#fff; box-shadow:0 0 0 1.5px rgba(249,115,22,.9), 0 2px 8px rgba(0,0,0,.4); z-index:2;}
+.blk-video::before{
+  content:''; position:absolute; left:0; right:0; top:0; height:3px;
+  background:repeating-linear-gradient(90deg, rgba(255,255,255,.55) 0 2px, transparent 2px 5px); opacity:.5;
+}
+.blk-narr{background:linear-gradient(90deg, rgba(16,185,129,.38), rgba(16,185,129,.2)); border-color:rgba(16,185,129,.45);}
+.blk-narr .wave{
+  position:absolute; left:0; right:0; bottom:0; height:7px;
+  background:repeating-linear-gradient(90deg, rgba(52,211,153,.95) 0 1.5px, transparent 1.5px 4px); opacity:.75;
+}
+.blk-bgm{
+  left:0; right:0;
+  background:linear-gradient(90deg, rgba(139,92,246,.05), rgba(139,92,246,.45) 10%, rgba(139,92,246,.45) 90%, rgba(139,92,246,.05));
+  border-color:rgba(139,92,246,.5);
+}
+.blk-bgm .bx{justify-content:center; gap:5px;}
+.blk-sub{background:rgba(245,158,11,.24); border-color:rgba(245,158,11,.45); color:#FDE68A;}
+.blk-sub .bx{font-size:8.5px; padding:1px 4px;}
+.blk.dash{background:rgba(255,255,255,.04); border:1px dashed rgba(255,255,255,.3); color:rgba(255,255,255,.38);}
+.tl-ph{position:absolute; top:0; bottom:0; width:0; z-index:5; pointer-events:none;}
+.tl-ph .ln{position:absolute; top:0; bottom:0; left:-.75px; width:1.5px; background:#F97316; box-shadow:0 0 6px rgba(249,115,22,.85);}
+.tl-ph .hd{
+  position:absolute; top:0; left:-5.5px; width:11px; height:12px; border-radius:4px 4px 2px 2px;
+  background:#F97316; cursor:ew-resize; pointer-events:auto; box-shadow:0 0 8px rgba(249,115,22,.7);
+}
+.pr-opts{display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding-top:4px; border-top:1px dashed var(--line); margin-top:6px; padding-top:10px;}
+.tool-select{
+  border:1px solid var(--line); background:#fff; border-radius:999px; padding:4px 8px 4px 10px;
+  font-size:12px; color:var(--sub); cursor:pointer; display:flex; align-items:center; gap:6px;
+}
+.tool-select select{border:none; outline:none; background:transparent; font:inherit; font-size:12px; color:var(--ink); cursor:pointer;}
+
+/* 分镜 tab 列表 */
+.board-list .seg-card{background:#fff; border:1px solid var(--line); border-radius:10px; padding:8px 11px; margin-bottom:8px;}
+.seg-head{display:flex; align-items:center; gap:7px; flex-wrap:wrap;}
+.seg-no{
+  width:21px; height:21px; border-radius:7px; background:#111827; color:#fff; font-size:11px; font-weight:700;
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+}
+.seg-no.cur{background:var(--brand);}
+.seg-dur{font-size:11px; color:var(--muted);}
+.status-chip{font-size:10.5px; padding:1px 8px; border-radius:99px;}
+.status-chip.ok{background:#ECFDF5; color:var(--ok); border:1px solid #A7F3D0;}
+.status-chip.busy{background:#FFF7ED; color:var(--brand-deep); border:1px solid #FED7AA;}
+.seg-head .sp{flex:1;}
+.narr{font-size:11.5px; color:var(--sub); margin:3px 0 5px;}
+.seg-ops{display:flex; gap:5px; flex-wrap:wrap;}
+
+/* 文件 tab */
+.file-row{
+  display:flex; align-items:center; gap:9px; padding:8px 10px; border:1px solid var(--line);
+  border-radius:9px; margin-bottom:7px; font-size:12.5px; cursor:pointer;
+}
+.file-row:hover{border-color:var(--brand);}
+.file-row .ic{width:28px; height:28px; border-radius:7px; background:#F3F4F6; display:flex; align-items:center; justify-content:center; font-size:13px;}
+.file-row .sz{margin-left:auto; color:var(--muted); font-size:11px;}
+
+.toast{
+  position:fixed; bottom:26px; left:50%; transform:translateX(-50%); background:#111827; color:#fff;
+  padding:9px 20px; border-radius:99px; font-size:13px; box-shadow:0 8px 24px rgba(2,6,23,.35); z-index:50;
+}
+.pop-enter-active{animation:popin .45s cubic-bezier(.2,.9,.3,1.2);}
+.pop-leave-active{transition:.15s; opacity:0;}
+@keyframes popin{from{opacity:0; transform:translateY(14px) scale(.94);} to{opacity:1; transform:none;}}
+</style>
+</head>
+<body>
+<div id="app" v-cloak>
+
+  <nav class="nav">
+    <div class="logo"><div class="logo-mark">帧</div>帧述<span style="font-weight:400;color:var(--muted);font-size:12px;margin-left:2px;">AI 解说视频</span></div>
+    <div class="nav-menu">
+      <a @click="toast('演示：占位菜单')">首页</a>
+      <a @click="toast('演示：占位菜单')">案例</a>
+      <a @click="toast('演示：占位菜单')">工具</a>
+      <a class="active">开始创作</a>
+      <a @click="toast('演示：占位菜单')">价格</a>
+    </div>
+    <button class="pill-orange" @click="toast('演示：登录页')">登录</button>
+  </nav>
+
+  <div class="shell">
+
+    <!-- ===== 左：工作空间 ===== -->
+    <aside class="panelL">
+      <div class="ws-name" @click="toast('演示：重命名项目')">
+        <b>{{projectName}}</b><span style="font-size:11px;color:var(--muted);">✎</span>
+      </div>
+      <div class="ws-tabs">
+        <button :class="{on:wsTab==='board'}" @click="wsTab='board'">分镜</button>
+        <button :class="{on:wsTab==='set'}" @click="wsTab='set'; toast('演示：项目设置')">设置</button>
+        <button :class="{on:wsTab==='asset'}" @click="wsTab='asset'; toast('演示：素材库')">资源</button>
+        <button :class="{on:wsTab==='hist'}" @click="wsTab='hist'">历史</button>
+      </div>
+      <div class="ws-body">
+        <template v-if="wsTab==='hist'">
+          <div class="hist-card" v-for="h in history" @click="toast('演示：打开历史项目「'+h.name+'」')">
+            <div class="hist-thumb" :style="{background:h.grad}"><span class="tag">{{h.dur}} · {{h.ratio}}</span></div>
+            <div class="hist-name">{{h.name}}</div>
+            <div class="hist-meta">{{h.when}}</div>
+          </div>
+        </template>
+        <template v-else-if="wsTab==='board'">
+          <div class="ws-mini" v-if="!segments.length">尚未生成分镜。<br>在右侧对话框发送内容后，我会先产出分镜规划。</div>
+          <div class="ws-mini" v-else>
+            <div v-for="(s,i) in segments" style="display:flex;gap:6px;padding:2px 0;">
+              <b>{{i+1}}.</b><span style="flex:1;">{{s.key.replace('\n','')}}</span><span style="color:var(--muted);">{{s.dur}}s</span>
+            </div>
+            <div style="margin-top:6px; color:var(--muted);">共 {{segments.length}} 段 · {{totalDur}}s</div>
+          </div>
+        </template>
+        <template v-else>
+          <div class="ws-mini">演示占位。</div>
+        </template>
+      </div>
+    </aside>
+
+    <!-- ===== 中：Agent 对话 ===== -->
+    <section class="panelC">
+      <div class="agent-head">
+        <div class="agent-avatar">帧</div>
+        <div>
+          <div class="agent-title">解说视频 Agent</div>
+          <div class="agent-status" :class="{work:working}"><span class="dot"></span>{{working?'正在项目中工作':'空闲'}}</div>
+        </div>
+        <span class="credit">积分 {{credit}}</span>
+      </div>
+
+      <div class="chat" ref="chatBox">
+        <div class="msg" v-for="m in messages" :key="m.id" :class="m.role">
+          <div class="av">{{m.role==='user'?'你':'帧'}}</div>
+          <div class="bubble">
+            <template v-if="m.type==='text'"><div v-if="m.title" class="mt">{{m.title}}</div>{{m.text}}</template>
+
+            <template v-else-if="m.type==='article'">
+              <div class="mt">📝 文章素材</div>
+              <div style="max-height:92px; overflow:hidden; position:relative;">
+                <div style="white-space:pre-wrap; color:var(--sub); font-size:12.5px;">{{m.text}}</div>
+                <div style="position:absolute; left:0; right:0; bottom:0; height:34px; background:linear-gradient(transparent,#FFF7ED);"></div>
+              </div>
+              <div style="font-size:11px; color:var(--muted); margin-top:2px;">{{m.text.length}} 字 · 点击可展开（演示）</div>
+            </template>
+
+            <template v-else-if="m.type==='plan'">
+              <div class="mt">我已根据文章规划好分镜方案：</div>
+              <div style="font-size:12.5px; color:var(--sub); margin-bottom:2px;">
+                主题：<b style="color:var(--ink);">从阳光七色到瑞利散射</b> · 结构：钩子 → 原理 → 现象 → 收尾
+              </div>
+              <div class="sb-card" :class="{'sb-edit':sbEditing}">
+                <div class="sb-row" v-for="(sg,i) in segments" :key="sg.id">
+                  <template v-if="!sbEditing">
+                    <span class="no">{{i+1}}</span>
+                    <span class="k">{{sg.key.replace('\n','')}}</span>
+                    <span class="n">{{sg.narration}}</span>
+                    <span class="d">{{sg.dur}}s</span>
+                  </template>
+                  <template v-else>
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:3px;">
+                      <span class="no">{{i+1}}</span>
+                      <span style="font-size:11.5px; font-weight:600;">{{sg.key.replace('\n','')}} · {{sg.dur}}s</span>
+                      <span style="flex:1"></span>
+                      <button class="btn small ghost" @click="moveSeg(i,-1)" :disabled="i===0">↑</button>
+                      <button class="btn small ghost" @click="moveSeg(i,1)" :disabled="i===segments.length-1">↓</button>
+                      <button class="btn small ghost" @click="delSeg(i)">✕</button>
+                    </div>
+                    <textarea v-model="sg.narration" rows="2"></textarea>
+                  </template>
+                </div>
+              </div>
+              <div class="plan-chips">
+                <span class="plan-chip">时间基准：<b>旁白驱动</b></span>
+                <span class="plan-chip">音色：<b>{{voice}}</b></span>
+                <span class="plan-chip">{{bgm}}</span>
+                <span class="plan-chip">风格：<b>{{curStyle.name}}</b></span>
+              </div>
+              <div style="font-size:12px; color:var(--muted); margin-top:6px;">
+                共 {{segments.length}} 段 · 约 {{totalDur}}s · 字幕由旁白逐词高亮
+              </div>
+              <div class="ops" v-if="phase==='storyboard'">
+                <button v-if="!sbEditing" class="btn" @click="sbEditing=true">✎ 编辑分镜</button>
+                <template v-else>
+                  <button class="btn primary" @click="sbEditing=false; toast('分镜已保存')">保存</button>
+                  <button class="btn small ghost" @click="addSeg">＋ 加一段</button>
+                </template>
+                <span style="flex:1"></span>
+                <button class="btn" @click="toast('演示：重新规划分镜')">↻ 重新规划</button>
+                <button class="btn primary" @click="confirmGen">确认，开始制作 →</button>
+              </div>
+              <div v-else class="ops" style="color:var(--ok); font-size:12.5px;">✓ 已确认 · 制作中</div>
+            </template>
+
+            <template v-else-if="m.type==='progress'">
+              <div class="mt">正在制作（第 3 步 / 共 5 步）</div>
+              <div class="steps-line">
+                <div class="li" v-for="p in pipeSteps" :class="p.state">
+                  <span class="ic">
+                    <template v-if="p.state==='done'">✓</template>
+                    <template v-else-if="p.state==='run'"><span class="spin"></span></template>
+                    <template v-else>○</template>
+                  </span>{{p.name}}
+                  <span v-if="p.state==='run'" style="color:var(--muted); font-size:11.5px;">{{p.detail}}</span>
+                </div>
+              </div>
+            </template>
+
+            <template v-else-if="m.type==='draft'">
+              <div class="mt">✓ 草稿已就绪</div>
+              <div style="font-size:12.5px; color:var(--sub); margin-bottom:4px;">
+                {{totalDur}}s · {{aspect}} · 低清草稿（与成片逐帧一致）
+              </div>
+              <div style="font-size:12.5px; color:var(--sub);">
+                右侧预览可播放；<b>哪段不满意就重做哪段</b>——可以在右栏分镜列表点按钮，也可以直接在这里对我说，例如「重做第 3 段画面」。
+              </div>
+              <div class="ops">
+                <button class="btn primary" @click="startRender">满意，出片 →</button>
+                <button class="btn" @click="startGenerating(true)">↻ 整条重新生成</button>
+              </div>
+            </template>
+
+            <template v-else-if="m.type==='render'">
+              <div class="mt">正在渲染成片 · 1080p H.264</div>
+              <div class="gen-line" style="max-width:320px; margin-top:8px;">
+                <div class="t"><span>{{rendStage}}</span><b>{{Math.round(rendPct)}}%</b></div>
+                <div class="gen-bar"><div class="fill" :style="{width:rendPct+'%'}"></div></div>
+              </div>
+            </template>
+
+            <template v-else-if="m.type==='done'">
+              <div class="mt">✓ 成片已就绪</div>
+              <div style="font-size:12.5px; color:var(--sub); margin:2px 0 6px;">
+                {{totalDur}}s · {{segments.length}} 段 · {{aspect}} · 1080p · 单条成本约 ¥0.9（模拟，M0 实测）
+              </div>
+              <div class="ops">
+                <button class="btn primary" @click="toast('演示环境：此处触发真实 MP4 下载')">⬇ 下载 MP4</button>
+                <button class="btn" @click="resetAll">再做一条</button>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <!-- 场景风格 -->
+      <div class="scene-bar">
+        <span class="lb">场景风格</span>
+        <div class="scene-row">
+          <div v-for="st in styles" class="scene-chip" :class="{sel:styleId===st.id}" @click="styleId=st.id">
+            <span class="th" :style="{background:st.swatch}"></span>
+            <span class="nm">{{st.name}}</span>
+            <span class="ck" v-if="styleId===st.id">✓</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 输入栏 -->
+      <div class="inputbar">
+        <div class="input-card">
+          <textarea v-model="input" placeholder="粘贴文章正文，或输入视频主题…（已预置示例，直接点发送）"
+            @keydown.enter.exact.prevent="sendMsg"></textarea>
+          <div class="input-foot">
+            <button class="tool-icon" @click="toast('演示：附件')">📎</button>
+            <div class="ratio-group">
+              <button :class="{on:aspect==='16:9'}" @click="aspect='16:9'">16:9</button>
+              <button :class="{on:aspect==='9:16'}" @click="aspect='9:16'">9:16</button>
+            </div>
+            <span class="cnt">{{input.length}} / 2000</span>
+            <button class="send-btn" :disabled="!input.trim()" @click="sendMsg">发送 ➤</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 右：实时预览 ===== -->
+    <aside class="panelR">
+      <div class="pr-tabs">
+        <button :class="{on:prTab==='preview'}" @click="prTab='preview'">实时预览</button>
+        <button :class="{on:prTab==='board'}" @click="prTab='board'">分镜</button>
+        <button :class="{on:prTab==='files'}" @click="prTab='files'">文件</button>
+      </div>
+      <div class="pr-body">
+
+        <template v-if="prTab==='preview'">
+          <template v-if="phase==='input'">
+            <div class="pr-empty"><div class="big">🎬</div>与 Agent 开始对话后<br>实时预览会自动更新</div>
+          </template>
+          <template v-else>
+            <div class="gen-line">
+              <div class="t"><span>{{genLabel}}</span><b>{{genPct}}%</b></div>
+              <div class="gen-bar"><div class="fill" :style="{width:genPct+'%'}"></div></div>
+            </div>
+            <div class="player" :style="playerBg">
+              <div class="p-stage">
+                <div class="p-bgdeco" :style="deco1"></div>
+                <div class="p-bgdeco" :style="deco2"></div>
+                <div class="p-segnum">段 {{curSegIdx+1}} / {{segments.length}}</div>
+                <div class="p-badge">{{aspect}} · {{phase==='draft'||phase==='rendering'||phase==='done'?'草稿':'合成中'}}</div>
+                <transition name="pop" mode="out-in">
+                  <div class="p-key" :key="curSeg.id" :style="{color:curStyle.ink}">{{curSeg.key}}</div>
+                </transition>
+              </div>
+              <div class="p-sub">
+                <span v-for="(c,i) in curChars" :key="i" :class="{lit:i<=curCharIdx, now:i===curCharIdx}">{{c}}</span>
+              </div>
+              <div class="p-controls">
+                <button class="p-play" @click="togglePlay">{{playing?'❚❚':'▶'}}</button>
+                <div class="p-bar" @click="seek($event)">
+                  <div class="p-fill" :style="{width:progress+'%'}"></div>
+                  <div class="p-tick" v-for="tk in ticks" :style="{left:tk+'%'}"></div>
+                </div>
+                <span>{{fmt(t)}} / {{fmt(totalDur)}}</span>
+              </div>
+            </div>
+            <div class="mtl" v-if="segments.length">
+              <div class="mtl-head">
+                <span class="cap">多轨时间轴</span>
+                <span class="zo" @click="toast('演示：时间轴缩放/展开')">🔍</span>
+              </div>
+              <div class="mtl-grid" ref="mtlGrid">
+                <div class="tl-lab">⏱</div>
+                <div class="tl-lane tl-ruler" @mousedown="tlDown">
+                  <span class="maj" v-for="tk in rulerMajor" :style="{left:tk.f+'%'}">{{tk.s}}s</span>
+                  <span class="min" v-for="tk in rulerMinor" :style="{left:tk.f+'%'}"></span>
+                </div>
+                <div class="tl-lab">视频</div>
+                <div class="tl-lane tl-v">
+                  <div class="blk blk-video" v-for="(sg,i) in segments" :class="{on:curSegIdx===i}"
+                    :style="blkV(i)" :title="'段 '+(i+1)+' · '+sg.brief" @click.stop="jumpTo(i)">
+                    <span class="bx"><i>{{i+1}}</i><span>{{sg.key.replace('\n','')}}</span></span>
+                  </div>
+                </div>
+                <div class="tl-lab">旁白</div>
+                <div class="tl-lane tl-a">
+                  <div class="blk blk-narr" v-for="(sg,i) in segments"
+                    :class="[{on:curSegIdx===i}, audioReady?'':'dash']"
+                    :style="blk(i)" :title="'旁白 '+(i+1)+'（'+voice+'）：'+sg.narration" @click.stop="tlSeek">
+                    <span class="bx"><i>{{i+1}}</i></span>
+                    <span class="wave" v-if="audioReady"></span>
+                  </div>
+                </div>
+                <div class="tl-lab">音乐</div>
+                <div class="tl-lane tl-b">
+                  <div v-if="bgm!=='BGM · 无'" class="blk blk-bgm" :class="audioReady?'':'dash'"
+                    title="背景音乐 · 对旁白自动闪避（-14dB）">
+                    <span class="bx">🎵 {{bgmShort}}<template v-if="audioReady"> · 自动闪避</template></span>
+                  </div>
+                  <div v-else class="blk dash" style="left:0; right:0;"><span class="bx">未启用 BGM</span></div>
+                </div>
+                <div class="tl-lab">字幕</div>
+                <div class="tl-lane tl-s">
+                  <div class="blk blk-sub" v-for="(sg,i) in segments"
+                    :class="[{on:curSegIdx===i}, audioReady?'':'dash']"
+                    :style="blk(i)" :title="'字幕 '+(i+1)+' · 逐词高亮（TTS 时间戳）'" @click.stop="tlSeek">
+                    <span class="bx">{{sg.narration.slice(0,10)}}</span>
+                  </div>
+                </div>
+                <div class="tl-ph" :style="phStyle">
+                  <span class="ln"></span>
+                  <span class="hd" @mousedown.stop.prevent="tlDown"></span>
+                </div>
+              </div>
+            </div>
+          </template>
+          <div class="pr-opts">
+            <label class="tool-select">👩<select v-model="voice"><option v-for="v in voices">{{v}}</option></select></label>
+            <label class="tool-select">🎵<select v-model="bgm"><option>BGM · 轻电子</option><option>BGM · 钢琴叙事</option><option>BGM · 无</option></select></label>
+          </div>
+          <div style="font-size:10.5px; color:var(--muted); text-align:center; margin-top:8px;">确定性渲染：预览即成片，导出无「浏览器效果不一致」问题</div>
+        </template>
+
+        <template v-else-if="prTab==='board'">
+          <div v-if="!segments.length" class="pr-empty"><div class="big">🎬</div>尚未生成分镜</div>
+          <div class="board-list" v-else>
+            <div class="seg-total-row" style="font-size:11.5px; color:var(--muted); margin-bottom:8px; display:flex; justify-content:space-between;">
+              <span>分段列表 · 哪段不满意就重做哪段</span><b style="color:var(--ink);">共 {{segments.length}} 段</b>
+            </div>
+            <div class="seg-card" v-for="(sg,i) in segments" :key="sg.id">
+              <div class="seg-head">
+                <span class="seg-no" :class="{cur:curSegIdx===i}">{{i+1}}</span>
+                <span class="seg-dur">{{sg.dur}}s</span>
+                <span class="status-chip" :class="sg.status.cls" v-if="sg.status">
+                  <template v-if="sg.status.busy"><span class="spin"></span>{{sg.status.txt}}</template>
+                  <template v-else>{{sg.status.txt}}</template>
+                </span>
+                <span class="sp"></span>
+                <button class="btn small ghost" @click="jumpTo(i); prTab='preview'">▶</button>
+              </div>
+              <div class="narr" v-if="!sg.editing">{{sg.narration}}</div>
+              <textarea v-else class="edit-mini" v-model="sg.narration" rows="2"
+                style="width:100%; border:1px solid var(--line); border-radius:7px; padding:5px 8px; font:inherit; font-size:11.5px;"></textarea>
+              <div class="seg-ops">
+                <button v-if="!sg.editing" class="btn small" @click="sg.editing=true">改文案</button>
+                <template v-else>
+                  <button class="btn small mini-brand" @click="sg.editing=false; redoSeg(i,'narr')">保存并重新配音</button>
+                  <button class="btn small ghost" @click="sg.editing=false">取消</button>
+                </template>
+                <button class="btn small mini-brand" @click="redoSeg(i,'visual')">↻ 重做画面</button>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <template v-else>
+          <div class="file-row" v-for="f in files" @click="toast('演示：下载 '+f.n)">
+            <span class="ic">{{f.ic}}</span><span>{{f.n}}</span><span class="sz">{{f.sz}}</span>
+          </div>
+          <div style="font-size:11px; color:var(--muted); margin-top:6px;">每步产物落盘，可从任意步骤重放（架构承诺）</div>
+        </template>
+
+      </div>
+    </aside>
+  </div>
+
+  <div class="toast" v-if="toastMsg">{{toastMsg}}</div>
+</div>
+
+<script>
+const { createApp } = Vue;
+
+const SAMPLE_ARTICLE = `为什么天空是蓝色的？
+
+晴朗的日子里抬头看，天空是一片湛蓝。这个颜色的来源，其实是阳光和大气层联手上演的一场物理表演。
+
+阳光看起来是白色的，但它实际上由红、橙、黄、绿、蓝、靛、紫七种颜色的光混合而成，每种颜色的波长都不一样。
+
+当阳光进入地球大气层，会撞上数不清的气体分子。其中蓝光波长最短、频率最高，最容易被这些微小分子弹开，这个现象叫做瑞利散射。被弹开的蓝光在天空里四处乱撞，最后从各个方向进入你的眼睛。
+
+到了傍晚，阳光需要斜穿更厚的大气层，蓝光在半路就被散射得所剩无几，反而是波长更长的红光和橙光坚持到了最后——这就是晚霞烧红半边天的原因。
+
+所以，天空的蓝不是涂上去的颜色，而是光在空气里不断"转弯"的结果。`;
+
+const SEED_SEGMENTS = [
+  { key:'天空为什么\n是蓝的？', dur:8,  narration:'你有没有想过，天空为什么是蓝色的？答案，藏在光和空气的一场碰撞里。', brief:'蓝天渐变背景，大字标题逐字浮现，开场钩子' },
+  { key:'阳光 ≠ 白色', dur:12, narration:'阳光看起来是白的，其实由红橙黄绿蓝靛紫七种颜色组成，每种颜色的波长都不一样。', brief:'白色光束从左侧射入，分解为七色光谱条依次展开' },
+  { key:'瑞利散射', dur:14, narration:'蓝光波长最短，最容易撞上空气里的微小分子，被弹向四面八方——这就是瑞利散射。', brief:'粒子碰撞动效：蓝色光点撞上分子后向四周弹开' },
+  { key:'满眼都是蓝', dur:12, narration:'被散射的蓝光从四面八方进入你的眼睛，所以抬头看到的天空，就是一片蓝色。', brief:'视角示意：四周的蓝色光线汇聚到中心视线点' },
+  { key:'晚霞的秘密', dur:12, narration:'傍晚时阳光要斜穿更厚的大气，蓝光半路散尽，红橙光坚持到最后，烧红了半边天。', brief:'日落暖色渐变过渡，太阳低垂，天边烧红' },
+  { key:'光是"转弯"的', dur:10, narration:'所以天空的蓝不是涂上去的颜色，而是光在空气里不断转弯的结果。', brief:'光线路径弯曲示意，收尾定格 + 频道 logo 位' },
+];
+
+const STYLES = [
+  { id:'darktech', name:'科技深空', swatch:'linear-gradient(135deg,#0B1226,#1E3A8A 68%,#38BDF8)', c1:'#0B1226', c2:'#1E3A8A', accent:'#38BDF8', ink:'#E2E8F0' },
+  { id:'warm',     name:'温暖图解', swatch:'linear-gradient(135deg,#FEF3C7,#FDBA74 68%,#F97316)',    c1:'#FFF7ED', c2:'#FDE68A', accent:'#EA580C', ink:'#431407' },
+  { id:'sketch',   name:'手绘叙事', swatch:'linear-gradient(135deg,#FDF6E3,#E8D5B5 68%,#C2703D)',   c1:'#FDF6E3', c2:'#EAD9BC', accent:'#B45309', ink:'#3F2D1E' },
+  { id:'cartoon',  name:'卡通童趣', swatch:'linear-gradient(135deg,#DCFCE7,#86EFAC 68%,#22C55E)',   c1:'#ECFDF5', c2:'#BBF7D0', accent:'#16A34A', ink:'#14361F' },
+  { id:'pure',     name:'纯白品牌', swatch:'linear-gradient(135deg,#FFFFFF,#EFF6FF 68%,#93C5FD)',   c1:'#FFFFFF', c2:'#E0F2FE', accent:'#2563EB', ink:'#0F172A' },
+  { id:'mono',     name:'黑白极简', swatch:'linear-gradient(135deg,#FAFAFA,#D4D4D8 68%,#71717A)',   c1:'#FAFAFA', c2:'#E4E4E7', accent:'#111827', ink:'#111827' },
+];
+
+let mid = 0;
+const nid = () => 'm' + (++mid);
+
+createApp({
+  data(){ return {
+    toastMsg:'',
+    projectName:'未命名项目',
+    wsTab:'hist', prTab:'preview',
+    phase:'input',           // input | storyboard | generating | draft | rendering | done
+    working:false, credit:48,
+    input:SAMPLE_ARTICLE,
+    messages:[
+      { id:nid(), role:'agent', type:'text',
+        text:'你好，我是解说视频 Agent。粘贴一篇文章（或输入主题），我会先产出分镜文档给你确认——内容你把关，画面交给我。右侧预览会随制作实时更新。' },
+    ],
+    sbEditing:false,
+    styles:STYLES, styleId:'darktech',
+    voices:['晓辰（女声）','晨风（男声）','少年清朗'], voice:'晓辰（女声）',
+    bgm:'BGM · 轻电子',
+    aspect:'9:16',
+    history:[
+      { name:'天空为什么是蓝的', when:'今天 14:20 · 已出片', dur:'68s', ratio:'9:16', grad:'linear-gradient(135deg,#0B1226,#38BDF8)' },
+      { name:'光的散射：瑞利的故事', when:'昨天 21:07 · 草稿', dur:'92s', ratio:'16:9', grad:'linear-gradient(135deg,#FEF3C7,#F97316)' },
+      { name:'三分钟看懂量子纠缠', when:'9月16日 · 已出片', dur:'135s', ratio:'9:16', grad:'linear-gradient(135deg,#DCFCE7,#22C55E)' },
+    ],
+    segments:[], genPct:0,
+    pipeSteps:[
+      {name:'TTS 配音（逐词时间戳）', state:'wait', detail:''},
+      {name:'画面合成物生成', state:'wait', detail:''},
+      {name:'质量门禁 lint/check', state:'wait', detail:''},
+      {name:'草稿渲染', state:'wait', detail:''},
+    ],
+    playing:false, t:0, lastTs:0, tickIv:0,
+    rendPct:0, rendStage:'', rendTimer:null,
+  };},
+  computed:{
+    curStyle(){ return this.styles.find(s=>s.id===this.styleId); },
+    genLabel(){
+      return { input:'等待开始', storyboard:'等待确认分镜', generating:'合成中', draft:'草稿就绪', rendering:'高清渲染中', done:'完成' }[this.phase];
+    },
+    files(){
+      const fs=[{ic:'📄', n:'script.json（分镜表）', sz:'2.1KB'}];
+      this.segments.forEach((s,i)=>fs.push({ic:'🎵', n:`audio/seg${i+1}.wav（含逐词时间戳）`, sz:'—'}));
+      if(this.phase!=='input'&&this.phase!=='storyboard'){
+        fs.push({ic:'🎞', n:'compositions/（每段一个 sub-comp）', sz:'—'});
+        fs.push({ic:'🎬', n:'renders/draft.mp4', sz:'4.2MB'});
+      }
+      if(this.phase==='done') fs.push({ic:'🎬', n:'renders/final_1080p.mp4', sz:'18.6MB'});
+      return fs;
+    },
+    totalDur(){ return this.segments.reduce((a,s)=>a+s.dur,0); },
+    segStarts(){ let acc=0; return this.segments.map(s=>{ const v=acc; acc+=s.dur; return v; }); },
+    curSegIdx(){ for(let i=this.segments.length-1;i>=0;i--){ if(this.t>=this.segStarts[i]) return i; } return 0; },
+    curSeg(){ return this.segments[this.curSegIdx] || {key:'',narration:'',dur:1,id:'x'}; },
+    curChars(){ return Array.from(this.curSeg.narration); },
+    curCharIdx(){
+      const seg=this.curSeg, st=this.segStarts[this.curSegIdx];
+      const p=(this.t-st)/seg.dur;
+      return Math.min(this.curChars.length-1, Math.floor(p*this.curChars.length));
+    },
+    progress(){ return this.totalDur ? (this.t/this.totalDur)*100 : 0; },
+    ticks(){ return this.segStarts.slice(1).map(s=>(s/this.totalDur)*100); },
+    audioReady(){ return ['generating','draft','rendering','done'].includes(this.phase); },
+    bgmShort(){ return this.bgm.replace('BGM · ',''); },
+    rulerMajor(){
+      const T=this.totalDur||1, out=[];
+      for(let s=0;s<=this.totalDur;s+=10) out.push({s, f:s/T*100});
+      if(this.totalDur%10) out.push({s:this.totalDur, f:100});
+      return out;
+    },
+    rulerMinor(){
+      const T=this.totalDur||1, out=[];
+      for(let s=5;s<this.totalDur;s+=10) out.push({f:s/T*100});
+      return out;
+    },
+    phStyle(){
+      const f=this.totalDur ? Math.min(1, Math.max(0, this.t/this.totalDur)) : 0;
+      /* 38px = 标签列 30px + 列间距 8px */
+      return {left:`calc(38px + (100% - 38px)*${f.toFixed(4)})`};
+    },
+    playerBg(){ return {background:`linear-gradient(160deg, ${this.curStyle.c1}, ${this.curStyle.c2})`}; },
+    deco1(){ return {width:'90px',height:'90px',background:this.curStyle.accent,left:'8%',top:'12%',opacity:'.22'}; },
+    deco2(){ return {width:'52px',height:'52px',background:this.curStyle.accent,right:'10%',bottom:'20%',opacity:'.16',animationDelay:'-3s'}; },
+  },
+  methods:{
+    toast(m){ this.toastMsg=m; clearTimeout(this._tt); this._tt=setTimeout(()=>this.toastMsg='',2200); },
+    pushMsg(m){ m.id=nid(); this.messages.push(m); this.$nextTick(()=>{ const b=this.$refs.chatBox; if(b) b.scrollTop=b.scrollHeight; }); },
+    seedSegments(){
+      this.segments=SEED_SEGMENTS.map((s,i)=>({
+        id:'sg'+i+'_'+Date.now(), key:s.key, dur:s.dur, narration:s.narration,
+        brief:s.brief, editing:false, status:null,
+      }));
+    },
+    moveSeg(i,d){ const j=i+d; if(j<0||j>=this.segments.length) return; const a=this.segments; [a[i],a[j]]=[a[j],a[i]]; },
+    delSeg(i){ this.segments.splice(i,1); if(!this.segments.length) this.toast('至少保留一段'); },
+    addSeg(){
+      this.segments.push({ id:'sg_new'+Date.now(), key:'新段落', dur:8,
+        narration:'（在这里写下这一段的旁白）', brief:'（画面提示）', editing:true, status:null });
+      this.sbEditing=true;
+    },
+    sendMsg(){
+      const text=this.input.trim();
+      if(!text) return;
+      this.pushMsg({ role:'user', type: this.phase==='input' ? 'article' : 'text', text });
+      this.input='';
+      if(this.phase==='input'){
+        this.seedSegments();
+        setTimeout(()=>{ this.pushMsg({ role:'agent', type:'plan' }); this.phase='storyboard'; this.prTab='preview'; }, 700);
+      } else if(this.phase==='storyboard'){
+        setTimeout(()=>this.pushMsg({ role:'agent', type:'text', text:'收到补充说明。分镜方案如上，确认后我开始制作；需要调整可直接点「编辑分镜」。' }), 600);
+      } else if(this.phase==='draft'){
+        const m=text.match(/重做.*?(\d+)|第\s*(\d+)\s*段/);
+        if(m){
+          const n=parseInt(m[1]||m[2]||'1');
+          if(n>=1&&n<=this.segments.length){
+            this.redoSeg(n-1, /文案|配音/.test(text)?'narr':'visual');
+            setTimeout(()=>this.pushMsg({ role:'agent', type:'text', text:`好的，正在重做第 ${n} 段${/文案|配音/.test(text)?'配音':'画面'}，完成后右侧预览自动更新。` }), 400);
+            return;
+          }
+        }
+        setTimeout(()=>this.pushMsg({ role:'agent', type:'text', text:'收到反馈。演示版仅支持「重做第 N 段（画面/配音）」指令；正式版由 Agent 理解任意修改意图。' }), 600);
+      } else if(this.phase==='done'){
+        setTimeout(()=>this.pushMsg({ role:'agent', type:'text', text:'这条成片已完成。点「再做一条」或直接粘贴新文章开始下一条。' }), 500);
+      } else {
+        setTimeout(()=>this.pushMsg({ role:'agent', type:'text', text:'正在制作中，完成后我会通知你。' }), 500);
+      }
+    },
+    confirmGen(){
+      this.sbEditing=false;
+      this.phase='generating'; this.working=true;
+      this.genPct=4;
+      this.pipeSteps.forEach(p=>{p.state='wait'; p.detail='';});
+      this.pushMsg({ role:'agent', type:'progress' });
+      const setStep=(i,state,detail)=>{ this.pipeSteps[i].state=state; if(detail) this.pipeSteps[i].detail=detail; };
+      const chain=[
+        ()=>{ setStep(0,'run','逐段合成中'); this.genPct=12; },
+        ...this.segments.map((s,i)=>()=>{ this.genPct=Math.min(40, 12+(i+1)*5); }),
+        ()=>{ setStep(0,'done'); setStep(1,'run','6 个 sub-composition'); this.genPct=52; },
+        ()=>{ this.genPct=64; },
+        ()=>{ setStep(1,'done'); setStep(2,'run','运行时/布局/对比度'); this.genPct=74; },
+        ()=>{ setStep(2,'done'); setStep(3,'run','720×1280 @12fps'); this.genPct=86; },
+        ()=>{ setStep(3,'done'); this.genPct=100; },
+        ()=>{
+          this.working=false; this.phase='draft';
+          this.pushMsg({ role:'agent', type:'draft' });
+        },
+      ];
+      let k=0;
+      clearTimeout(this.logTimer);
+      const next=()=>{ if(k<chain.length){ chain[k++](); this.logTimer=setTimeout(next, 560); } };
+      next();
+    },
+    startGenerating(redo){
+      this.phase='generating'; this.working=true; this.stopPlay();
+      this.genPct=4;
+      this.pipeSteps.forEach(p=>{p.state='wait'; p.detail='';});
+      this.pushMsg({ role:'agent', type:'progress' });
+      const setStep=(i,state,detail)=>{ this.pipeSteps[i].state=state; if(detail) this.pipeSteps[i].detail=detail; };
+      const chain=[
+        ()=>{ setStep(0,'run','逐段合成中'); this.genPct=20; },
+        ()=>{ setStep(0,'done'); setStep(1,'run','重新生成合成物'); this.genPct=55; },
+        ()=>{ setStep(1,'done'); setStep(2,'run','lint/check'); this.genPct=75; },
+        ()=>{ setStep(2,'done'); setStep(3,'run','草稿渲染'); this.genPct=92; },
+        ()=>{ setStep(3,'done'); this.genPct=100; },
+        ()=>{ this.working=false; this.phase='draft'; this.pushMsg({ role:'agent', type:'draft' }); },
+      ];
+      let k=0;
+      clearTimeout(this.logTimer);
+      const next=()=>{ if(k<chain.length){ chain[k++](); this.logTimer=setTimeout(next, 420); } };
+      next();
+    },
+    redoSeg(i,kind){
+      const sg=this.segments[i];
+      sg.status={cls:'busy',busy:true,txt: kind==='narr'?'重新配音中':'重做画面中'};
+      this.working=true;
+      setTimeout(()=>{
+        sg.status = kind==='narr'
+          ? {cls:'ok',txt:'已重新配音 · 时长已更新'}
+          : {cls:'ok',txt:'画面已重做'};
+        this.working=false;
+      },1300);
+    },
+    jumpTo(i){ this.t=this.segStarts[i]+0.01; if(!this.playing) this.togglePlay(); },
+    togglePlay(){
+      this.playing=!this.playing;
+      if(this.playing){
+        if(this.t>=this.totalDur-0.05) this.t=0;
+        this.lastTs=performance.now();
+        clearInterval(this.tickIv);
+        this.tickIv=setInterval(()=>{
+          const now=performance.now(); const dt=(now-this.lastTs)/1000; this.lastTs=now;
+          this.t+=dt;
+          if(this.t>=this.totalDur){ this.t=this.totalDur; this.playing=false; clearInterval(this.tickIv); }
+        },100);
+      } else { clearInterval(this.tickIv); }
+    },
+    stopPlay(){ this.playing=false; clearInterval(this.tickIv); },
+    seek(e){
+      const bar=e.currentTarget; const r=(e.clientX-bar.getBoundingClientRect().left)/bar.offsetWidth;
+      this.t=Math.max(0,Math.min(this.totalDur-0.05, r*this.totalDur));
+    },
+    blk(i){
+      const T=this.totalDur||1, st=this.segStarts[i]||0, d=(this.segments[i]||{}).dur||0;
+      return {left:(st/T*100)+'%', width:(d/T*100)+'%'};
+    },
+    blkV(i){
+      const o=this.blk(i);
+      o.background=`linear-gradient(160deg, ${this.curStyle.c2}, ${this.curStyle.c1})`;
+      o.color=this.curStyle.ink;
+      o.borderColor='rgba(255,255,255,.18)';
+      return o;
+    },
+    tlSeekAt(clientX){
+      const g=this.$refs.mtlGrid; if(!g) return;
+      const r=g.getBoundingClientRect();
+      const x0=r.left+38, w=r.width-38;
+      const f=Math.max(0, Math.min(1, (clientX-x0)/w));
+      this.t=Math.max(0, Math.min(this.totalDur-0.05, f*this.totalDur));
+    },
+    tlSeek(e){ this.tlSeekAt(e.clientX); },
+    tlDown(e){
+      this.tlSeekAt(e.clientX);
+      const mv=ev=>this.tlSeekAt(ev.clientX);
+      const up=()=>{ document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); };
+      document.addEventListener('mousemove',mv);
+      document.addEventListener('mouseup',up);
+    },
+    fmt(s){ s=Math.round(s); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); },
+    startRender(){
+      this.phase='rendering'; this.stopPlay();
+      this.pushMsg({ role:'agent', type:'render' });
+      const stages=[[15,'排队中…'],[70,'渲染 1080p（逐帧确定性渲染）'],[90,'编码 H.264'],[100,'完成']];
+      let si=0;
+      clearInterval(this.rendTimer);
+      this.rendTimer=setInterval(()=>{
+        this.rendPct=Math.min(100,this.rendPct+Math.random()*6+3);
+        while(si<stages.length-1 && this.rendPct>=stages[si][0]) si++;
+        this.rendStage=stages[si][1];
+        if(this.rendPct>=100){
+          clearInterval(this.rendTimer);
+          setTimeout(()=>{ this.phase='done'; this.pushMsg({ role:'agent', type:'done' }); }, 500);
+        }
+      },260);
+    },
+    resetAll(){
+      this.stopPlay(); clearTimeout(this.logTimer); clearInterval(this.rendTimer);
+      this.phase='input'; this.segments=[]; this.t=0; this.genPct=0; this.rendPct=0;
+      this.sbEditing=false; this.working=false;
+      this.messages=[{ id:nid(), role:'agent', type:'text',
+        text:'你好，我是解说视频 Agent。粘贴一篇文章（或输入主题），我会先产出分镜文档给你确认——内容你把关，画面交给我。' }];
+      this.input=SAMPLE_ARTICLE;
+      this.wsTab='hist'; this.prTab='preview';
+    },
+  },
+}).mount('#app');
+</script>
+</body>
+</html>

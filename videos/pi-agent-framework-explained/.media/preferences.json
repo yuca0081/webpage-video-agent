@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "preferences": {
+    "flow": {
+      "value": "automation",
+      "confirmed_in": [
+        "pi-agent-framework-explained"
+      ],
+      "updated_at": "2026-09-20T09:11:13.439Z"
+    },
+    "storyboard": {
+      "value": "no",
+      "confirmed_in": [
+        "pi-agent-framework-explained"
+      ],
+      "updated_at": "2026-09-20T09:11:13.532Z"
+    },
+    "language": {
+      "value": "zh",
+      "confirmed_in": [
+        "pi-agent-framework-explained"
+      ],
+      "updated_at": "2026-09-20T09:11:13.631Z"
+    },
+    "style_preset.faceless-explainer": {
+      "value": "daisy-days",
+      "confirmed_in": [
+        "pi-agent-framework-explained"
+      ],
+      "updated_at": "2026-09-20T09:13:11.676Z"
+    }
+  },
+  "sightings": {}
+}

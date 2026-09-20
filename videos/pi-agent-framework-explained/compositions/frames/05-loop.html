@@ -1,0 +1,925 @@
+<template>
+  <div
+    id="root"
+    data-composition-id="05-loop"
+    data-start="0"
+    data-duration="15.583"
+    data-width="1920"
+    data-height="1080"
+  >
+    <style>
+/* system font declarations (satisfy lint; resolved locally by the OS) */
+@font-face{font-family:"KaiTi";src:local("KaiTi"),local("楷体"),local("SimKai");}
+@font-face{font-family:"STKaiti";src:local("STKaiti"),local("华文楷体");}
+@font-face{font-family:"Microsoft YaHei";src:local("Microsoft YaHei"),local("微软雅黑");}
+
+      @font-face {
+        font-family: "Courier Prime";
+        src: url("assets/fonts/courier-prime-700.woff2") format("woff2");
+        font-weight: 700;
+        font-display: block;
+      }
+      #root {
+        position: absolute;
+        inset: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        pointer-events: none;
+        font-family: "KaiTi", "STKaiti", "Microsoft YaHei", sans-serif;
+      }
+      /* ---- background: workbench paper (full-bleed clip, lowest track) ---- */
+      #root .f05-bg {
+        position: absolute;
+        inset: 0;
+        background-color: #f5f0e6;
+        background-image: radial-gradient(
+          circle,
+          rgba(45, 45, 45, 0.1) 1.7px,
+          rgba(45, 45, 45, 0) 1.8px
+        );
+        background-size: 46px 46px;
+        background-position: 23px 23px;
+      }
+      #root .f05-bg svg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+      }
+      #root .f05-bg path {
+        fill: none;
+        stroke: #2d2d2d;
+        stroke-width: 2.4px;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      #root .f05-bg path.f05-fill-butter {
+        fill: #fde68a;
+      }
+      #root .f05-bg path.f05-fill-peach {
+        fill: #ffcba4;
+      }
+      /* ---- content stage ---- */
+      #root .f05-stageclip {
+        position: absolute;
+        inset: 0;
+      }
+      #root .f05-stage {
+        position: absolute;
+        inset: 0;
+      }
+      #root .f05-stage > * {
+        position: absolute;
+      }
+      #root svg.f05-ring {
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+      }
+      #root .f05-ring path {
+        fill: none;
+        stroke: #2d2d2d;
+        stroke-width: 6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      #root .f05-ring path.f05-travel {
+        stroke: none;
+      }
+      #root .f05-ring path.f05-ripple {
+        stroke: #f8635f;
+        stroke-width: 5;
+      }
+      /* ---- wobble node boxes (hw-box-label anatomy: wrapper > deform > boil > svg+label) ---- */
+      #root .f05-box {
+        left: 0;
+        top: 0;
+        width: 250px;
+        height: 136px;
+      }
+      #root .f05-box .f05-bx-deform,
+      #root .f05-box .f05-bx-boil {
+        position: absolute;
+        inset: 0;
+      }
+      #root .f05-box svg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+        filter: drop-shadow(4px 4px 0 #2d2d2d);
+      }
+      #root .f05-box path.f05-bx-rect {
+        fill: #ffffff;
+        stroke: #2d2d2d;
+        stroke-width: 6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      #root .f05-bx-label {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+      }
+      #root .f05-bx-label b {
+        font-size: 60px;
+        font-weight: 700;
+        color: #2d2d2d;
+        letter-spacing: 2px;
+        line-height: 1;
+      }
+      #root .f05-bx-label i {
+        font-style: normal;
+        font-family: "Courier Prime", monospace;
+        font-weight: 700;
+        font-size: 19px;
+        color: #6b6b6b;
+        letter-spacing: 1px;
+      }
+      /* ---- result-return note ---- */
+      #root .f05-note-w {
+        left: 425px;
+        top: 688px;
+        width: 170px;
+        height: 44px;
+      }
+      #root .f05-note {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 32px;
+        font-weight: 700;
+        color: #2d2d2d;
+        letter-spacing: 2px;
+      }
+      /* ---- code-chip token ---- */
+      #root .f05-chip {
+        left: 0;
+        top: 0;
+        width: 78px;
+        height: 54px;
+        background: #ffffff;
+        border: 3px solid #2d2d2d;
+        border-radius: 14px;
+        box-shadow: 4px 4px 0 #2d2d2d;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: "Courier Prime", monospace;
+        font-weight: 700;
+        font-size: 26px;
+        color: #2d2d2d;
+      }
+      /* ---- lap runner dot ---- */
+      #root .f05-runner {
+        left: 0;
+        top: 0;
+        width: 22px;
+        height: 22px;
+        background: #f8635f;
+        border: 3px solid #2d2d2d;
+        border-radius: 50%;
+      }
+      /* ---- coral DONE stamp ---- */
+      #root .f05-stamp {
+        left: 675px;
+        top: 585px;
+        width: 250px;
+        height: 130px;
+      }
+      #root .f05-stamp-deform,
+      #root .f05-stamp-boil {
+        position: absolute;
+        inset: 0;
+      }
+      #root .f05-stamp svg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+      }
+      #root .f05-stamp path {
+        fill: none;
+        stroke: #f8635f;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      #root .f05-stamp-txt {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 58px;
+        font-weight: 700;
+        color: #e04a46;
+        letter-spacing: 8px;
+        padding-left: 8px;
+      }
+      /* ---- butter badge pill ---- */
+      #root .f05-badge {
+        left: 488px;
+        top: 86px;
+        width: 224px;
+        height: 64px;
+        background: #fde68a;
+        border: 3px solid #2d2d2d;
+        border-radius: 50px;
+        box-shadow: 4px 4px 0 #2d2d2d;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 34px;
+        font-weight: 700;
+        color: #2d2d2d;
+        letter-spacing: 4px;
+      }
+      /* ---- event receipt strip (framed-header card) ---- */
+      #root .f05-receipt {
+        left: 1210px;
+        top: 140px;
+        width: 450px;
+        background: #ffffff;
+        border: 3px solid #2d2d2d;
+        border-radius: 20px;
+        box-shadow: 6px 6px 0 #2d2d2d;
+        overflow: hidden;
+      }
+      #root .f05-rc-cap {
+        height: 62px;
+        background: #a8d8f0;
+        border-bottom: 3px solid #2d2d2d;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 24px;
+      }
+      #root .f05-rc-cap b {
+        font-size: 30px;
+        font-weight: 700;
+        color: #2d2d2d;
+        letter-spacing: 3px;
+      }
+      #root .f05-rc-cap i {
+        font-style: normal;
+        font-family: "Courier Prime", monospace;
+        font-weight: 700;
+        font-size: 18px;
+        color: #2d2d2d;
+        letter-spacing: 1px;
+      }
+      #root .f05-rc-body {
+        padding: 22px 26px 0;
+      }
+      #root .f05-row {
+        position: relative;
+        height: 118px;
+      }
+      #root .f05-check {
+        position: absolute;
+        left: 0;
+        top: 18px;
+        width: 50px;
+        height: 44px;
+      }
+      #root .f05-check path {
+        fill: none;
+        stroke: #f8635f;
+        stroke-width: 9;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      #root .f05-row-label {
+        position: absolute;
+        left: 72px;
+        top: 24px;
+        font-size: 34px;
+        font-weight: 700;
+        color: #2d2d2d;
+        letter-spacing: 2px;
+      }
+      #root .f05-row-tag {
+        position: absolute;
+        right: 0;
+        top: 34px;
+        font-family: "Courier Prime", monospace;
+        font-weight: 700;
+        font-size: 19px;
+        color: #6b6b6b;
+      }
+      #root .f05-rule {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 8px;
+        height: 2px;
+        background: #2d2d2d;
+        opacity: 0.14;
+      }
+      #root .f05-rc-dots {
+        display: flex;
+        gap: 12px;
+        padding: 16px 0 4px 6px;
+      }
+      #root .f05-rc-dots i {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #fde68a;
+        border: 2.5px solid #2d2d2d;
+      }
+      #root .f05-rc-tail {
+        height: 58px;
+        margin-top: 14px;
+        border-top: 3px dashed #2d2d2d;
+        opacity: 0.3;
+      }
+    </style>
+
+    <!-- track 0 — workbench paper ground + ornament wreath -->
+    <div class="clip f05-bg" data-start="0" data-duration="15.583" data-track-index="0">
+      <svg id="f05-orn-svg" viewBox="0 0 1920 1080"></svg>
+    </div>
+
+    <!-- track 1 — content stage -->
+    <div class="clip f05-stageclip" data-start="0" data-duration="15.583" data-track-index="1">
+      <div class="f05-stage" id="f05-stage">
+        <svg class="f05-ring" id="f05-ring" viewBox="0 0 1920 1080">
+          <g id="f05-arr-1-g"><path id="f05-arr-1" /></g>
+          <g id="f05-arr-2-g"><path id="f05-arr-2" /></g>
+          <g id="f05-arr-3-g"><path id="f05-arr-3" /></g>
+          <path id="f05-toptravel" class="f05-travel" />
+          <path id="f05-bottravel" class="f05-travel" />
+          <path id="f05-lapath" class="f05-travel" />
+          <path id="f05-ripple" class="f05-ripple" />
+        </svg>
+
+        <div class="f05-box" id="f05-box-model" style="left: 130px; top: 402px">
+          <div class="f05-bx-deform">
+            <div class="f05-bx-boil">
+              <svg viewBox="0 0 250 136"><path class="f05-bx-rect" fill-opacity="0" /></svg>
+              <div class="f05-bx-label"><b>模型</b><i>model</i></div>
+            </div>
+          </div>
+        </div>
+        <div class="f05-box" id="f05-box-tool" style="left: 820px; top: 402px">
+          <div class="f05-bx-deform">
+            <div class="f05-bx-boil">
+              <svg viewBox="0 0 250 136"><path class="f05-bx-rect" fill-opacity="0" /></svg>
+              <div class="f05-bx-label"><b>工具</b><i>tools</i></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="f05-note-w" id="f05-note-w"><div class="f05-note" id="f05-note">结果回填</div></div>
+        <div class="f05-chip" id="f05-chip">{ }</div>
+        <div class="f05-runner" id="f05-runner"></div>
+
+        <div class="f05-stamp" id="f05-stamp">
+          <div class="f05-stamp-deform" id="f05-stamp-deform">
+            <div class="f05-stamp-boil" id="f05-stamp-boil">
+              <svg viewBox="0 0 250 130">
+                <path id="f05-stamp-o" stroke-width="7" />
+                <g transform="translate(14 14)"><path id="f05-stamp-i" stroke-width="4" /></g>
+              </svg>
+              <div class="f05-stamp-txt">完成</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="f05-badge" id="f05-badge">核心循环</div>
+
+        <div class="f05-receipt" id="f05-receipt">
+          <div class="f05-rc-cap"><b id="f05-rc-cap-t">事件流</b><i id="f05-rc-cap-m">EVENT LOG</i></div>
+          <div class="f05-rc-body">
+            <div class="f05-row" id="f05-row1">
+              <svg class="f05-check" viewBox="0 0 86 80">
+                <path d="M6 46 L30 72 L80 8" pathLength="100" />
+              </svg>
+              <span class="f05-row-label">读取文件</span>
+              <span class="f05-row-tag">event 01</span>
+              <div class="f05-rule"></div>
+            </div>
+            <div class="f05-row" id="f05-row2">
+              <svg class="f05-check" viewBox="0 0 86 80">
+                <path d="M6 46 L30 72 L80 8" pathLength="100" />
+              </svg>
+              <span class="f05-row-label">编辑代码</span>
+              <span class="f05-row-tag">event 02</span>
+              <div class="f05-rule"></div>
+            </div>
+            <div class="f05-row" id="f05-row3">
+              <svg class="f05-check" viewBox="0 0 86 80">
+                <path d="M6 46 L30 72 L80 8" pathLength="100" />
+              </svg>
+              <span class="f05-row-label">跑测试</span>
+              <span class="f05-row-tag">event 03</span>
+              <div class="f05-rule"></div>
+            </div>
+            <div class="f05-rc-dots" id="f05-rc-dots"><i></i><i></i><i></i></div>
+            <div class="f05-rc-tail"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      (function () {
+        "use strict";
+        var NS = "http://www.w3.org/2000/svg";
+        var DUR = 15.083;
+
+        /* ---- hw family runtime, local copies (mechanics per the hw-boil family) ---- */
+        function hash(n, seed) {
+          var x = Math.sin(n * 127.1 + (seed || 1) * 311.7) * 43758.5453;
+          return (x - Math.floor(x)) * 2 - 1;
+        }
+        var tl = gsap.timeline({ paused: true });
+        function reg(fn) {
+          if (!tl.__f05Renders) {
+            tl.__f05Renders = [];
+            tl.eventCallback("onUpdate", function () {
+              for (var i = 0; i < tl.__f05Renders.length; i++) tl.__f05Renders[i]();
+            });
+          }
+          tl.__f05Renders.push(fn);
+          fn();
+        }
+        /* the boil: pose is a pure function of quantized timeline time — seek-safe */
+        function boil(target, opts) {
+          opts = opts || {};
+          var amp = opts.amp !== undefined ? opts.amp : 1.6;
+          var rot = opts.rot !== undefined ? opts.rot : 0.5;
+          var drop = opts.frameDrop || 3;
+          var seed = opts.seed || 1;
+          var els = gsap.utils.toArray(target);
+          reg(function () {
+            var step = Math.floor((tl.time() * 30) / drop);
+            for (var i = 0; i < els.length; i++) {
+              gsap.set(els[i], {
+                x: hash(step * 3 + i * 97, seed) * amp,
+                y: hash(step * 3 + 1 + i * 97, seed) * amp,
+                rotation: (opts.baseRot || 0) + hash(step * 3 + 2 + i * 97, seed) * rot,
+              });
+            }
+          });
+        }
+        function wobbleRect(w, h, r, seed, amp) {
+          amp = amp === undefined ? 3.5 : amp;
+          function wob(n) {
+            return hash(n, seed) * amp;
+          }
+          var d = "M " + (r + wob(1)) + " " + wob(2);
+          d += " L " + (w / 2 + wob(3)) + " " + wob(4);
+          d += " L " + (w - r + wob(5)) + " " + wob(6);
+          d += " Q " + (w + wob(7)) + " " + wob(8) + " " + (w + wob(9)) + " " + (r + wob(10));
+          d += " L " + (w + wob(11)) + " " + (h / 2 + wob(12));
+          d += " L " + (w + wob(13)) + " " + (h - r + wob(14));
+          d +=
+            " Q " + (w + wob(15)) + " " + (h + wob(16)) + " " + (w - r + wob(17)) + " " + (h + wob(18));
+          d += " L " + (w / 2 + wob(19)) + " " + (h + wob(20));
+          d += " L " + (r + wob(21)) + " " + (h + wob(22));
+          d += " Q " + wob(23) + " " + (h + wob(24)) + " " + wob(25) + " " + (h - r + wob(26));
+          d += " L " + wob(27) + " " + (h / 2 + wob(28));
+          d += " L " + wob(29) + " " + (r + wob(30));
+          d += " Q " + wob(31) + " " + wob(32) + " " + (r + wob(33)) + " " + wob(34);
+          return d;
+        }
+        function wobbleEllipse(cx, cy, rx, ry, seed, wobblePct) {
+          wobblePct = wobblePct === undefined ? 3 : wobblePct;
+          var N = 14,
+            pts = [];
+          for (var i = 0; i < N; i++) {
+            var a = (i / N) * Math.PI * 2;
+            var wr = 1 + hash(i * 13 + 5, seed) * (wobblePct / 100);
+            pts.push([cx + Math.cos(a) * rx * wr, cy + Math.sin(a) * ry * wr]);
+          }
+          var mx = (pts[0][0] + pts[N - 1][0]) / 2,
+            my = (pts[0][1] + pts[N - 1][1]) / 2;
+          var d = "M" + mx.toFixed(1) + " " + my.toFixed(1);
+          for (var j = 0; j < N; j++) {
+            var p = pts[j],
+              q = pts[(j + 1) % N];
+            d +=
+              " Q" +
+              p[0].toFixed(1) +
+              " " +
+              p[1].toFixed(1) +
+              " " +
+              ((p[0] + q[0]) / 2).toFixed(1) +
+              " " +
+              ((p[1] + q[1]) / 2).toFixed(1);
+          }
+          return d;
+        }
+        /* wobbled ellipse ARC (degrees, screen-y), a0 -> a1; head = tangent barbs at the end */
+        function arcPath(cx, cy, rx, ry, a0, a1, seed, head) {
+          var span = Math.abs(a1 - a0);
+          var steps = Math.max(6, Math.round(span / 11));
+          var pts = [];
+          for (var i = 0; i <= steps; i++) {
+            var a = ((a0 + ((a1 - a0) * i) / steps) * Math.PI) / 180;
+            var wr = 1 + hash(i * 13 + 5, seed) * 0.028;
+            pts.push([cx + Math.cos(a) * rx * wr, cy - Math.sin(a) * ry * wr]);
+          }
+          var d =
+            "M " + pts[0][0].toFixed(1) + " " + pts[0][1].toFixed(1);
+          for (var j = 0; j < steps; j++) {
+            var p = pts[j],
+              q = pts[j + 1];
+            d +=
+              " Q " +
+              p[0].toFixed(1) +
+              " " +
+              p[1].toFixed(1) +
+              " " +
+              ((p[0] + q[0]) / 2).toFixed(1) +
+              " " +
+              ((p[1] + q[1]) / 2).toFixed(1);
+          }
+          if (head) {
+            var m1 = pts[steps - 1],
+              m2 = pts[steps];
+            var ang = Math.atan2(m2[1] - m1[1], m2[0] - m1[0]) + Math.PI;
+            var BARB = 30,
+              SPREAD = 0.46;
+            d +=
+              " M " +
+              m2[0].toFixed(1) +
+              " " +
+              m2[1].toFixed(1) +
+              " l " +
+              (Math.cos(ang - SPREAD) * BARB).toFixed(1) +
+              " " +
+              (Math.sin(ang - SPREAD) * BARB).toFixed(1);
+            d +=
+              " M " +
+              m2[0].toFixed(1) +
+              " " +
+              m2[1].toFixed(1) +
+              " l " +
+              (Math.cos(ang + SPREAD) * BARB).toFixed(1) +
+              " " +
+              (Math.sin(ang + SPREAD) * BARB).toFixed(1);
+          }
+          return d;
+        }
+        /* draw-on: dash-animate the path; opacity set only kills the pre-draw start nub */
+        function drawOn(path, at, dur, ease) {
+          var len = path.getTotalLength();
+          path.setAttribute("stroke-dasharray", len + " " + len);
+          path.setAttribute("stroke-dashoffset", len);
+          gsap.set(path, { opacity: 0 });
+          tl.set(path, { opacity: 1 }, at);
+          tl.to(path, { strokeDashoffset: 0, duration: dur, ease: ease || "power2.inOut" }, at);
+        }
+        /* element glides along an (invisible) path — proxy tween, pure function of progress.
+           immediateRender:false — start positions are seeded via gsap.set, and a later leg
+           must not pre-place the element at ITS start during build. */
+        function travel(pathEl, el, at, dur, ease) {
+          var L = pathEl.getTotalLength();
+          var st = { p: 0 };
+          tl.fromTo(
+            st,
+            { p: 0 },
+            {
+              p: 1,
+              duration: dur,
+              ease: ease || "power1.inOut",
+              immediateRender: false,
+              onUpdate: function () {
+                var pt = pathEl.getPointAtLength(st.p * L);
+                gsap.set(el, { x: pt.x, y: pt.y });
+              },
+            },
+            at
+          );
+        }
+        function mk(tag, attrs, parent) {
+          var e = document.createElementNS(NS, tag);
+          for (var k in attrs) e.setAttribute(k, attrs[k]);
+          if (parent) parent.appendChild(e);
+          return e;
+        }
+
+        /* ================= build: ring geometry ================= */
+        var RING = { cx: 600, cy: 470, rx: 345, ry: 230 };
+        var arr1 = document.getElementById("f05-arr-1");
+        arr1.setAttribute("d", arcPath(RING.cx, RING.cy, RING.rx, RING.ry, 163, 95, 2, true));
+        var arr2 = document.getElementById("f05-arr-2");
+        arr2.setAttribute("d", arcPath(RING.cx, RING.cy, RING.rx, RING.ry, 95, 17, 3, true));
+        var arr3 = document.getElementById("f05-arr-3");
+        arr3.setAttribute("d", arcPath(RING.cx, RING.cy, RING.rx, RING.ry, -26, -154, 5, true));
+        var topTravel = document.getElementById("f05-toptravel");
+        topTravel.setAttribute("d", arcPath(RING.cx, RING.cy, RING.rx, RING.ry, 152, 28, 41, false));
+        var botTravel = document.getElementById("f05-bottravel");
+        botTravel.setAttribute("d", arcPath(RING.cx, RING.cy, RING.rx, RING.ry, -24, -152, 42, false));
+        var lapPath = document.getElementById("f05-lapath");
+        lapPath.setAttribute("d", arcPath(RING.cx, RING.cy, RING.rx, RING.ry, 150, -210, 43, false));
+        var ripple = document.getElementById("f05-ripple");
+        ripple.setAttribute("d", wobbleEllipse(800, 650, 150, 85, 44, 3.4));
+
+        /* node boxes */
+        var modelPath = document.querySelector("#f05-box-model path.f05-bx-rect");
+        modelPath.setAttribute("d", wobbleRect(250, 136, 24, 4));
+        var toolPath = document.querySelector("#f05-box-tool path.f05-bx-rect");
+        toolPath.setAttribute("d", wobbleRect(250, 136, 24, 9));
+        /* stamp double border */
+        document.getElementById("f05-stamp-o").setAttribute("d", wobbleRect(250, 130, 18, 13, 3));
+        document.getElementById("f05-stamp-i").setAttribute("d", wobbleRect(222, 102, 12, 14, 3));
+
+        /* ================= build: ornament wreath ================= */
+        var bgSvg = document.getElementById("f05-orn-svg");
+        function ornGroup(id) {
+          var g = mk("g", { id: id });
+          bgSvg.appendChild(g);
+          return g;
+        }
+        /* daisy, top-left, cropping the corner */
+        var daisyG = ornGroup("f05-orn-daisy");
+        var daisyPaths = [];
+        for (var pi = 0; pi < 8; pi++) {
+          var pg = mk(
+            "g",
+            { transform: "rotate(" + (pi * 45 + hash(pi, 31) * 4).toFixed(1) + " 95 95)" },
+            daisyG
+          );
+          var petal = mk(
+            "path",
+            { class: "f05-fill-butter", "fill-opacity": "0", d: wobbleEllipse(95, 59, 13, 30, 40 + pi, 6) },
+            pg
+          );
+          daisyPaths.push(petal);
+        }
+        var daisyCore = mk(
+          "path",
+          { class: "f05-fill-peach", "fill-opacity": "0", d: wobbleEllipse(95, 95, 15, 15, 55, 5) },
+          daisyG
+        );
+        daisyPaths.push(daisyCore);
+        /* star, top-right */
+        function starPath(cx, cy, R, seed) {
+          var d = "";
+          for (var i = 0; i < 10; i++) {
+            var a = -Math.PI / 2 + (i * Math.PI) / 5;
+            var rad = (i % 2 === 0 ? R : R * 0.45) * (1 + hash(i * 7 + 3, seed) * 0.07);
+            d +=
+              (i ? " L " : "M ") +
+              (cx + Math.cos(a) * rad).toFixed(1) +
+              " " +
+              (cy + Math.sin(a) * rad).toFixed(1);
+          }
+          return d + " Z";
+        }
+        var starG = ornGroup("f05-orn-star");
+        var starPathEl = mk("path", { d: starPath(1835, 82, 40, 33) }, starG);
+        /* cloud, right edge */
+        function cloudPath(cx, cy, w, seed) {
+          function j(n) {
+            return hash(n, seed) * 4;
+          }
+          var h = w * 0.42,
+            x0 = cx - w / 2,
+            x1 = cx + w / 2,
+            yb = cy + h * 0.25;
+          return (
+            "M " + (x0 + j(1)).toFixed(1) + " " + (yb + j(2)).toFixed(1) +
+            " Q " + (x0 + w * 0.22 + j(3)).toFixed(1) + " " + (cy - h * 0.95 + j(4)).toFixed(1) +
+            " " + (x0 + w * 0.42 + j(5)).toFixed(1) + " " + (cy - h * 0.35 + j(6)).toFixed(1) +
+            " Q " + (cx + j(7)).toFixed(1) + " " + (cy - h * 1.25 + j(8)).toFixed(1) +
+            " " + (x0 + w * 0.72 + j(9)).toFixed(1) + " " + (cy - h * 0.45 + j(10)).toFixed(1) +
+            " Q " + (x1 - w * 0.06 + j(11)).toFixed(1) + " " + (cy - h * 0.8 + j(12)).toFixed(1) +
+            " " + (x1 + j(13)).toFixed(1) + " " + (yb + j(14)).toFixed(1) +
+            " Z"
+          );
+        }
+        var cloudG = ornGroup("f05-orn-cloud");
+        var cloudPathEl = mk("path", { d: cloudPath(1795, 300, 150, 36) }, cloudG);
+        /* sun, bottom-left */
+        var sunG = ornGroup("f05-orn-sun");
+        var sunCircle = mk(
+          "path",
+          { class: "f05-fill-peach", "fill-opacity": "0", d: wobbleEllipse(95, 800, 30, 30, 60, 5) },
+          sunG
+        );
+        var rays = "";
+        for (var ri = 0; ri < 8; ri++) {
+          var ra = (ri * Math.PI) / 4 + hash(ri, 61) * 0.1;
+          var rx1 = 95 + Math.cos(ra) * 40,
+            ry1 = 800 + Math.sin(ra) * 40;
+          var rl = 18 + hash(ri + 9, 61) * 5;
+          rays +=
+            " M " +
+            rx1.toFixed(1) +
+            " " +
+            ry1.toFixed(1) +
+            " l " +
+            (Math.cos(ra) * rl).toFixed(1) +
+            " " +
+            (Math.sin(ra) * rl).toFixed(1);
+        }
+        var sunRays = mk("path", { d: rays }, sunG);
+        /* small butter star, bottom-center */
+        var star2G = ornGroup("f05-orn-star2");
+        var star2El = mk(
+          "path",
+          { class: "f05-fill-butter", "fill-opacity": "0", d: starPath(1125, 838, 24, 34) },
+          star2G
+        );
+
+        /* ================= timeline ================= */
+        /* macro move: one slow push under the whole shot */
+        gsap.set("#f05-stage", { transformOrigin: "50% 45%" });
+        tl.to("#f05-stage", { scale: 1.032, duration: DUR, ease: "none" }, 0);
+
+        /* Scene 1 (0.0-2.8s) — badge, the two nodes draw on, first arc */
+        gsap.set("#f05-badge", { rotation: -1.5 });
+        tl.fromTo(
+          "#f05-badge",
+          { scale: 0.5, opacity: 0 },
+          { scale: 1, opacity: 1, duration: 0.45, ease: "back.out(2)" },
+          0.12
+        );
+        function boxOn(boxSel, at) {
+          var path = document.querySelector(boxSel + " path.f05-bx-rect");
+          drawOn(path, at, 0.75);
+          tl.to(path, { attr: { "fill-opacity": 1 }, duration: 0.3, ease: "power1.inOut" }, at + 0.5);
+          tl.fromTo(
+            boxSel + " .f05-bx-label",
+            { opacity: 0 },
+            { opacity: 1, duration: 0.35, ease: "power2.out" },
+            at + 0.5
+          );
+        }
+        boxOn("#f05-box-model", 0.38);
+        boxOn("#f05-box-tool", 1.12);
+        drawOn(arr1, 1.95, 0.7);
+
+        /* ornaments draw on quietly in the background */
+        function ornIn(paths, at, gap, dur) {
+          paths.forEach(function (p, i) {
+            drawOn(p, at + i * gap, dur);
+            if (p.getAttribute("fill-opacity") === "0") {
+              tl.to(p, { attr: { "fill-opacity": 1 }, duration: 0.25 }, at + i * gap + dur * 0.7);
+            }
+          });
+        }
+        ornIn(daisyPaths, 0.15, 0.05, 0.3);
+        ornIn([starPathEl], 0.55, 0, 0.4);
+        ornIn([cloudPathEl], 0.85, 0, 0.45);
+        ornIn([sunCircle, sunRays], 1.15, 0.08, 0.35);
+        ornIn([star2El], 1.45, 0, 0.3);
+
+        /* Scene 2 (2.8-6.2s) — arcs 2 & 3, the token goes out and returns */
+        drawOn(arr2, 2.95, 0.6);
+        drawOn(arr3, 3.6, 1.05);
+
+        var chip = document.getElementById("f05-chip");
+        gsap.set(chip, { xPercent: -50, yPercent: -50 });
+        var chipStart = topTravel.getPointAtLength(0);
+        gsap.set(chip, { x: chipStart.x, y: chipStart.y });
+        tl.fromTo(
+          chip,
+          { opacity: 0, scale: 0.6 },
+          { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(2.2)" },
+          3.15
+        );
+        travel(topTravel, chip, 3.28, 0.94);
+        travel(botTravel, chip, 4.48, 1.04);
+        tl.to(chip, { backgroundColor: "#a8e6cf", duration: 0.25, ease: "power1.inOut" }, 4.26);
+        tl.to(chip, { opacity: 0, scale: 0.7, duration: 0.25, ease: "power2.in" }, 5.5);
+
+        function pulse(sel, at) {
+          tl.to(sel, { scaleX: 1.07, scaleY: 0.9, duration: 0.1, ease: "power3.out" }, at);
+          tl.to(sel, { scaleX: 1, scaleY: 1, duration: 0.45, ease: "back.out(2.5)" }, at + 0.11);
+        }
+        gsap.set("#f05-box-tool .f05-bx-deform", { transformOrigin: "50% 100%" });
+        gsap.set("#f05-box-model .f05-bx-deform", { transformOrigin: "50% 100%" });
+        pulse("#f05-box-tool .f05-bx-deform", 4.22);
+        pulse("#f05-box-model .f05-bx-deform", 5.62);
+
+        tl.fromTo(
+          "#f05-note-w",
+          { opacity: 0, y: 12 },
+          { opacity: 1, y: 0, duration: 0.4, ease: "power2.out" },
+          4.98
+        );
+
+        /* Scene 3 (6.2-9.0s) — the loop keeps cycling, then the DONE stamp */
+        var runner = document.getElementById("f05-runner");
+        gsap.set(runner, { xPercent: -50, yPercent: -50 });
+        var lapStart = lapPath.getPointAtLength(0);
+        gsap.set(runner, { x: lapStart.x, y: lapStart.y });
+        tl.fromTo(runner, { opacity: 0 }, { opacity: 1, duration: 0.2 }, 6.3);
+        travel(lapPath, runner, 6.38, 0.58, "power1.inOut");
+        travel(lapPath, runner, 7.02, 0.5, "none");
+        tl.to(runner, { opacity: 0, duration: 0.18, ease: "power1.in" }, 7.52);
+
+        gsap.set("#f05-stamp", { rotation: -10, transformOrigin: "50% 50%" });
+        gsap.set("#f05-stamp-deform", { transformOrigin: "50% 100%" });
+        tl.fromTo(
+          "#f05-stamp",
+          { opacity: 0, scale: 2.4, y: -80 },
+          { opacity: 1, scale: 1, y: 0, duration: 0.34, ease: "power3.in" },
+          7.58
+        );
+        tl.to(
+          "#f05-stamp-deform",
+          { scaleX: 1.06, scaleY: 0.92, duration: 0.09, ease: "power3.out" },
+          7.92
+        );
+        tl.to(
+          "#f05-stamp-deform",
+          { scaleX: 1, scaleY: 1, duration: 0.5, ease: "back.out(2.4)" },
+          8.01
+        );
+        drawOn(ripple, 7.92, 0.32, "power2.out");
+        tl.to(ripple, { opacity: 0, duration: 0.28, ease: "power1.in" }, 8.4);
+
+        /* Scene 4 (9.0-12.5s) — the event receipt prints and checks off */
+        gsap.set("#f05-receipt", { transformOrigin: "50% 35%" });
+        tl.fromTo(
+          "#f05-receipt",
+          { opacity: 0, y: 48, scale: 0.93, rotation: -4 },
+          { opacity: 1, y: 0, scale: 1, rotation: -1.2, duration: 0.55, ease: "back.out(1.6)" },
+          9.12
+        );
+        tl.fromTo(
+          "#f05-rc-cap-t",
+          { opacity: 0 },
+          { opacity: 1, duration: 0.35, ease: "power2.out" },
+          9.45
+        );
+        tl.fromTo(
+          "#f05-rc-cap-m",
+          { opacity: 0 },
+          { opacity: 0.75, duration: 0.35, ease: "power2.out" },
+          9.55
+        );
+        gsap.set(".f05-rule", { scaleX: 0, transformOrigin: "0% 50%" });
+        [
+          ["#f05-row1", 9.92],
+          ["#f05-row2", 10.82],
+          ["#f05-row3", 11.72],
+        ].forEach(function (r) {
+          var el = r[0],
+            at = r[1];
+          tl.fromTo(
+            el,
+            { opacity: 0, y: 16 },
+            { opacity: 1, y: 0, duration: 0.3, ease: "power2.out" },
+            at
+          );
+          tl.to(el + " .f05-rule", { scaleX: 1, duration: 0.3, ease: "power2.out" }, at + 0.1);
+          tl.fromTo(
+            el + " .f05-check path",
+            { strokeDasharray: 100, strokeDashoffset: 100 },
+            { strokeDashoffset: 0, duration: 0.38, ease: "power1.in" },
+            at + 0.24
+          );
+        });
+        gsap.utils.toArray("#f05-rc-dots i").forEach(function (d, i) {
+          tl.fromTo(
+            d,
+            { opacity: 0, scale: 0.3 },
+            { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(3)" },
+            12.18 + i * 0.12
+          );
+        });
+
+        /* Scene 5 (12.5-15.08s) — the receipt lifts half a notch; quiet read */
+        tl.to(
+          "#f05-receipt",
+          { y: -34, rotation: -2.2, duration: 0.95, ease: "power2.inOut" },
+          12.6
+        );
+
+        /* boils — hand-drawn life on the loop, note, stamp, ornaments */
+        boil(["#f05-arr-1-g", "#f05-arr-2-g", "#f05-arr-3-g"], { amp: 1.5, rot: 0.35, frameDrop: 3, seed: 6 });
+        boil("#f05-box-model .f05-bx-boil", { amp: 1.6, rot: 0.5, frameDrop: 3, seed: 4 });
+        boil("#f05-box-tool .f05-bx-boil", { amp: 1.6, rot: 0.5, frameDrop: 3, seed: 9 });
+        boil("#f05-note", { amp: 1.3, rot: 0.5, frameDrop: 3, seed: 12, baseRot: -2 });
+        boil("#f05-stamp-boil", { amp: 1.5, rot: 0.6, frameDrop: 3, seed: 13 });
+        boil(
+          ["#f05-orn-daisy", "#f05-orn-star", "#f05-orn-cloud", "#f05-orn-sun", "#f05-orn-star2"],
+          { amp: 1.1, rot: 0.4, frameDrop: 4, seed: 21 }
+        );
+
+        window.__timelines = window.__timelines || {};
+        window.__timelines["05-loop"] = tl;
+      })();
+    </script>
+  </div>
+</template>
