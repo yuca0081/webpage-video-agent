@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>帧述 · 创作工作台 v2（交互演示）</title>
+<script src="./vue.global.prod.js"></script>
+<style>
+:root{
+  --bg:#FAF9F6; --side:#F5F3EF; --card:#FFFFFF;
+  --ink:#111827; --sub:#4B5563; --muted:#9CA3AF;
+  --line:#E5E7EB; --brand:#F97316; --brand-deep:#EA580C;
+  --grad:linear-gradient(93deg,#F97316,#EF4444);
+  --ok:#10B981; --warn:#F59E0B; --coral:#F8635F;
+  --shadow:0 1px 3px rgba(17,24,39,.06);
+  --shadow-lg:0 8px 28px rgba(17,24,39,.10);
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+[v-cloak]{display:none;}
+body{font-family:"PingFang SC","Microsoft YaHei","Segoe UI",system-ui,sans-serif; background:var(--bg); color:var(--ink); font-size:14px; line-height:1.6; overflow:hidden;}
+button{font:inherit;}
+
+/* ===== 顶栏 ===== */
+.nav{position:sticky; top:0; z-index:30; background:#fff; height:56px; display:flex; align-items:center; gap:18px; padding:0 18px; border-bottom:1px solid #F0EEE9;}
+.logo{display:flex; align-items:center; gap:8px; font-weight:800; font-size:16px;}
+.logo-mark{width:24px; height:24px; border-radius:8px; background:var(--grad); box-shadow:0 4px 12px rgba(249,115,22,.35); display:flex; align-items:center; justify-content:center; color:#fff; font-size:12px; font-weight:900;}
+.proj-name{font-size:13px; color:var(--sub); border-bottom:1px dashed var(--muted); cursor:text;}
+.phase-crumbs{display:flex; gap:4px; align-items:center; margin-left:6px;}
+.crumb{font-size:11.5px; color:var(--muted); background:#F5F3EF; border:1px solid var(--line); border-radius:99px; padding:2px 10px; display:flex; align-items:center; gap:4px;}
+.crumb.on{color:var(--brand-deep); border-color:#FDBA74; background:#FFF7ED; font-weight:600;}
+.crumb .n{font-size:10px; opacity:.7;}
+.nav .right{margin-left:auto; display:flex; align-items:center; gap:12px;}
+.credit{font-size:12px; color:var(--muted);}
+.checklist-btn{border:1.5px solid var(--brand); background:linear-gradient(93deg,rgba(249,115,22,.08),rgba(239,68,68,.08)); border-radius:999px; padding:4px 14px; font-size:12.5px; color:var(--brand-deep); font-weight:600; cursor:pointer;}
+
+/* ===== 三区布局：左轨 / 中舞台 / 右聊天 ===== */
+.shell{display:grid; grid-template-columns:54px minmax(0,1fr) 400px; height:calc(100vh - 56px);}
+@media (max-width:1080px){ .shell{grid-template-columns:54px minmax(0,1fr) 340px;} }
+
+/* 左：图标轨 + 浮层面板 */
+.rail{background:var(--side); border-right:1px solid #ECE9E2; display:flex; flex-direction:column; align-items:center; padding-top:12px; gap:6px; z-index:20;}
+.rail-btn{width:40px; height:40px; border-radius:11px; border:none; background:transparent; cursor:pointer; font-size:18px; color:var(--sub); position:relative;}
+.rail-btn:hover{background:#EDEAE3;}
+.rail-btn.on{background:#fff; color:var(--brand-deep); box-shadow:var(--shadow);}
+.rail-btn .dot{position:absolute; top:6px; right:6px; width:7px; height:7px; border-radius:50%; background:var(--coral); display:none;}
+.rail-btn .dot.show{display:block;}
+.rail-tip{font-size:9.5px; color:var(--muted);}
+.rail-foot{margin-top:auto; padding-bottom:10px; font-size:9.5px; color:var(--muted); writing-mode:vertical-rl; letter-spacing:2px;}
+.rail-panel{position:absolute; left:54px; top:56px; bottom:0; width:252px; background:#fff; border-right:1px solid var(--line); box-shadow:var(--shadow-lg); z-index:19; padding:14px 12px; overflow-y:auto;}
+.rail-panel h4{font-size:12.5px; margin-bottom:10px; color:var(--sub); font-weight:700;}
+.hist-card{background:#fff; border:1px solid var(--line); border-radius:10px; padding:8px; margin-bottom:8px; cursor:pointer; box-shadow:var(--shadow);}
+.hist-thumb{height:46px; border-radius:7px; margin-bottom:6px;}
+.hist-name{font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.hist-meta{font-size:10.5px; color:var(--muted);}
+.tpl-card{border:1px solid var(--line); border-radius:10px; overflow:hidden; margin-bottom:10px; cursor:pointer;}
+.tpl-thumb{height:64px; position:relative;}
+.tpl-name{font-size:12px; font-weight:600; padding:6px 8px 2px;}
+.tpl-meta{font-size:10.5px; color:var(--muted); padding:0 8px 7px;}
+.tpl-empty{border:1.5px dashed var(--line); border-radius:10px; padding:18px 10px; text-align:center; color:var(--muted); font-size:11.5px;}
+
+/* 中：舞台 */
+.stage{position:relative; display:flex; flex-direction:column; overflow:hidden; background:var(--bg);}
+.stage-head{display:flex; align-items:center; gap:10px; padding:10px 18px; border-bottom:1px solid #F0EEE9; background:#fff;}
+.stage-title{font-size:14px; font-weight:700;}
+.stage-sub{font-size:11.5px; color:var(--muted);}
+.stage-body{flex:1; overflow-y:auto; padding:16px 18px;}
+
+/* 文稿视图 */
+.doc-card{background:#fff; border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); max-width:760px; margin:0 auto;}
+.doc-head{display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid #F3F4F6;}
+.doc-head b{font-size:14px;}
+.chip{background:#FFF7ED; border:1px solid #FED7AA; border-radius:7px; padding:2px 9px; font-size:11px; color:#9A3412;}
+.chip.gray{background:#F5F3EF; border-color:var(--line); color:var(--sub);}
+.doc-body{padding:16px 20px; white-space:pre-wrap; font-size:13.5px; color:#1F2937; line-height:1.9; max-height:calc(100vh - 320px); overflow-y:auto;}
+.doc-foot{padding:9px 16px; border-top:1px solid #F3F4F6; font-size:11.5px; color:var(--muted);}
+
+/* 分镜表 */
+.sb-table{background:#fff; border:1px solid var(--line); border-radius:12px; overflow:hidden; box-shadow:var(--shadow); max-width:860px; margin:0 auto;}
+.sb-row{display:flex; align-items:flex-start; gap:10px; padding:10px 14px; border-bottom:1px solid #F3F4F6; transition:.25s;}
+.sb-row:last-child{border-bottom:none;}
+.sb-row.done{background:#F0FDF9;}
+.sb-row.busy{background:#FFF7ED;}
+.sb-row.rework-flash{animation:flash 1.2s 2;}
+@keyframes flash{50%{background:#FEF2F2;}}
+.sb-no{width:22px; height:22px; border-radius:7px; background:#111827; color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:2px;}
+.sb-main{flex:1; min-width:0;}
+.sb-key{font-size:13px; font-weight:600; margin-bottom:2px;}
+.sb-narr{font-size:12px; color:var(--sub);}
+.sb-visual{font-size:11px; color:var(--muted); margin-top:2px;}
+.sb-side{display:flex; flex-direction:column; align-items:flex-end; gap:5px; flex-shrink:0;}
+.sb-dur{font-size:11.5px; color:var(--muted);}
+.status-pill{font-size:10.5px; border-radius:99px; padding:1.5px 9px; border:1px solid var(--line); color:var(--muted); background:#fff; white-space:nowrap;}
+.status-pill.run{color:var(--brand-deep); border-color:#FDBA74; background:#FFF7ED; font-weight:600;}
+.status-pill.ok{color:#047857; border-color:#A7F3D0; background:#ECFDF5;}
+.status-pill.rework{color:#B91C1C; border-color:#FECACA; background:#FEF2F2; font-weight:600;}
+.spin{display:inline-block; width:10px; height:10px; border:2px solid var(--brand); border-top-color:transparent; border-radius:50%; animation:rot .7s linear infinite; vertical-align:-1px; margin-right:3px;}
+@keyframes rot{to{transform:rotate(360deg);}}
+
+/* 风格样张 */
+.style-wrap{max-width:860px; margin:0 auto;}
+.style-dir{display:flex; align-items:center; gap:10px; margin-bottom:12px;}
+.style-dir b{font-size:15px;}
+.style-hint{display:flex; align-items:center; gap:6px; font-size:12px; color:#B45309; background:#FFFBEB; border:1px solid #FDE68A; border-radius:9px; padding:7px 12px; margin-bottom:14px;}
+.sample-row{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+@media (max-width:1300px){ .sample-row{grid-template-columns:1fr;} }
+.sample-card{border:2px solid var(--line); border-radius:14px; overflow:hidden; background:#fff; cursor:pointer; transition:.15s;}
+.sample-card:hover{border-color:#FDBA74; box-shadow:var(--shadow-lg);}
+.sample-card.sel{border-color:var(--brand); box-shadow:0 6px 20px rgba(249,115,22,.25);}
+.sample-tag{font-size:11px; color:var(--muted); padding:6px 12px; border-top:1px dashed var(--line); background:#FAFAF9;}
+.sample-canvas{height:230px; position:relative; overflow:hidden;}
+
+/* 手绘风样张内部 */
+.hw-paper{background:#FDF6E3; background-image:radial-gradient(#E8D5B5 1px, transparent 1px); background-size:26px 26px;}
+.hw-title{font-family:"KaiTi","STKaiti",serif; font-weight:700; color:#3F2D1E;}
+.hw-underline{height:7px; background:var(--coral); opacity:.75; border-radius:6px; transform:rotate(-.6deg);}
+.hw-note{background:#FDE68A; border:2.5px solid #2D2D2D; border-radius:4px; box-shadow:4px 4px 0 #2D2D2D; font-family:"KaiTi","STKaiti",serif; font-size:13px; color:#2D2D2D; padding:7px 12px; transform:rotate(2deg);}
+.hw-note.p2{background:#A8E6CF; transform:rotate(-2deg);}
+.hw-arrow{font-size:26px; color:#2D2D2D; font-family:"KaiTi","STKaiti",serif;}
+.hw-stat{font-family:"KaiTi","STKaiti",serif; font-size:44px; font-weight:700; color:#B45309;}
+/* 科技深空样张内部 */
+.dk-paper{background:linear-gradient(150deg,#0B1226,#16224E); color:#E2E8F0;}
+.dk-title{font-weight:800; letter-spacing:2px;}
+.dk-glow{background:#38BDF8; box-shadow:0 0 22px #38BDF8;}
+.dk-bar{background:linear-gradient(90deg,#38BDF8,#818CF8); border-radius:3px;}
+
+/* 制作中的深色时间轴预览 */
+.tl-preview{max-width:860px; margin:14px auto 0; background:#191D26; border:1px solid #232936; border-radius:10px; padding:10px 14px;}
+.tl-prev-track{display:flex; gap:3px; height:22px;}
+.tl-prev-seg{border-radius:3px; background:#2A3040; display:flex; align-items:center; justify-content:center; font-size:10px; color:#8B93A3; overflow:hidden; white-space:nowrap;}
+.tl-prev-seg.lit{background:#3563E9; color:#fff; font-weight:600;}
+
+/* 播放器（上）+ 时间轴（下）：横竖屏统一，时间轴全宽 */
+.player-zone{display:flex; flex-direction:column; gap:12px; max-width:960px; margin:0 auto;}
+.player-col{display:flex; flex-direction:column; align-items:center; gap:10px; width:100%;}
+.player{height:min(46vh,420px); width:auto; aspect-ratio:9/16; min-width:180px; background:#0B1226; border-radius:14px; overflow:hidden; position:relative; box-shadow:var(--shadow-lg); flex-shrink:0; cursor:pointer;}
+.p-deco1,.p-deco2{position:absolute; border-radius:50%; filter:blur(2px); opacity:.5;}
+.p-segnum{position:absolute; top:10px; left:12px; font-size:10px; background:rgba(0,0,0,.45); color:#fff; padding:2px 8px; border-radius:99px;}
+.p-badge{position:absolute; top:10px; right:12px; font-size:9.5px; background:rgba(0,0,0,.45); color:#fff; padding:2px 8px; border-radius:99px;}
+.p-key{font-size:19px; font-weight:800; color:#fff; text-align:center; margin-top:30px; line-height:1.4; white-space:pre-line;}
+.p-sub{position:absolute; left:8%; right:8%; bottom:14%; text-align:center; font-size:12px; font-weight:600; line-height:1.5;}
+.p-sub span{color:rgba(255,255,255,.42); margin:0 1px;}
+.p-sub span.lit{color:#fff;}
+.p-sub span.now{color:#FDE68A; text-shadow:0 0 12px rgba(253,230,138,.6);}
+.p-controls{position:absolute; left:0; right:0; bottom:0; display:flex; align-items:center; gap:8px; padding:6px 10px; background:linear-gradient(transparent,rgba(0,0,0,.55));}
+.p-play{width:26px; height:26px; border-radius:50%; border:none; background:rgba(255,255,255,.16); color:#fff; cursor:pointer; font-size:11px; flex-shrink:0;}
+.p-bar{flex:1; height:4px; border-radius:99px; background:rgba(255,255,255,.25); position:relative; cursor:pointer;}
+.p-fill{position:absolute; left:0; top:0; bottom:0; border-radius:99px; background:var(--grad);}
+.p-time{font-size:9.5px; color:rgba(255,255,255,.85); flex-shrink:0;}
+.player-actions{display:flex; align-items:center; gap:12px; flex-wrap:wrap; justify-content:center;}
+.inspect-big{border:none; border-radius:10px; padding:8px 20px; font-size:13.5px; font-weight:700; background:var(--grad); color:#fff; cursor:pointer; box-shadow:0 5px 16px rgba(249,115,22,.35);}
+.inspect-big:hover{opacity:.92;}
+.inspect-big.on{background:#111827; box-shadow:var(--shadow);}
+.pa-hint{font-size:11px; color:var(--muted);}
+
+/* 检视模式 mock 帧 */
+.inspect-frame{position:absolute; inset:0; background:#FDF6E3; background-image:radial-gradient(#E8D5B5 1px, transparent 1px); background-size:22px 22px; overflow:hidden;}
+[data-name]{cursor:pointer;}
+.ielem-hover{outline:2.5px dashed var(--coral); outline-offset:3px; border-radius:4px;}
+.ielem-sel{outline:2.5px solid var(--brand); outline-offset:3px; border-radius:4px;}
+#el-tip{position:fixed; z-index:99; background:#111827; color:#fff; font-size:11px; border-radius:6px; padding:3px 9px; pointer-events:none; box-shadow:var(--shadow-lg); white-space:nowrap;}
+.if-title{position:absolute; top:7%; left:0; right:0; text-align:center; font-family:"KaiTi","STKaiti",serif; font-size:24px; font-weight:700; color:#3F2D1E;}
+.if-title-u{position:absolute; top:calc(7% + 32px); left:50%; transform:translateX(-50%) rotate(-1deg); width:120px; height:6px; background:var(--coral); opacity:.75; border-radius:6px;}
+.if-sun{position:absolute; top:12%; left:12%; width:44px; height:44px; border-radius:50%; background:#FDE68A; border:3px solid #2D2D2D; box-shadow:3px 3px 0 #2D2D2D;}
+.if-beam{position:absolute; top:22%; left:26%; width:86px; height:9px; background:#FDE68A; border:2.5px solid #2D2D2D; border-radius:5px; transform:rotate(18deg);}
+.if-mol{position:absolute; top:40%; left:46%; width:17px; height:17px; border-radius:50%; background:#7ECDC0; border:3px solid #2D2D2D; z-index:3;}
+.if-mol-label{position:absolute; top:calc(40% - 22px); left:42.5%; font-family:"KaiTi","STKaiti",serif; font-size:12px; color:#2D2D2D;}
+.if-blue1,.if-blue2,.if-blue3{position:absolute; width:44px; height:6px; background:#38BDF8; border:2px solid #1E3A8A; border-radius:4px;}
+.if-blue1{top:47%; left:58%; transform:rotate(-38deg);}
+.if-blue2{top:44%; left:34%; transform:rotate(215deg);}
+.if-blue3{top:53%; left:55%; transform:rotate(24deg);}
+.if-red{position:absolute; top:49%; left:20%; width:130px; height:6px; background:#F8635F; border:2px solid #7F1D1D; border-radius:4px; transform:rotate(18deg); opacity:.85;}
+.if-cap{position:absolute; left:8%; right:8%; bottom:13%; text-align:center; font-size:12px; font-weight:600; color:#2D2D2D; background:rgba(255,255,255,.75); border:2px solid #2D2D2D; border-radius:99px; padding:4px 8px;}
+.if-tip{position:absolute; left:0; right:0; bottom:2%; text-align:center; font-size:9.5px; color:#B45309;}
+
+/* 三轨时间轴（专业深色编辑器风格，全宽） */
+.tl-zone{width:100%; min-width:0;}
+.tl-card{background:#191D26; border:1px solid #232936; border-radius:12px; box-shadow:var(--shadow); padding:12px 14px;}
+.tl-head{display:flex; align-items:center; gap:8px; margin-bottom:8px;}
+.tl-head .cap{font-size:12px; font-weight:700; color:#C7CDD9;}
+.tl-head .zo{margin-left:auto; font-size:12px; color:#5C6575; cursor:pointer;}
+.tl-grid{display:grid; grid-template-columns:34px 1fr; row-gap:4px; align-items:center;}
+.tl-lab{font-size:10px; color:#6B7280; text-align:right; padding-right:6px;}
+.tl-lane{position:relative; height:26px; border-radius:4px; background:#10131B; border:1px solid #232936; cursor:pointer; overflow:hidden;}
+.tl-lane.tall{height:30px;}
+.tl-ruler{height:18px; position:relative; background:transparent; cursor:pointer;}
+.tl-ruler .maj{position:absolute; top:0; font-size:9px; color:#8B93A3; transform:translateX(-50%); font-variant-numeric:tabular-nums;}
+.tl-ruler .min{position:absolute; bottom:0; width:1px; height:4px; background:#39414F;}
+.blk{position:absolute; top:3px; bottom:3px; border-radius:3px; font-size:9.5px; display:flex; align-items:center; justify-content:center; overflow:hidden; white-space:nowrap; cursor:pointer; font-variant-numeric:tabular-nums;}
+.blk:hover{box-shadow:0 0 0 1.5px #F97316 inset;}
+.blk.on{box-shadow:0 0 0 1.5px rgba(255,255,255,.85) inset;}
+.blk-video{background:#3563E9; color:rgba(255,255,255,.92); font-weight:600; letter-spacing:.5px;}
+.blk-video.re-lit{background:#DC2626;}
+.blk-narr{background:#0F3D2E; color:#6EE7B7; border:1px solid #1E6B52;}
+.blk-sub{background:#3B2A63; color:#C4B5FD; border:1px solid #5B4596; font-size:9px;}
+.blk-narr .wave{position:absolute; left:4px; right:4px; bottom:3px; height:6px; background:repeating-linear-gradient(90deg,rgba(52,211,153,.55) 0 2px,transparent 2px 5px); border-radius:2px;}
+.blk.dash{background:repeating-linear-gradient(45deg,#1B2029,#1B2029 6px,#151922 6px,#151922 12px); color:#5C6575;}
+.playhead{position:absolute; top:0; bottom:0; width:1.5px; background:#F43F5E; z-index:5; pointer-events:none;}
+.playhead::before{content:""; position:absolute; top:0; left:-4px; border-left:4.5px solid transparent; border-right:4.5px solid transparent; border-top:6px solid #F43F5E;}
+.tl-note{font-size:10.5px; color:#6B7280; margin-top:8px;}
+
+/* ===== 右：聊天 ===== */
+.chatcol{background:#fff; border-left:1px solid #ECE9E2; display:flex; flex-direction:column; overflow:hidden;}
+.agent-head{display:flex; align-items:center; gap:10px; padding:11px 18px; border-bottom:1px solid #F0EEE9;}
+.agent-avatar{width:32px; height:32px; border-radius:10px; background:var(--grad); color:#fff; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:800; box-shadow:0 4px 12px rgba(249,115,22,.35);}
+.agent-title{font-size:14px; font-weight:700;}
+.agent-status{font-size:11.5px; color:var(--muted); display:flex; align-items:center; gap:6px;}
+.agent-status .dot{width:7px; height:7px; border-radius:50%; background:#D1D5DB;}
+.agent-status.work .dot{background:var(--brand); animation:blink 1.2s infinite;}
+@keyframes blink{50%{opacity:.35;}}
+.chat{flex:1; overflow-y:auto; padding:16px 16px 6px;}
+.msg{display:flex; gap:9px; margin-bottom:14px; max-width:94%;}
+.msg .av{width:28px; height:28px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600;}
+.msg.agent .av{background:var(--grad); color:#fff;}
+.msg.user{flex-direction:row-reverse; margin-left:auto;}
+.msg.user .av{background:#E5E7EB; color:#374151;}
+.msg.system{justify-content:center; max-width:100%;}
+.msg.system .sysline{font-size:11px; color:var(--muted); background:#F5F3EF; border-radius:99px; padding:2px 12px;}
+.bubble{border-radius:13px; padding:10px 13px; box-shadow:var(--shadow); max-width:calc(100% - 42px); font-size:13px;}
+.msg.agent .bubble{background:#fff; border:1px solid var(--line); border-top-left-radius:4px;}
+.msg.user .bubble{background:#FFF7ED; border:1px solid #FED7AA; border-top-right-radius:4px; color:#7C2D12;}
+.bubble .mt{font-weight:600; margin-bottom:3px; font-size:12.5px;}
+.bubble .ops{display:flex; gap:8px; margin-top:9px; flex-wrap:wrap;}
+.btn{border:1px solid var(--line); background:#fff; color:var(--ink); border-radius:9px; padding:5px 13px; font-size:12.5px; cursor:pointer; transition:.15s;}
+.btn:hover{border-color:var(--brand); color:var(--brand-deep);}
+.btn.primary{background:var(--grad); border:none; color:#fff; font-weight:700; box-shadow:0 5px 16px rgba(249,115,22,.3);}
+.btn.primary:hover{opacity:.92; color:#fff;}
+.btn.small{padding:3px 10px; font-size:11.5px; border-radius:7px;}
+.btn.ghost{border-color:transparent; color:var(--muted);}
+.btn.ghost:hover{color:var(--brand-deep);}
+.btn.mini-brand{background:#FFF7ED; border:1px solid #FDBA74; color:#C2410C; font-weight:600;}
+.btn:disabled{opacity:.5; cursor:not-allowed;}
+.steps-line .li{display:flex; align-items:center; gap:7px; padding:2px 0; font-size:12px; color:var(--sub);}
+.steps-line .li.done{color:var(--ok);}
+.steps-line .li.run{color:var(--brand-deep); font-weight:600;}
+.ok-list{font-size:12px; color:#065F46; line-height:1.9;}
+.refcard{display:flex; align-items:center; gap:8px; background:#F5F3EF; border:1px solid var(--line); border-radius:9px; padding:6px 10px; font-size:12px; margin-top:6px;}
+.refcard b{color:var(--brand-deep);}
+.cost-row{display:flex; justify-content:space-between; font-size:12px; color:var(--sub); padding:2px 0;}
+.cost-row.total{border-top:1px dashed var(--line); margin-top:4px; padding-top:5px; font-weight:700; color:var(--ink);}
+.typing{display:flex; gap:4px; padding:4px 2px;}
+.typing i{width:6px; height:6px; border-radius:50%; background:var(--muted); animation:tp 1s infinite;}
+.typing i:nth-child(2){animation-delay:.15s;}
+.typing i:nth-child(3){animation-delay:.3s;}
+@keyframes tp{30%{transform:translateY(-4px); background:var(--brand);}}
+
+/* 引用 chips + 输入栏 */
+.inputbar{padding:8px 14px 12px; background:#fff;}
+.refchips{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:6px;}
+.refchip{display:flex; align-items:center; gap:6px; background:#FFF7ED; border:1px solid #FDBA74; border-radius:99px; padding:3px 6px 3px 11px; font-size:11.5px; color:#9A3412; font-weight:600;}
+.refchip button{border:none; background:transparent; color:#C2410C; cursor:pointer; font-size:12px; padding:0 2px;}
+.input-card{background:#fff; border:1px solid var(--line); border-radius:13px; box-shadow:var(--shadow-lg); padding:9px 11px 7px;}
+.input-card textarea{width:100%; border:none; outline:none; resize:none; min-height:46px; max-height:120px; font:inherit; font-size:13px; color:var(--ink); background:transparent; line-height:1.6;}
+.input-card textarea::placeholder{color:var(--muted);}
+.input-foot{display:flex; align-items:center; gap:8px; margin-top:3px;}
+.cnt{font-size:10.5px; color:var(--muted);}
+.send-btn{margin-left:auto; border:none; border-radius:9px; padding:6px 16px; font-size:13px; font-weight:700; background:var(--grad); color:#fff; cursor:pointer; box-shadow:0 5px 16px rgba(249,115,22,.35);}
+.send-btn:disabled{background:#E5E7EB; color:#9CA3AF; box-shadow:none; cursor:not-allowed;}
+.input-tip{font-size:10.5px; color:var(--muted); text-align:center; margin-top:6px;}
+
+/* 验收清单弹窗 */
+.modal-mask{position:fixed; inset:0; background:rgba(17,24,39,.45); z-index:60; display:flex; align-items:center; justify-content:center;}
+.modal{background:#fff; border-radius:16px; width:min(560px,92vw); max-height:80vh; overflow-y:auto; padding:22px 26px; box-shadow:var(--shadow-lg);}
+.modal h3{font-size:16px; margin-bottom:4px;}
+.modal .sub{font-size:12px; color:var(--muted); margin-bottom:14px;}
+.ck-item{display:flex; gap:9px; padding:7px 0; border-bottom:1px dashed #F3F4F6; font-size:13px; align-items:flex-start;}
+.ck-item:last-child{border-bottom:none;}
+.ck-item .no{width:20px; height:20px; border-radius:6px; background:#111827; color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px;}
+.modal .ops{display:flex; justify-content:flex-end; margin-top:16px;}
+
+/* toast */
+.toast{position:fixed; left:50%; bottom:34px; transform:translateX(-50%); background:#111827; color:#fff; font-size:12.5px; border-radius:99px; padding:8px 20px; z-index:80; box-shadow:var(--shadow-lg);}
+</style>
+</head>
+<body>
+<div id="app" v-cloak>
+
+  <!-- 顶栏 -->
+  <div class="nav">
+    <div class="logo"><div class="logo-mark">帧</div>帧述</div>
+    <span class="proj-name">{{ phase==='input' ? '新项目' : '天空为什么是蓝的' }}</span>
+    <div class="phase-crumbs">
+      <div class="crumb" :class="{on:phase==='input'||phase==='manuscript'}"><span class="n">1</span>文稿</div>
+      <div class="crumb" :class="{on:phase==='storyboard'}"><span class="n">2</span>分镜</div>
+      <div class="crumb" :class="{on:phase==='style'}"><span class="n">3</span>🔒 风格确认</div>
+      <div class="crumb" :class="{on:phase==='producing'}"><span class="n">4</span>制作</div>
+      <div class="crumb" :class="{on:phase==='video'||phase==='exporting'||phase==='exported'}"><span class="n">5</span>成片</div>
+    </div>
+    <div class="right">
+      <span class="credit">积分 {{credit}}</span>
+      <button class="checklist-btn" @click="showCk=true">📋 验收清单</button>
+    </div>
+  </div>
+
+  <div class="shell">
+    <!-- 左：图标轨 -->
+    <div class="rail">
+      <button class="rail-btn" :class="{on:railPanel==='hist'}" @click="toggleRail('hist')">🕘</button>
+      <div class="rail-tip">历史</div>
+      <button class="rail-btn" :class="{on:railPanel==='tpl'}" @click="toggleRail('tpl')">🎨<span class="dot" :class="{show:tplNew}"></span></button>
+      <div class="rail-tip">模板库</div>
+      <div class="rail-foot">会话中自动收起</div>
+    </div>
+    <div class="rail-panel" v-if="railPanel==='hist'">
+      <h4>历史项目</h4>
+      <div class="hist-card" v-for="h in history">
+        <div class="hist-thumb" :style="{background:h.grad}"></div>
+        <div class="hist-name">{{h.name}}</div>
+        <div class="hist-meta">{{h.when}} · {{h.dur}} · {{h.ratio}}</div>
+      </div>
+      <div class="hist-card" style="border-color:#FDBA74;">
+        <div class="hist-thumb" style="background:linear-gradient(135deg,#0B1226,#38BDF8)"></div>
+        <div class="hist-name">天空为什么是蓝的</div>
+        <div class="hist-meta">进行中 · 演示</div>
+      </div>
+    </div>
+    <div class="rail-panel" v-if="railPanel==='tpl'">
+      <h4>风格模板库（方法库）</h4>
+      <div class="tpl-card" v-if="tplNew">
+        <div class="tpl-thumb" style="background:#FDF6E3;display:flex;align-items:center;justify-content:center;">
+          <span style="font-family:KaiTi;font-weight:700;font-size:22px;color:#3F2D1E;">蓝天 · 手绘叙事</span>
+        </div>
+        <div class="tpl-name">蓝天 · 手绘叙事</div>
+        <div class="tpl-meta">来源：本项目沉淀 · 刚入库</div>
+      </div>
+      <div class="tpl-empty" v-if="!tplNew">
+        库还是空的——<br>完成第一条片子并确认入库后，<br>这里的模板会从真实成片里长出来。<br><br>
+        <span style="font-size:10.5px;">冷启动阶段：每条片的风格由 AI 现场生成（§4.6）</span>
+      </div>
+    </div>
+
+    <!-- 中：舞台 -->
+    <section class="stage">
+      <div class="stage-head">
+        <span class="stage-title">{{ stageTitle }}</span>
+        <span class="stage-sub">{{ stageSub }}</span>
+      </div>
+      <div class="stage-body">
+
+        <!-- 视图：文稿 -->
+        <template v-if="view==='manuscript'">
+          <div class="doc-card">
+            <div class="doc-head"><b>📄 文稿</b><span class="chip">来源：用户粘贴</span><span class="chip gray">v1 · 已定稿</span><span class="chip gray">{{ manuscript.length }} 字</span></div>
+            <div class="doc-body">{{ manuscript }}</div>
+            <div class="doc-foot">内容权威：分镜旁白只能由此改写（压缩/口语化可以，编造不行）· 时长策略：忠实原文，上限 15 分钟</div>
+          </div>
+        </template>
+
+        <!-- 视图：分镜表（含制作中状态） -->
+        <template v-else-if="view==='storyboard'">
+          <div class="sb-table">
+            <div class="sb-row" v-for="(s,i) in segments" :key="s.id" :class="rowCls(s)">
+              <div class="sb-no">{{i+1}}</div>
+              <div class="sb-main">
+                <div class="sb-key">{{s.key}}</div>
+                <div class="sb-narr">{{s.narration}}</div>
+                <div class="sb-visual">画面：{{s.visual}}</div>
+              </div>
+              <div class="sb-side">
+                <span class="sb-dur">{{s.dur}}s</span>
+                <span class="status-pill" :class="pillCls(s)">
+                  <span class="spin" v-if="pillSpin(s)"></span>{{ pillText(s) }}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="tl-preview" v-if="phase==='producing'">
+            <div style="font-size:11px;color:#8B93A3;margin-bottom:6px;">时间轴（灰色=占位，整条完成一次点亮）</div>
+            <div class="tl-prev-track">
+              <div class="tl-prev-seg" v-for="(s,i) in segments" :style="{flex:s.dur}" :class="{lit:s.status==='done'}">{{i+1}}</div>
+            </div>
+          </div>
+        </template>
+
+        <!-- 视图：风格样张 -->
+        <template v-else-if="view==='style'">
+          <div class="style-wrap">
+            <div class="style-dir"><b>🎨 拟采用风格：{{ styleOptions[styleRound%2].name }}</b><span class="chip">AI 按文稿气质提议 · 可换</span></div>
+            <div class="style-hint">🔒 <b>硬前置门</b>：风格图必须你确认才开工——「好不好看」只有人能判断，AI 自检不了。样张与成片出自同一套参数，所见即所得。</div>
+            <div class="sample-row">
+              <div class="sample-card" v-for="sm in styleOptions[styleRound%2].samples" @click="selSample=sm.tag" :class="{sel:selSample===sm.tag}">
+                <div class="sample-canvas" :class="sm.paper">
+                  <!-- 手绘样张内容 -->
+                  <template v-if="sm.kind==='hw1'">
+                    <div class="hw-paper" style="position:absolute;inset:0;"></div>
+                    <div class="hw-title" style="position:absolute;top:16%;width:100%;text-align:center;font-size:30px;">天空为什么是蓝的？</div>
+                    <div class="hw-underline" style="position:absolute;top:calc(16% + 44px);left:30%;width:40%;"></div>
+                    <div class="hw-note" style="position:absolute;bottom:18%;left:12%;">问号便签 ✎</div>
+                    <div class="hw-note p2" style="position:absolute;bottom:12%;right:10%;">波长短 → 易散射</div>
+                    <div class="hw-arrow" style="position:absolute;bottom:30%;left:44%;">⤺</div>
+                  </template>
+                  <template v-else-if="sm.kind==='hw2'">
+                    <div class="hw-paper" style="position:absolute;inset:0;"></div>
+                    <div class="hw-stat" style="position:absolute;top:14%;left:12%;">425<span style="font-size:15px;">nm</span></div>
+                    <div class="hw-title" style="position:absolute;top:15%;left:52%;font-size:17px;">蓝光波长</div>
+                    <div class="hw-note" style="position:absolute;top:44%;left:12%;">最短 → 最容易被弹开</div>
+                    <div class="hw-underline" style="position:absolute;top:66%;left:14%;width:60%;height:8px;"></div>
+                    <div class="hw-title" style="position:absolute;top:72%;left:14%;font-size:15px;color:#B45309;">瑞利散射</div>
+                  </template>
+                  <template v-else-if="sm.kind==='dk1'">
+                    <div class="dk-paper" style="position:absolute;inset:0;"></div>
+                    <div class="dk-title dk-glow" style="position:absolute;top:18%;left:0;right:0;text-align:center;font-size:26px;padding:4px;">SKY BLUE</div>
+                    <div style="position:absolute;top:44%;left:16%;font-size:13px;color:#93C5FD;">λ 400–500nm</div>
+                    <div class="dk-bar" style="position:absolute;top:56%;left:16%;width:58%;height:10px;"></div>
+                    <div class="dk-bar" style="position:absolute;top:64%;left:16%;width:40%;height:10px;opacity:.6;"></div>
+                  </template>
+                  <template v-else>
+                    <div class="dk-paper" style="position:absolute;inset:0;"></div>
+                    <div style="position:absolute;top:20%;left:0;right:0;text-align:center;font-size:30px;font-weight:800;">425 nm</div>
+                    <div style="position:absolute;top:40%;left:0;right:0;text-align:center;font-size:12px;color:#94A3B8;">RAYLEIGH SCATTERING</div>
+                    <div class="dk-glow" style="position:absolute;top:56%;left:47%;width:14px;height:14px;border-radius:50%;"></div>
+                  </template>
+                </div>
+                <div class="sample-tag">{{sm.tag}} · {{sm.desc}}</div>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- 视图：视频 + 时间轴 -->
+        <template v-else-if="view==='video'">
+          <div class="player-zone">
+            <div class="player-col">
+            <div class="player" @click="togglePlay">
+              <template v-if="!inspectMode">
+                <div class="p-deco1" :style="deco1"></div>
+                <div class="p-deco2" :style="deco2"></div>
+                <div class="p-segnum">段 {{curIdx+1}} / {{segments.length}}</div>
+                <div class="p-badge">9:16 · {{phase==='exported' ? '成片' : '草稿'}} · 确定性渲染</div>
+                <div class="p-key">{{ curSeg.key }}</div>
+                <div class="p-sub"><span v-for="(c,i) in curChars" :key="i" :class="{lit:i<=curCharIdx, now:i===curCharIdx}">{{c}}</span></div>
+                <div class="p-controls" @click.stop>
+                  <button class="p-play" @click="togglePlay">{{playing?'❚❚':'▶'}}</button>
+                  <div class="p-bar" @click="barSeek($event)"><div class="p-fill" :style="{width:(t/totalDur*100)+'%'}"></div></div>
+                  <span class="p-time">{{fmt(t)}} / {{fmt(totalDur)}}</span>
+                </div>
+              </template>
+              <template v-else>
+                <div class="inspect-frame" @mouseover="elOver($event)" @mouseout="elOut" @click="elClick($event)">
+                  <div class="if-title" data-name="标题：瑞利散射">瑞利散射</div>
+                  <div class="if-title-u" data-name="马克笔下划线"></div>
+                  <div class="if-sun" data-name="太阳"></div>
+                  <div class="if-beam" data-name="入射光束"></div>
+                  <div class="if-mol-label" data-name="空气分子">空气分子</div>
+                  <div class="if-mol" data-name="空气分子"></div>
+                  <div class="if-blue1" data-name="箭头：蓝光弹开"></div>
+                  <div class="if-blue2" data-name="箭头：蓝光弹开"></div>
+                  <div class="if-blue3" data-name="箭头：蓝光弹开"></div>
+                  <div class="if-red" data-name="红光穿透"></div>
+                  <div class="if-cap" data-name="字幕带（逐词高亮）">蓝光被弹向四面八方</div>
+                  <div class="if-tip">检视模式：悬停查看元素名，点击选中 → 生成引用卡（活合成物 seek 到当前帧，与 MP4 逐像素一致）</div>
+                </div>
+              </template>
+            </div>
+              <div class="player-actions">
+                <button class="inspect-big" :class="{on:inspectMode}" @click="toggleInspect">{{ inspectMode ? '✕ 退出检视' : '🔍 检视画面 · 点选元素修改' }}</button>
+                <span class="pa-hint">进入后：悬停元素看名字 → 点击选中 → 在右侧聊天告诉我怎么改</span>
+              </div>
+            </div>
+            <div class="tl-zone">
+              <div class="tl-card">
+                <div class="tl-head"><span class="cap">多轨时间轴</span><span style="font-size:11px;color:#7C8698;">视频轨 / 旁白轨 / 字幕轨 · 点段块=段引用 · 点轨道空白=时间引用</span><span class="zo" @click="toast('演示：缩放')">🔍</span></div>
+                <div class="tl-grid">
+                  <div class="tl-lab"></div>
+                  <div class="tl-lane tl-ruler" @click="tlSeek($event)">
+                    <span class="maj" v-for="tk in rulerMaj" :style="{left:tk.f+'%'}">{{tk.s}}s</span>
+                    <span class="min" v-for="tk in rulerMin" :style="{left:tk+'%'}"></span>
+                    <div class="playhead" :style="{left:(t/totalDur*100)+'%'}"></div>
+                  </div>
+                  <div class="tl-lab">视频</div>
+                  <div class="tl-lane tall" @click="tlSeek($event)">
+                    <div class="blk blk-video" v-for="(s,i) in segments" :class="{on:curIdx===i, 're-lit':s.justDone}" :style="blkStyle(i)" @click.stop="segRef(i)" :title="'段'+(i+1)+' · '+s.key">{{i+1}} {{s.key}}</div>
+                    <div class="playhead" :style="{left:(t/totalDur*100)+'%'}"></div>
+                  </div>
+                  <div class="tl-lab">旁白</div>
+                  <div class="tl-lane" @click="tlSeek($event)">
+                    <div class="blk blk-narr" v-for="(s,i) in segments" :class="{on:curIdx===i}" :style="blkStyle(i)" @click.stop="segRef(i)" :title="s.narration"><span class="wave"></span></div>
+                    <div class="playhead" :style="{left:(t/totalDur*100)+'%'}"></div>
+                  </div>
+                  <div class="tl-lab">字幕</div>
+                  <div class="tl-lane" @click="tlSeek($event)">
+                    <div class="blk blk-sub" v-for="(s,i) in segments" :class="{on:curIdx===i}" :style="blkStyle(i)" @click.stop="segRef(i)" :title="s.narration">{{s.narration.slice(0,6)}}</div>
+                    <div class="playhead" :style="{left:(t/totalDur*100)+'%'}"></div>
+                  </div>
+                </div>
+                <div class="tl-note">视频在上 · 时间轴在下（横竖屏统一，全宽更易看整条） · 三轨同源分镜表 · 修改单元=元素，重渲单元=段</div>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- 视图：空态 -->
+        <template v-else>
+          <div style="text-align:center; color:var(--muted); margin-top:18vh; font-size:13.5px;">
+            <div style="font-size:40px; margin-bottom:10px;">🎬</div>
+            舞台随创作推进演化：文稿 → 分镜 → 风格确认 → 制作 → 视频+时间轴<br>
+            <span style="font-size:11.5px;">在右侧把示例文稿发给 AI 开始（已预填，直接点发送）</span>
+          </div>
+        </template>
+
+      </div>
+    </section>
+
+    <!-- 右：聊天 -->
+    <section class="chatcol">
+      <div class="agent-head">
+        <div class="agent-avatar">帧</div>
+        <div>
+          <div class="agent-title">解说视频 Agent</div>
+          <div class="agent-status" :class="{work:working}"><span class="dot"></span>{{working?'正在工作中':'空闲'}}</div>
+        </div>
+        <span class="credit" style="margin-left:auto;">ReAct · 状态机门禁</span>
+      </div>
+
+      <div class="chat" ref="chatBox">
+        <div class="msg" v-for="m in messages" :key="m.id" :class="m.role">
+          <div class="av" v-if="m.role!=='system'">{{m.role==='user'?'你':'帧'}}</div>
+          <div class="bubble" v-if="m.role!=='system'">
+            <template v-if="m.type==='text'"><div v-if="m.title" class="mt">{{m.title}}</div>{{m.text}}</template>
+
+            <template v-else-if="m.type==='article'">
+              <div class="mt">📝 文章素材</div>
+              <div style="max-height:80px; overflow:hidden; position:relative;">
+                <div style="white-space:pre-wrap; color:var(--sub); font-size:12px;">{{m.text}}</div>
+                <div style="position:absolute;left:0;right:0;bottom:0;height:28px;background:linear-gradient(transparent,#FFF7ED);"></div>
+              </div>
+              <div style="font-size:10.5px;color:var(--muted);margin-top:2px;">{{m.text.length}} 字 · 粘贴的文稿</div>
+            </template>
+
+            <template v-else-if="m.type==='manuscript'">
+              <div class="mt">✓ 文稿已存档（前置件 1/3）</div>
+              <div style="font-size:12.5px;color:var(--sub);">已在舞台展示 · 时长策略：<b>忠实原文</b>（这篇约 68 秒，远低于 15 分钟上限，无需压缩）</div>
+            </template>
+
+            <template v-else-if="m.type==='storyboard'">
+              <div class="mt">✓ 分镜已生成（前置件 2/3）</div>
+              <div style="font-size:12.5px;color:var(--sub);">
+                共 {{segments.length}} 段 · 约 {{totalDur}}s · 时间基准：<b>旁白驱动</b>（先配音，画面按实际音频时长生成）
+              </div>
+              <div style="font-size:12px;color:var(--sub);margin-top:4px;">每段旁白都来自文稿，舞台可逐段查看画面提示。</div>
+            </template>
+
+            <template v-else-if="m.type==='samples'">
+              <div class="mt">🎨 风格样张已出（前置件 3/3，等你确认）</div>
+              <div style="font-size:12.5px;color:var(--sub);">按文稿气质提议「{{styleOptions[styleRound%2].name}}」，1–3 张样张在舞台。</div>
+              <div class="ops">
+                <button class="btn primary" @click="confirmStyle">✓ 就用这版，开工</button>
+                <button class="btn" @click="regenStyle">↻ 换一版风格</button>
+              </div>
+            </template>
+
+            <template v-else-if="m.type==='selfcheck'">
+              <div class="mt">自检通过（三前置齐备）</div>
+              <div class="ok-list">
+                ✓ 文稿存在且定稿<br>
+                ✓ 分镜 schema 合法（6 段，总时长 68s ≤ 15min）<br>
+                ✓ 分镜旁白覆盖文稿要点，无凭空事实<br>
+                ✓ 风格图已确认（StylePack 已锁定）<br>
+                ✓ 开始制作
+              </div>
+            </template>
+
+            <template v-else-if="m.type==='progress'">
+              <div class="mt">制作中 · 流水线（Go 编排，AI 只在画面/检查点动脑）</div>
+              <div class="steps-line">
+                <div class="li" v-for="p in m.steps" :class="p.state">
+                  <span style="width:14px;text-align:center;">
+                    <template v-if="p.state==='done'">✓</template>
+                    <template v-else-if="p.state==='run'"><span class="spin"></span></template>
+                    <template v-else>○</template>
+                  </span>{{p.name}}
+                  <span v-if="p.state==='run'" style="font-size:11px;color:var(--muted);">{{p.note}}</span>
+                </div>
+              </div>
+            </template>
+
+            <template v-else-if="m.type==='videoready'">
+              <div class="mt">✓ 整条视频就绪（{{totalDur}}s，一次点亮）</div>
+              <div style="font-size:12.5px;color:var(--sub);margin-bottom:4px;">
+                舞台已就绪：视频在上、时间轴在下。<b>指哪改哪</b>：点时间轴段块选段、点轨道空白定位到秒、或点视频下方的<b>「🔍 检视画面」</b>进画面里选元素，然后直接告诉我怎么改。
+              </div>
+              <div class="ops">
+                <button class="btn" @click="enterInspect">🔍 检视画面（选元素）</button>
+                <button class="btn primary" @click="startExport">🎬 满意，出片</button>
+              </div>
+            </template>
+
+            <template v-else-if="m.type==='rework'">
+              <div class="mt">🔧 收到，定点修改</div>
+              <div class="refcard">📎 引用：<b>{{m.refLabel}}</b></div>
+              <div style="font-size:12.5px;color:var(--sub);margin-top:5px;">指令：「{{m.instruction}}」</div>
+              <div class="steps-line" style="margin-top:4px;">
+                <div class="li" :class="m.step>=1?'done':'run'"><span style="width:14px;">{{m.step>=1?'✓':''}}</span>修改该元素（HTML 定义，整段所有关键帧生效）</div>
+                <div class="li" :class="m.step>=2?'done':(m.step===1?'run':'')"><span style="width:14px;">{{m.step>=2?'✓':(m.step===1?'●':'')}}</span>lint/check 复查通过</div>
+                <div class="li" :class="m.step>=3?'done':(m.step===2?'run':'')"><span style="width:14px;">{{m.step>=3?'✓':(m.step===2?'●':'')}}</span>只重渲段 {{m.segNo}}（其余段不动）</div>
+              </div>
+              <div v-if="m.step>=3" style="font-size:12px;color:var(--ok);margin-top:3px;">✓ 完成 · 时间轴段 {{m.segNo}} 已更新（修改单元=元素，重渲单元=段）</div>
+            </template>
+
+            <template v-else-if="m.type==='exporting'">
+              <div class="mt">正在渲染成片 · 1080p H.264</div>
+              <div style="font-size:12px;color:var(--sub);">{{m.stage}}</div>
+              <div style="height:6px;background:#F5F3EF;border-radius:99px;margin-top:6px;overflow:hidden;">
+                <div :style="{width:m.pct+'%',height:'100%',background:'var(--grad)',transition:'width .3s'}"></div>
+              </div>
+            </template>
+
+            <template v-else-if="m.type==='exported'">
+              <div class="mt">✓ 成片已就绪</div>
+              <div style="font-size:12.5px;color:var(--sub);">{{totalDur}}s · {{segments.length}} 段 · 9:16 · 1080p · MP4</div>
+              <div style="margin-top:6px;">
+                <div class="cost-row"><span>LLM（分镜+画面+修复）</span><span>¥0.42</span></div>
+                <div class="cost-row"><span>TTS 配音（Kokoro 离线）</span><span>¥0.00</span></div>
+                <div class="cost-row"><span>渲染（draft+1080p）</span><span>¥0.31</span></div>
+                <div class="cost-row total"><span>单条成本</span><span>¥0.73</span></div>
+              </div>
+              <div class="ops">
+                <button class="btn primary" @click="toast('演示环境：此处触发真实 MP4 下载')">⬇ 下载 MP4</button>
+              </div>
+            </template>
+
+            <template v-else-if="m.type==='library'">
+              <div class="mt">📚 方法库沉淀（出片后自动起草，你确认入库）</div>
+              <div class="refcard">🎨 风格模板：「蓝天 · 手绘叙事」（frame.md 规范 + 组件）</div>
+              <div class="refcard">🧠 经验卡：「科普数字段用大数字+下划线强调，比图表更快读懂」</div>
+              <div class="ops" v-if="!m.done">
+                <button class="btn primary" @click="confirmLib(m)">✓ 确认入库</button>
+                <button class="btn ghost" @click="m.done=true;m.skipped=true">这次不存</button>
+              </div>
+              <div v-if="m.done" style="font-size:12px;margin-top:4px;" :style="m.skipped?{color:'var(--muted)'}:{color:'var(--ok)'}">
+                {{m.skipped?'已跳过，不影响项目':'✓ 已入库 · 左栏「模板库」可见，下次做片可直接复用'}}
+              </div>
+            </template>
+          </div>
+          <div v-else class="sysline">{{m.text}}</div>
+        </div>
+        <div class="msg agent" v-if="agentTyping">
+          <div class="av">帧</div>
+          <div class="bubble"><div class="typing"><i></i><i></i><i></i></div></div>
+        </div>
+      </div>
+
+      <div class="inputbar">
+        <div class="refchips" v-if="refs.length">
+          <div class="refchip" v-for="(r,i) in refs" :key="r.uid">
+            📎 {{refLabel(r)}}<button @click="refs.splice(i,1)">✕</button>
+          </div>
+        </div>
+        <div class="input-card">
+          <textarea v-model="input" :placeholder="inputPlaceholder" @keydown.enter.exact.prevent="send"
+            :disabled="phase==='producing'"></textarea>
+          <div class="input-foot">
+            <span class="cnt">{{input.length}} / 2000</span>
+            <button class="send-btn" :disabled="!canSend" @click="send">发送 ➤</button>
+          </div>
+        </div>
+        <div class="input-tip">四级寻址：时间轴点段 / 暂停点秒 / 检视选元素 / 直接嘴说</div>
+      </div>
+    </section>
+  </div>
+
+  <!-- 验收清单 -->
+  <div class="modal-mask" v-if="showCk" @click.self="showCk=false">
+    <div class="modal">
+      <h3>📋 Demo 验收清单</h3>
+      <div class="sub">对照我们定下的设计决策点一遍，发现走样的就是"大问题"</div>
+      <div class="ck-item" v-for="c in checklist"><span class="no">{{c.n}}</span><span>{{c.t}}</span></div>
+      <div class="ops"><button class="btn primary" @click="showCk=false">开始验收</button></div>
+    </div>
+  </div>
+
+  <div id="el-tip" v-show="hoverName" :style="{left:hoverX+'px', top:hoverY+'px'}">{{hoverName}}</div>
+  <div class="toast" v-if="toastMsg">{{toastMsg}}</div>
+</div>
+
+<script>
+const { createApp } = Vue;
+
+const SAMPLE_ARTICLE = `为什么天空是蓝色的？
+
+晴朗的日子里抬头看，天空是一片湛蓝。这个颜色的来源，其实是阳光和大气层联手上演的一场物理表演。
+
+阳光看起来是白色的，但它实际上由红、橙、黄、绿、蓝、靛、紫七种颜色的光混合而成，每种颜色的波长都不一样。
+
+当阳光进入地球大气层，会撞上数不清的气体分子。其中蓝光波长最短、频率最高，最容易被这些微小分子弹开，这个现象叫做瑞利散射。被弹开的蓝光在天空里四处乱撞，最后从各个方向进入你的眼睛。
+
+到了傍晚，阳光需要斜穿更厚的大气层，蓝光在半路就被散射得所剩无几，反而是波长更长的红光和橙光坚持到了最后——这就是晚霞烧红半边天的原因。
+
+所以，天空的蓝不是涂上去的颜色，而是光在空气里不断"转弯"的结果。`;
+
+const SEED = [
+  {key:'天空为什么\n是蓝的？', dur:8,  narration:'你有没有想过，天空为什么是蓝色的？答案，藏在光和空气的一场碰撞里。', visual:'手绘纸面大标题+问号便签', status:'pending'},
+  {key:'阳光 ≠ 白色',  dur:12, narration:'阳光看起来是白的，其实由红橙黄绿蓝靛紫七种颜色组成，每种颜色的波长都不一样。', visual:'白光分解七色光谱条', status:'pending'},
+  {key:'瑞利散射',     dur:14, narration:'蓝光波长最短，最容易撞上空气里的微小分子，被弹向四面八方——这就是瑞利散射。', visual:'光撞分子，蓝光四散弹开', status:'pending'},
+  {key:'满眼都是蓝',   dur:12, narration:'被散射的蓝光从四面八方进入你的眼睛，所以抬头看到的天空，就是一片蓝色。', visual:'蓝光从四周汇入视线', status:'pending'},
+  {key:'晚霞的秘密',   dur:12, narration:'傍晚时阳光要斜穿更厚的大气，蓝光半路散尽，红橙光坚持到最后，烧红了半边天。', visual:'日落暖色渐变+斜穿大气', status:'pending'},
+  {key:'光是"转弯"的', dur:10, narration:'所以天空的蓝不是涂上去的颜色，而是光在空气里不断转弯的结果。', visual:'光线弯曲路径+收尾定格', status:'pending'},
+];
+
+const STYLE_OPTIONS = [
+  { name:'手绘叙事（纸面·马克笔）', samples:[
+    {tag:'样张 A · 标题帧', desc:'楷体大标题 + 马克笔下划线 + 便签', paper:'hw-paper', kind:'hw1'},
+    {tag:'样张 B · 数据帧', desc:'手写大数字 + 便签结论 + 圈注', paper:'hw-paper', kind:'hw2'},
+  ]},
+  { name:'科技深空（渐变·发光）', samples:[
+    {tag:'样张 A · 标题帧', desc:'大写英文 + 霓虹发光 + 波形条', paper:'dk-paper', kind:'dk1'},
+    {tag:'样张 B · 数据帧', desc:'大数字 + 英文注解 + 光点', paper:'dk-paper', kind:'dk2'},
+  ]},
+];
+
+let mid = 0; const nid = () => 'm' + (++mid);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+createApp({
+  data(){ return {
+    toastMsg:'', showCk:false,
+    phase:'input',                 // input|manuscript|storyboard|style|producing|video|exporting|exported
+    view:'empty',                  // empty|manuscript|storyboard|style|video
+    working:false, agentTyping:false, credit:48,
+    input:SAMPLE_ARTICLE,
+    manuscript:'',
+    segments:[], selSample:'',
+    styleOptions:STYLE_OPTIONS, styleRound:0,
+    messages:[{id:nid(), role:'agent', type:'text',
+      text:'你好，我是帧述 Agent。把文稿发我（输入框已预填示例），我会：存文稿 → 出分镜 → 出风格样张给你确认 → 自检开工。三样前置齐了才开工，风格必须你点头。右侧舞台会同步演化。'}],
+    railPanel:'hist', tplNew:false,
+    history:[
+      {name:'三分钟看懂量子纠缠', when:'9月16日', dur:'135s', ratio:'9:16', grad:'linear-gradient(135deg,#DCFCE7,#22C55E)'},
+      {name:'光的散射：瑞利的故事', when:'昨天', dur:'92s', ratio:'16:9', grad:'linear-gradient(135deg,#FEF3C7,#F97316)'},
+    ],
+    // 播放
+    playing:false, t:0, tickIv:0,
+    inspectMode:false, hoverName:'', hoverX:0, hoverY:0, selElem:'',
+    refs:[], refSeq:0,
+    checklist:[
+      {n:1, t:'布局：左栏收成图标轨（会话开始自动收起），中间舞台最大，右侧聊天驱动'},
+      {n:2, t:'三前置硬门：文稿 → 分镜 → 风格样张，且风格必须点「就用这版」才往下走（试试不点行不行）'},
+      {n:3, t:'风格图 = HTML 样张（与成片同参数）；「换一版」会换方向重出'},
+      {n:4, t:'制作过程：舞台分镜表逐段显示 配音中→画面生成中→检查中→渲染中；时间轴先是灰色占位'},
+      {n:5, t:'整条完成一次性点亮（无边渲边显示）；聊天同步播报四步流水线'},
+      {n:6, t:'段引用：点时间轴视频轨的段块 → 输入框出现 📎 段N'},
+      {n:7, t:'秒/帧引用：点轨道空白处 → 暂停 + 📎 时间码'},
+      {n:8, t:'元素引用：点「🔍 检视」→ 悬停画面元素出现人话名（箭头：蓝光弹开）→ 点击选中成 📎'},
+      {n:9, t:'修改循环：带引用说「改成珊瑚色，飞慢点」→ 只重渲那段（时间轴该段闪一下）；嘴说也试一次'},
+      {n:10, t:'出片：成本明细卡（LLM/TTS/渲染）→ 方法库起草 → 确认入库 → 左栏模板库出现新模板'},
+    ],
+  };},
+  computed:{
+    totalDur(){ return this.segments.reduce((a,s)=>a+s.dur,0); },
+    segStarts(){ let acc=0; return this.segments.map(s=>{const v=acc; acc+=s.dur; return v;}); },
+    curIdx(){ for(let i=this.segments.length-1;i>=0;i--){ if(this.t>=this.segStarts[i]) return i; } return 0; },
+    curSeg(){ return this.segments[this.curIdx] || {key:'',narration:'',dur:1}; },
+    curChars(){ return Array.from(this.curSeg.narration); },
+    curCharIdx(){ const s=this.curSeg, st=this.segStarts[this.curIdx]||0; const p=(this.t-st)/s.dur; return Math.min(this.curChars.length-1, Math.floor(p*this.curChars.length)); },
+    rulerMaj(){ const arr=[]; for(let s=0;s<=this.totalDur;s+=10){ arr.push({f:s/this.totalDur*100, s}); } return arr; },
+    rulerMin(){ const arr=[]; for(let s=0;s<=this.totalDur;s+=2){ arr.push(Math.min(100, s/this.totalDur*100)); } return arr; },
+    canSend(){ return this.input.trim().length>0 && this.phase!=='producing'; },
+    inputPlaceholder(){
+      if(this.phase==='producing') return '制作中…（可随时喊停）';
+      if(this.phase==='video'||this.phase==='exported') return '指哪改哪：选个引用直接说怎么改，或嘴说（如"45秒那个箭头太慢"）';
+      return '粘贴文稿发我开始；也可以先聊聊你想怎么做';
+    },
+    stageTitle(){
+      return {empty:'舞台', manuscript:'文稿', storyboard:'分镜表', style:'风格样张', video:'视频 · 时间轴'}[this.view]||'舞台';
+    },
+    stageSub(){
+      if(this.view==='manuscript') return '前置件 1/3 · 内容权威';
+      if(this.view==='storyboard') return this.phase==='producing' ? '前置件 2/3 · 制作中（段状态实时更新）' : '前置件 2/3 · 每段=旁白+画面提示';
+      if(this.view==='style') return '前置件 3/3 · 🔒 等你确认（硬门）';
+      if(this.view==='video') return this.phase==='exported' ? '成片 · 预览即成片' : '整条视频 · 段级重渲已就绪';
+      return '等待开始';
+    },
+    deco1(){ const p=this.t/this.totalDur; return {top:(10+p*20)+'%', left:(8+p*10)+'%', width:'70px', height:'70px', background:'rgba(56,189,248,.25)'}; },
+    deco2(){ const p=this.t/this.totalDur; return {bottom:(12+p*15)+'%', right:(10+p*8)+'%', width:'50px', height:'50px', background:'rgba(249,115,22,.2)'}; },
+  },
+  methods:{
+    toast(m){ this.toastMsg=m; clearTimeout(this._tt); this._tt=setTimeout(()=>this.toastMsg='',1800); },
+    toggleRail(p){ this.railPanel = this.railPanel===p ? '' : p; },
+    push(m){ this.messages.push(m); this.$nextTick(()=>{ const b=this.$refs.chatBox; if(b) b.scrollTop=b.scrollHeight; }); },
+    async think(ms){ this.agentTyping=true; await sleep(ms); this.agentTyping=false; },
+
+    /* ===== 主流程 ===== */
+    async send(){
+      const text=this.input.trim(); if(!text||!this.canSend) return;
+      this.input=''; this.railPanel='';
+      if(this.phase==='input'){ return this.startFlow(text); }
+      // 修改/对话阶段
+      this.push({id:nid(), role:'user', type:'text', text});
+      const hasRef=this.refs.length>0;
+      const snapshot=this.refs.splice(0);
+      await this.think(600);
+      if(hasRef) return this.doRework(snapshot, text);
+      if(/秒|箭头|那个|重做/.test(text)) return this.resolveMouth(text);
+      if(/出片/.test(text)) return this.startExport();
+      if(/停/.test(text)){ this.toast('演示：制作中喊停 → cancel_production'); return; }
+      if(this.phase==='style' && /确认|就用|开工/.test(text)) return this.confirmStyle();
+      this.push({id:nid(), role:'agent', type:'text', text:'（演示）收到。这条片子随时可改：点时间轴选段、暂停指秒、检视选元素，或直接像刚才那样描述位置。'});
+    },
+
+    async startFlow(text){
+      this.push({id:nid(), role:'user', type:'article', text});
+      this.working=true;
+      await this.think(700);
+      // 1 存文稿
+      this.manuscript=text;
+      this.push({id:nid(), role:'agent', type:'manuscript'});
+      this.view='manuscript'; this.phase='manuscript';
+      await this.think(800);
+      // 2 出分镜
+      this.segments=SEED.map((s,i)=>({...s, id:'seg'+(i+1), status:'pending', justDone:false}));
+      this.push({id:nid(), role:'agent', type:'storyboard'});
+      this.view='storyboard'; this.phase='storyboard';
+      await this.think(900);
+      // 3 风格样张（硬门：停下等确认）
+      this.selSample='';
+      this.push({id:nid(), role:'agent', type:'samples'});
+      this.view='style'; this.phase='style'; this.working=false;
+    },
+
+    async regenStyle(){
+      this.styleRound++;
+      this.toast('已换方向：'+this.styleOptions[this.styleRound%2].name);
+    },
+
+    async confirmStyle(){
+      if(this.phase!=='style') return;
+      this.push({id:nid(), role:'user', type:'text', text:'就用这版风格，开工吧'});
+      this.working=true; this.phase='producing'; this.view='storyboard';
+      await this.think(600);
+      this.push({id:nid(), role:'agent', type:'selfcheck'});
+      await this.think(700);
+      // 制作流水线动画
+      const pm={id:nid(), role:'agent', type:'progress', steps:[
+        {name:'配音 TTS（逐词时间戳）', state:'run', note:'Kokoro 离线'}, 
+        {name:'画面合成物生成（每段一个 packet）', state:'wait', note:''},
+        {name:'质量门禁 lint/check', state:'wait', note:''},
+        {name:'段级并行渲染 + 拼接', state:'wait', note:''},
+      ]};
+      this.push(pm);
+      // TTS
+      for(const [i,s] of this.segments.entries()){ s.status='tts'; await sleep(320); s.status='done'; }
+      pm.steps[0].state='done'; pm.steps[1].state='run'; pm.steps[1].note='AI 只在此处动脑';
+      // 画面
+      for(const s of this.segments){ s.status='comp'; await sleep(480); s.status='done'; }
+      pm.steps[1].state='done'; pm.steps[1].note='6/6 段 · 元素命名 ✓';
+      pm.steps[2].state='run'; pm.steps[2].note='自修复 0 次通过';
+      // 检查
+      for(const s of this.segments){ s.status='check'; } await sleep(900);
+      for(const s of this.segments){ s.status='done'; }
+      pm.steps[2].state='done'; pm.steps[3].state='run'; pm.steps[3].note='6 段并行';
+      // 渲染
+      for(const s of this.segments){ s.status='render'; }
+      await sleep(1500);
+      for(const s of this.segments){ s.status='done'; }
+      pm.steps[3].state='done'; pm.steps[3].note='拼接完成';
+      await sleep(400);
+      // 整条点亮
+      this.phase='video'; this.view='video';
+      this.push({id:nid(), role:'agent', type:'videoready'});
+      this.working=false;
+      this.playing=false; this.t=0;
+    },
+
+    /* ===== 播放 & 时间轴 ===== */
+    togglePlay(){ this.playing=!this.playing; if(this.playing){ this.inspectMode=false; this.runClock(); } },
+    runClock(){
+      clearInterval(this.tickIv);
+      this.tickIv=setInterval(()=>{
+        if(!this.playing) return clearInterval(this.tickIv);
+        this.t=Math.round((this.t+0.1)*10)/10;
+        if(this.t>=this.totalDur){ this.t=this.totalDur; this.playing=false; clearInterval(this.tickIv); }
+      },100);
+    },
+    fmt(x){ const m=Math.floor(x/60), s=(x%60).toFixed(1); return m>0? `${m}:${String(Math.floor(x%60)).padStart(2,'0')}` : s+'s'; },
+    barSeek(e){ const r=e.currentTarget.getBoundingClientRect(); this.seekTo((e.clientX-r.left)/r.width*this.totalDur); },
+    tlSeek(e){ const r=e.currentTarget.getBoundingClientRect(); this.seekTo((e.clientX-r.left)/r.width*this.totalDur);
+      const t=Math.round(this.t*10)/10; this.addRef({kind:'time', time:t}); },
+    seekTo(v){ this.t=Math.max(0,Math.min(this.totalDur,v)); if(!this.playing) return; },
+    blkStyle(i){ const st=this.segStarts[i], d=this.segments[i].dur; return {left:(st/this.totalDur*100)+'%', width:(d/this.totalDur*100-0.6)+'%'}; },
+
+    /* ===== 引用 ===== */
+    addRef(r){ r.uid=++this.refSeq;
+      if(r.kind==='elem'||r.kind==='time'){ r.seg=this.curIdx+1; r.time=Math.round(this.t*10)/10; }
+      const dup=this.refs.find(x=>this.refLabel(x)===this.refLabel(r));
+      if(dup) return; this.refs.push(r); this.toast('已引用：'+this.refLabel(r)); },
+    segRef(i){ this.seekTo(this.segStarts[i]+0.01); this.addRef({kind:'seg', seg:i+1}); },
+    refLabel(r){
+      if(r.kind==='seg') return '段'+r.seg;
+      if(r.kind==='time') return '00:'+String(Math.floor(r.time)).padStart(2,'0')+'（段'+r.seg+'）';
+      return `段${r.seg} · 00:${String(Math.floor(r.time||0)).padStart(2,'0')} ·「${r.name}」`;
+    },
+
+    /* ===== 检视模式（命名元素） ===== */
+    enterInspect(){ this.playing=false; clearInterval(this.tickIv); this.inspectMode=true; this.toast('检视模式：活合成物 seek 到当前帧'); },
+    toggleInspect(){ if(!this.inspectMode){ this.playing=false; clearInterval(this.tickIv); this.inspectMode=true; } else { this.inspectMode=false; } },
+    elOver(e){ const el=e.target.closest('[data-name]'); if(!el) return;
+      document.querySelectorAll('.ielem-hover').forEach(x=>x.classList.remove('ielem-hover'));
+      el.classList.add('ielem-hover'); this.hoverName=el.dataset.name;
+      this.hoverX=e.clientX+14; this.hoverY=e.clientY+14; },
+    elOut(e){ const el=e.target.closest('[data-name]');
+      document.querySelectorAll('.ielem-hover').forEach(x=>x.classList.remove('ielem-hover'));
+      if(!e.relatedTarget || !e.relatedTarget.closest('[data-name]')) this.hoverName=''; },
+    elClick(e){ const el=e.target.closest('[data-name]'); if(!el) return;
+      document.querySelectorAll('.ielem-sel').forEach(x=>x.classList.remove('ielem-sel'));
+      el.classList.add('ielem-sel'); this.addRef({kind:'elem', name:el.dataset.name});
+      setTimeout(()=>{ this.inspectMode=false; el.classList.remove('ielem-sel'); },600); },
+
+    /* ===== 修改循环 ===== */
+    async doRework(refs, text){
+      const r=refs.find(x=>x.kind==='elem')||refs.find(x=>x.kind==='time')||refs[0];
+      const segNo=r.seg||1;
+      const m={id:nid(), role:'agent', type:'rework', refLabel:this.refLabel(r), instruction:text, segNo, step:0};
+      this.push(m); this.working=true;
+      const seg=this.segments[segNo-1];
+      seg.status='rework'; m.step=1; await sleep(1000);
+      m.step=2; await sleep(700);
+      seg.status='render'; await sleep(1200);
+      seg.status='done'; seg.justDone=true; m.step=3;
+      setTimeout(()=>{ seg.justDone=false; }, 2400);
+      this.working=false;
+    },
+    async resolveMouth(text){
+      const m=text.match(/(\d+)\s*秒/);
+      const tt=m? parseInt(m[1]) : 34;
+      let segIdx=0; this.segStarts.forEach((st,i)=>{ if(tt>=st) segIdx=i; });
+      await this.think(500);
+      this.push({id:nid(), role:'agent', type:'text', title:'嘴说解析',
+        text:`我理解你指的是 00:${tt} → 段${segIdx+1}「${this.segments[segIdx].key}」里会动的那支「箭头：蓝光弹开」。按"改慢一点"直接处理了——如果理解错了，用检视模式点选精确告诉我。`});
+      this.doRework([{uid:++this.refSeq, kind:'elem', seg:segIdx+1, time:tt, name:'箭头：蓝光弹开'}], text.replace(/。*/,'，改慢一点'));
+    },
+
+    /* ===== 出片 & 方法库 ===== */
+    async startExport(){
+      if(this.phase!=='video'&&this.phase!=='exported') return;
+      this.phase='exporting';
+      const m={id:nid(), role:'agent', type:'exporting', pct:0, stage:'段级并行渲染 1080p（6 段同时）…'};
+      this.push(m); this.working=true;
+      for(let p=0;p<=100;p+=8){ m.pct=p; await sleep(160); }
+      m.pct=100; m.stage='FFmpeg 拼接 + 上传 MinIO…'; await sleep(500);
+      this.phase='exported'; this.credit-=2;
+      this.push({id:nid(), role:'agent', type:'exported'});
+      await this.think(700);
+      this.push({id:nid(), role:'agent', type:'library', done:false, skipped:false});
+      this.working=false;
+    },
+    confirmLib(m){ m.done=true; this.tplNew=true; this.credit+=1; this.toast('已入库 · 左栏「模板库」查看'); },
+  },
+  mounted(){ this.showCk=true; },
+}).mount('#app');
+</script>
+</html>

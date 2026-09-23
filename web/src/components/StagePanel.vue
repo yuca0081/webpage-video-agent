@@ -1,0 +1,204 @@
+<script setup lang="ts">
+import { NButton, NScrollbar, NSpin, NTag } from 'naive-ui'
+import type { ProjectView, Storyboard, StyleSamples } from '../types'
+import { videoURL } from '../api'
+
+const props = defineProps<{
+  view: ProjectView | null
+  storyboard: Storyboard | null
+  styleSamples: StyleSamples | null
+  manuscript: { content: string; word_count: number } | null
+  stageSummary: { key: string; state: string }[] | null
+  videoId: string
+}>()
+const emit = defineEmits<{ 'confirm-style': []; seg: [idx: number, key: string] }>()
+
+const stageName: Record<string, string> = {
+  tts: '配音', compositions: '画面', assemble: '组装', check: '检查', render: '渲染',
+}
+</script>
+
+<template>
+  <section class="stage">
+    <!-- 舞台四态：文稿 → 分镜 → 风格样张 → 视频 -->
+    <template v-if="view">
+      <!-- 状态 1：文稿（前置未齐时的底稿展示） -->
+      <div v-if="!view.gates.storyboard && manuscript" class="pane">
+        <div class="pane-head">
+          文稿 <NTag size="small" :bordered="false">{{ manuscript.word_count }} 字</NTag>
+        </div>
+        <NScrollbar class="ms-scroll">
+          <article class="manuscript">{{ manuscript.content }}</article>
+        </NScrollbar>
+      </div>
+
+      <!-- 状态 2：分镜表 -->
+      <div v-else-if="view.gates.storyboard && !view.gates.style_draft && storyboard" class="pane">
+        <div class="pane-head">
+          分镜 <NTag size="small" :bordered="false">{{ storyboard.segments.length }} 段 / 约 {{ Math.round(view.total_hint) }} 秒</NTag>
+        </div>
+        <NScrollbar class="ms-scroll">
+          <table class="sb">
+            <thead><tr><th style="width:56px">段</th><th style="width:130px">标题</th><th>旁白</th><th style="width:170px">画面</th><th style="width:64px">秒</th></tr></thead>
+            <tbody>
+              <tr v-for="s in storyboard.segments" :key="s.id" class="sb-row" @click="emit('seg', s.idx, s.key)">
+                <td class="c">{{ s.idx }}</td>
+                <td><b>{{ s.key }}</b></td>
+                <td class="narr">{{ s.narration }}</td>
+                <td class="brief">{{ s.visual_brief }}</td>
+                <td class="c">{{ Math.round(s.duration_hint) }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="hint">点任意段可把 📎 引用带进聊天</div>
+        </NScrollbar>
+      </div>
+
+      <!-- 状态 3：风格样张（硬门：用户确认；制作中切到进度面板） -->
+      <div v-else-if="view.gates.style_draft && styleSamples && !view.has_video && !view.producing && !stageSummary" class="pane">
+        <div class="pane-head">
+          风格样张 · {{ styleSamples.direction }}
+          <NTag size="small" :bordered="false" :type="styleSamples.confirmed ? 'success' : 'warning'">
+            {{ styleSamples.confirmed ? '已确认' : '待确认' }}
+          </NTag>
+        </div>
+        <NScrollbar class="ms-scroll">
+          <div class="samples">
+            <figure v-for="s in styleSamples.samples" :key="s.tag" class="sample">
+              <iframe :srcdoc="s.html" sandbox="" class="frame" :style="{ aspectRatio: view.aspect === '9:16' ? '9/16' : '16/9' }" />
+              <figcaption>
+                <b>{{ s.tag }}</b>
+                <span>{{ s.desc }}</span>
+              </figcaption>
+            </figure>
+          </div>
+          <div class="confirm-bar">
+            <p>样张与成片同一套 token，所见即所得。确认后即可开工（这是唯一必须你拍板的门）。</p>
+            <NButton v-if="!styleSamples.confirmed" type="primary" size="large" @click="emit('confirm-style')">
+              确认风格，开工
+            </NButton>
+            <NButton v-else type="success" ghost size="large" disabled>已确认</NButton>
+          </div>
+        </NScrollbar>
+      </div>
+
+      <!-- 状态 4：成片（含制作进度与时间轴分段条） -->
+      <div v-else-if="view.has_video" class="pane video-pane" :class="{ vertical: view.aspect === '9:16' }">
+        <!-- 段级重做中：细进度条（其余段的画面/音频不动） -->
+        <div v-if="stageSummary" class="rework-strip">
+          <div v-for="st in stageSummary" :key="st.key" class="stage" :data-state="st.state">
+            <span class="dot" />{{ stageName[st.key] ?? st.key }}
+          </div>
+          <span class="rework-hint">段级重做中</span>
+        </div>
+        <div class="player">
+          <video :src="videoURL(videoId)" controls preload="metadata" />
+        </div>
+        <div v-if="storyboard" class="segbar">
+          <div
+            v-for="s in storyboard.segments" :key="s.id" class="seg"
+            :style="{ flexGrow: s.duration_hint }"
+            @click="emit('seg', s.idx, s.key)"
+          >
+            <span class="seg-idx">{{ s.idx }}</span>
+            <span class="seg-key">{{ s.key }}</span>
+          </div>
+        </div>
+        <div class="foot-row">
+          <span class="video-hint">点段插入 📎 引用，聊天里说要改什么——只重做那一段</span>
+          <a class="dl" :href="videoURL(videoId)" :download="`${view.name}.mp4`">下载成片 · {{ view.aspect === '9:16' ? '1080×1920' : '1080p' }}</a>
+        </div>
+      </div>
+
+      <!-- 制作中：进度面板（其余状态都不满足 = 管线在跑或等待中） -->
+      <div v-else class="pane producing">
+        <NSpin size="large" />
+        <div class="prod-title">{{ view.producing || stageSummary ? '制作管线运行中' : '准备中…' }}</div>
+        <div v-if="stageSummary" class="stages">
+          <div v-for="st in stageSummary" :key="st.key" class="stage" :data-state="st.state">
+            <span class="dot" />{{ stageName[st.key] ?? st.key }}
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <div v-else class="pane empty">
+      <div class="none">← 左侧新建或选择一个项目</div>
+    </div>
+  </section>
+</template>
+
+<style scoped>
+.stage { flex: 1; min-height: 0; padding: 16px 20px 20px; display: flex; }
+.pane {
+  flex: 1; min-width: 0; display: flex; flex-direction: column;
+  background: #14141a; border: 1px solid #232329; border-radius: 12px; overflow: hidden;
+}
+.pane-head {
+  flex: none; display: flex; align-items: center; gap: 10px;
+  padding: 12px 18px; font-weight: 600; border-bottom: 1px solid #202027; color: #d9d9e0;
+}
+.ms-scroll { flex: 1; }
+.manuscript { padding: 26px 34px; line-height: 2.1; font-size: 15px; color: #cfcfd8; white-space: pre-wrap; max-width: 860px; margin: 0 auto; font-family: 'KaiTi', 'STKaiti', serif; font-size: 17px; }
+
+/* 分镜表 */
+.sb { width: 100%; border-collapse: collapse; font-size: 13px; }
+.sb th { position: sticky; top: 0; background: #14141a; text-align: left; padding: 10px 12px; color: #7c7c88; font-weight: 600; border-bottom: 1px solid #232329; }
+.sb td { padding: 10px 12px; border-bottom: 1px solid #1d1d24; vertical-align: top; }
+.sb-row { cursor: pointer; }
+.sb-row:hover td { background: #191920; }
+.c { color: #7c7c88; text-align: center; }
+.narr { color: #c3c3cd; }
+.brief { color: #8a8a96; }
+.hint { padding: 10px 14px; color: #55555f; font-size: 12px; }
+
+/* 样张 */
+.samples { display: flex; gap: 16px; padding: 20px; flex-wrap: wrap; }
+.sample { flex: 1; min-width: 320px; max-width: 480px; }
+.frame { width: 100%; border: 1px solid #2b2b33; border-radius: 8px; background: #FDF6E3; }
+figcaption { margin-top: 8px; display: flex; flex-direction: column; gap: 2px; }
+figcaption b { font-size: 13px; }
+figcaption span { font-size: 12px; color: #8a8a96; }
+.confirm-bar { padding: 4px 20px 20px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.confirm-bar p { color: #8a8a96; font-size: 13px; max-width: 560px; }
+
+/* 成片 */
+.video-pane { align-items: center; justify-content: center; gap: 14px; padding: 20px; }
+.player { width: min(100%, 1080px); }
+.player video { width: 100%; border-radius: 8px; background: #000; display: block; }
+.video-pane.vertical .player { width: auto; height: 100%; max-height: calc(100vh - 300px); }
+.video-pane.vertical .player video { width: auto; height: 100%; max-width: 100%; }
+.rework-strip { display: flex; align-items: center; gap: 10px; }
+.rework-hint { font-size: 12px; color: #f0c674; }
+.segbar { width: min(100%, 1080px); display: flex; gap: 3px; }
+.foot-row { width: min(100%, 1080px); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.video-hint { color: #55555f; font-size: 12px; }
+.seg {
+  min-width: 0; cursor: pointer; border-radius: 6px; padding: 6px 8px;
+  background: #1c1c23; border: 1px solid #2b2b33; display: flex; flex-direction: column; gap: 2px;
+}
+.seg:hover { border-color: #f0c674; }
+.seg-idx { font-size: 10px; color: #7c7c88; }
+.seg-key { font-size: 11px; color: #c3c3cd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dl { color: #8fc7ff; font-size: 13px; text-decoration: none; border: 1px solid #2b4a66; padding: 6px 14px; border-radius: 999px; }
+.dl:hover { background: #121b24; }
+
+/* 制作中 */
+.producing { align-items: center; justify-content: center; gap: 18px; }
+.prod-title { color: #c3c3cd; font-size: 15px; }
+.stages { display: flex; gap: 10px; }
+.stage {
+  display: flex; align-items: center; gap: 6px; font-size: 13px; color: #7c7c88;
+  border: 1px solid #2b2b33; border-radius: 999px; padding: 5px 14px;
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #3a3a45; }
+.stage[data-state="running"] { color: #8fc7ff; border-color: #2b4a66; }
+.stage[data-state="running"] .dot { background: #8fc7ff; animation: pulse 1.2s infinite; }
+.stage[data-state="done"] { color: #7ee2a8; border-color: #2c5c40; }
+.stage[data-state="done"] .dot { background: #7ee2a8; }
+.stage[data-state="error"] { color: #ff9d9d; border-color: #66302b; }
+.stage[data-state="error"] .dot { background: #ff9d9d; }
+@keyframes pulse { 50% { opacity: .35; } }
+.empty { align-items: center; justify-content: center; }
+.none { color: #55555f; }
+</style>
