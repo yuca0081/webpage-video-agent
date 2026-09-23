@@ -20,8 +20,16 @@ def load(proj_dir):
     p = pathlib.Path(proj_dir)
     if str(p) not in _META_CACHE:
         meta = json.load(open(p / 'audio_meta.json', encoding='utf-8'))
+        words = {v['id']: v['words'] for v in meta['voices']}
+        phrases = {}
+        for v in meta['voices']:
+            ph = v.get('phrases')
+            if not ph:  # 旧产物无短语 → 整段一个短语（v1 行为）
+                ph = [[0, len(v['words']) - 1]] if v['words'] else []
+            phrases[v['id']] = ph
         _META_CACHE[str(p)] = {
-            'words': {v['id']: v['words'] for v in meta['voices']},
+            'words': words,
+            'phrases': phrases,
             'dur': {v['id']: v['duration_s'] for v in meta['voices']},
             'scene': {v['id']: round(v['duration_s'] + 0.35, 3) for v in meta['voices']},
         }
@@ -58,7 +66,8 @@ def _css_one(frame, W=1920, H=1080):
 .{frame}-el{{position:absolute;}}
 .{frame}-note{{position:absolute;border:3px solid {INK};border-radius:6px;box-shadow:5px 5px 0 {INK};
   padding:14px 26px;font-size:40px;font-weight:700;white-space:nowrap;}}
-.{frame}-capzone{{position:absolute;left:0;right:0;top:{cap_top}px;bottom:0;display:flex;align-items:center;justify-content:center;}}
+.{frame}-capzone{{position:absolute;left:0;right:0;top:{cap_top}px;bottom:0;}}
+.{frame}-capph{{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;}}
 .{frame}-cap{{max-width:{cap_max}px;background:rgba(255,255,255,.88);border:3px solid {INK};border-radius:999px;
   padding:10px 40px;font-size:33px;line-height:1.4;text-align:center;}}
 .{frame}-cap span{{opacity:.28;margin:0 3px;}}
@@ -81,16 +90,28 @@ def wrap(proj_dir, frame, sid, body_html, body_js, W=1920, H=1080):
         n[0] += 1
         return tag.replace('class="', f'id="{frame}-c{n[0]}" class="', 1)
     body_html = re.sub(r'<div\b[^>]*class="[^"]*clip[^"]*"[^>]*>', add_id, body_html)
-    caps = ''.join(f'<span data-w="{i}">{w["text"]}</span>' for i, w in enumerate(sc['words'][sid]))
-    capjs = ''.join(f'tl.to(\'[data-w="{i}"]\',{{opacity:1,duration:.1,ease:"none"}},{w["start"]:.2f});'
-                    for i, w in enumerate(sc['words'][sid]))
+    # 字幕：短语级（v2）——一次只显示当前短语胶囊，短语内逐词高亮，短语间硬切
+    words, phrases = sc['words'][sid], sc['phrases'][sid]
+    ph_html = ''.join(
+        f'<div class="{frame}-capph" data-ph="{pi}"><div class="{frame}-cap">'
+        + ''.join(f'<span data-w="{i}">{words[i]["text"]}</span>' for i in range(i0, i1 + 1))
+        + '</div></div>'
+        for pi, (i0, i1) in enumerate(phrases))
+    ph_js = ''
+    for pi, (i0, _i1) in enumerate(phrases):
+        t_in = max(0.0, words[i0]['start'] - 0.05)
+        if pi > 0:
+            ph_js += f'tl.set(\'[data-ph="{pi-1}"]\',{{opacity:0}},{t_in:.2f});\n      '
+        ph_js += f'tl.set(\'[data-ph="{pi}"]\',{{opacity:1}},{t_in:.2f});\n      '
+    capjs = ph_js + ''.join(f'tl.to(\'[data-w="{i}"]\',{{opacity:1,duration:.1,ease:"none"}},{w["start"]:.2f});'
+                            for i, w in enumerate(words))
     return f"""<template>
   <style>{css(prefixes, W, H)}</style>
   <div data-composition-id="{sid}" data-width="{W}" data-height="{H}">
     <div id="root">
       <div id="{frame}-paper" class="{frame}-clip clip {frame}-paper" data-start="0" data-duration="{scene:.3f}" data-track-index="0" data-hf-name="纸面底+淡网格"></div>
       {body_html}
-      <div id="{frame}-capzone" class="{frame}-clip clip {frame}-capzone" data-start="0" data-duration="{scene:.3f}" data-track-index="8" data-hf-name="字幕带：逐词高亮"><div class="{frame}-cap">{caps}</div></div>
+      <div id="{frame}-capzone" class="{frame}-clip clip {frame}-capzone" data-start="0" data-duration="{scene:.3f}" data-track-index="8" data-hf-name="字幕带：逐词高亮">{ph_html}</div>
     </div>
   </div>
   <script>
