@@ -78,6 +78,10 @@ def render_element(f, sid, e, i, words, W=1920):
         return html, sp.fade(f'#{eid}', t)
     if kind == 'icon':
         return render_icon(f, sid, e, i, t)
+    if kind == 'image':
+        return render_image(f, sid, e, i, t)
+    if kind == 'emoji':
+        return render_emoji(f, sid, e, i, t)
     if kind == 'chart_bar':
         return render_chart_bar(f, sid, e, i, t)
     if kind == 'chart_line':
@@ -108,9 +112,39 @@ def extract_elements(html):
     return els
 
 
-# ── icon / 图表（手绘风 SVG 渲染层）──────────────────────────
+# ── image / emoji / 图表（手绘风渲染层）─────────────────────
 
 ICON_DIR = SHARED / 'assets' / 'icons'
+
+
+def render_image(f, sid, e, i, t):
+    """真实照片：制作期已下载到本地（assets/img/），拍立得白框+墨线阴影呈现。
+    src 空 = 搜图无源 → 便签兜底（管线不死）。"""
+    eid = f"{sid}-img{i}"
+    q = str(e.get('query', '配图')).strip()[:10]
+    w, h = e.get('w', 520), e.get('h', 360)
+    src = e.get('src')
+    if not src:
+        note_html = sp.note(f, eid, e['x'], e['y'], q, bg=sp.SKY, rot=-1.5, fs=38)
+        return note_html, sp.rise(f'#{eid}', t)
+    rot = e.get('rot', -1.8 if i % 2 else 1.8)
+    html = (f'<div class="{f}-el" id="{eid}" data-hf-name="图片：{q}" '
+            f'style="top:{e["y"]}px;left:{e["x"]}px;width:{w}px;height:{h}px;'
+            f'background:#FFF;border:3px solid {sp.INK};padding:12px 12px 18px;'
+            f'box-shadow:7px 7px 0 {sp.INK};transform:rotate({rot}deg);">'
+            f'<img src="{src}" style="width:100%;height:100%;object-fit:cover;display:block;" /></div>')
+    return html, sp.pop(f'#{eid}', t, scale=.85)
+
+
+def render_emoji(f, sid, e, i, t):
+    """大号彩色 emoji（本地系统字体，确定性渲染）。"""
+    eid = f"{sid}-emoji{i}"
+    fs = e.get('fs', 140)
+    ch = (e.get('text') or '✨')[:4]
+    html = (f'<div class="{f}-el" id="{eid}" data-hf-name="表情：{ch}" '
+            f'style="top:{e["y"]}px;left:{e["x"]}px;font-size:{fs}px;line-height:1.1;'
+            f"font-family:'Segoe UI Emoji','Apple Color Emoji','Noto Color Emoji',sans-serif;\">{ch}</div>")
+    return html, sp.pop(f'#{eid}', t, scale=.5)
 
 
 def render_icon(f, sid, e, i, t):

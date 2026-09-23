@@ -38,8 +38,8 @@ func CanvasFor(aspect string) Canvas {
 
 // SpecElement 元素语义。坐标体系随画幅（CanvasFor），y ≥ CapTop 为字幕带禁放。
 type SpecElement struct {
-	Kind string `json:"kind"` // title|note|label|big|beam|disc|circle|arrow|icon|chart_bar|chart_line|chart_pie
-	X    float64 `json:"x,omitempty"`  // 左上角（note/label/big/beam/icon/chart_*）
+	Kind string `json:"kind"` // title|note|label|big|beam|disc|circle|arrow|icon|chart_bar|chart_line|chart_pie|image|emoji
+	X    float64 `json:"x,omitempty"`  // 左上角（note/label/big/beam/icon/chart_*/image/emoji）
 	Y    float64 `json:"y,omitempty"`
 	X1   float64 `json:"x1,omitempty"` // arrow 起点
 	Y1   float64 `json:"y1,omitempty"`
@@ -48,10 +48,11 @@ type SpecElement struct {
 	Cx   float64 `json:"cx,omitempty"` // 圆心（disc/circle）
 	Cy   float64 `json:"cy,omitempty"`
 	R    float64 `json:"r,omitempty"`  // 半径（disc/circle）
-	W    float64 `json:"w,omitempty"`  // 宽（beam/chart_*）
+	W    float64 `json:"w,omitempty"`  // 宽（beam/chart_*/image）
 	H    float64 `json:"h,omitempty"`
 	Text string  `json:"text,omitempty"`
 	Name string  `json:"name,omitempty"`  // icon 名（lucide kebab，本地库）
+	Query string `json:"query,omitempty"` // image 搜索词（制作期下载本地化）
 	Size float64 `json:"size,omitempty"` // icon 边长
 	Values []float64 `json:"values,omitempty"` // 图表数值
 	Labels []string  `json:"labels,omitempty"` // 图表标签
@@ -67,6 +68,7 @@ var specKinds = map[string]bool{
 	"title": true, "note": true, "label": true, "big": true,
 	"beam": true, "disc": true, "circle": true, "arrow": true,
 	"icon": true, "chart_bar": true, "chart_line": true, "chart_pie": true,
+	"image": true, "emoji": true,
 }
 
 // bbox 保守估计元素占位（供边界与重叠检查）。
@@ -109,6 +111,20 @@ func (e *SpecElement) bbox(cv Canvas) (x0, y0, w, h float64, ok bool) {
 			e.Size = 120
 		}
 		return e.X, e.Y, e.Size, e.Size, true
+	case "image":
+		if e.W == 0 {
+			e.W = 520
+		}
+		if e.H == 0 {
+			e.H = 360
+		}
+		// 拍立得白框余量（border+padding，防重叠漏检）
+		return e.X - 15, e.Y - 15, e.W + 30, e.H + 38, true
+	case "emoji":
+		if e.Fs == 0 {
+			e.Fs = 140
+		}
+		return e.X, e.Y, e.Fs, e.Fs * 1.1, true
 	case "chart_bar", "chart_line":
 		if e.W == 0 {
 			e.W = 560
@@ -197,6 +213,31 @@ func ValidateSpec(s *CompSpec, wordCount int, cv Canvas) []string {
 			}
 			if e.Size != 0 && (e.Size < 48 || e.Size > 400) {
 				errs = append(errs, fmt.Sprintf("%s: size %v 超范围 48–400", tag, e.Size))
+			}
+		}
+		if e.Kind == "image" {
+			if e.Query == "" {
+				errs = append(errs, tag+": 缺 query（图片搜索词）")
+			}
+			if n := utf8.RuneCountInString(e.Query); n > 12 {
+				errs = append(errs, fmt.Sprintf("%s: query「%s」超长（≤12 字）", tag, e.Query))
+			}
+			if e.W != 0 && (e.W < 200 || e.W > 1000) {
+				errs = append(errs, fmt.Sprintf("%s: w %v 超范围 200–1000", tag, e.W))
+			}
+			if e.H != 0 && (e.H < 140 || e.H > 700) {
+				errs = append(errs, fmt.Sprintf("%s: h %v 超范围 140–700", tag, e.H))
+			}
+		}
+		if e.Kind == "emoji" {
+			if e.Text == "" {
+				errs = append(errs, tag+": 缺 text（emoji 字符）")
+			}
+			if utf8.RuneCountInString(e.Text) > 4 {
+				errs = append(errs, fmt.Sprintf("%s: text「%s」超长（≤4 字符）", tag, e.Text))
+			}
+			if e.Fs != 0 && e.Fs > 300 {
+				errs = append(errs, fmt.Sprintf("%s: fs %v 超 300", tag, e.Fs))
 			}
 		}
 		if e.Kind == "chart_bar" || e.Kind == "chart_line" || e.Kind == "chart_pie" {
@@ -291,13 +332,18 @@ func SanitizeSpec(s *CompSpec, wordCount int, cv Canvas) []string {
 		}
 		// 文本/条状类夹进安全区上半段；圆类圆心留出半径余量
 		if e.Kind == "note" || e.Kind == "label" || e.Kind == "big" || e.Kind == "beam" ||
-			e.Kind == "icon" || e.Kind == "chart_bar" || e.Kind == "chart_line" || e.Kind == "chart_pie" {
+			e.Kind == "icon" || e.Kind == "chart_bar" || e.Kind == "chart_line" || e.Kind == "chart_pie" ||
+			e.Kind == "image" || e.Kind == "emoji" {
 			e.X = clamp(e.X, cv.X0+100, cv.X1-260)
 			e.Y = clamp(e.Y, cv.Y0+60, cv.Y1-120)
 		}
 		if e.Kind == "chart_bar" || e.Kind == "chart_line" || e.Kind == "chart_pie" {
 			e.W = clamp(e.W, 240, cv.W-2*cv.X0)
 			e.H = clamp(e.H, 200, cv.Y1-cv.Y0-200)
+		}
+		if e.Kind == "image" {
+			e.W = clamp(e.W, 240, cv.W-2*cv.X0-60)
+			e.H = clamp(e.H, 160, cv.Y1-cv.Y0-260)
 		}
 		if e.Kind == "disc" || e.Kind == "circle" {
 			e.Cx = clamp(e.Cx, cv.X0+180, cv.X1-180)

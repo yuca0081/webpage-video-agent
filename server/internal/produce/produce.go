@@ -133,6 +133,9 @@ func (r *Runner) runRework(p *pipeline.Project, seg contract.Segment, instructio
 	if err := r.genSpecs(p, feedback, seg.ID); err != nil {
 		return err
 	}
+	if err := r.fetchImages(p); err != nil {
+		return err
+	}
 	if err := r.renderSpecs(p); err != nil {
 		return err
 	}
@@ -232,10 +235,13 @@ func (r *Runner) run(p *pipeline.Project) error {
 	return nil
 }
 
-// compositions 生成/复用 spec → 渲染 HTML → 清旧帧 → 管线落盘。
+// compositions 生成/复用 spec → 搜图本地化 → 渲染 HTML → 清旧帧 → 管线落盘。
 func (r *Runner) compositions(p *pipeline.Project) error {
 	r.emit(p.ID, "stage", "compositions", "running")
 	if err := r.genSpecs(p, "", ""); err != nil {
+		return err
+	}
+	if err := r.fetchImages(p); err != nil {
 		return err
 	}
 	if err := r.renderSpecs(p); err != nil {
@@ -269,6 +275,9 @@ func (r *Runner) checkWithRepair(p *pipeline.Project, only string) error {
 		r.emit(p.ID, "stage", "check", "repair：带着报错重生成画面")
 		r.Manifest(p, "check.repair", tail(err.Error(), 10))
 		if err := r.genSpecs(p, feedback, only); err != nil {
+			return err
+		}
+		if err := r.fetchImages(p); err != nil {
 			return err
 		}
 		if err := r.renderSpecs(p); err != nil {
@@ -478,7 +487,9 @@ func specUserPrompt(seg contract.Segment, v voiceMeta, instruction, feedback str
 - note：马克笔便签（给左上角坐标）。x, y, text(≤12字), bg(butter/mint/sky/coral/peach/pink), rot(±3), fs(默认40), reveal
 - label：文字标注。x, y, text(≤14字), fs(默认38), reveal
 - big：大数字/短语强调。x, y, text(≤8字), fs(默认110), reveal
-- icon：手绘线稿图标（主体物首选，语义物体尽量用它而不是圆盘）。x, y, size(48–400，主体物 120–260), name, rot(±6), reveal
+- image：真实照片（制作时按 query 自动搜图下载本地化，拍立得白框呈现）——有实体名词（动物/地标/物品/场景）时的主视觉首选。x, y, w(默认520), h(默认360), query(中文搜索词2–12字，如"蓝鲸 海面"), rot(±3), reveal
+- icon：手绘线稿图标（抽象概念/动作的视觉锚点）。x, y, size(48–400，主体物 120–260), name, rot(±6), reveal
+- emoji：大号彩色 emoji 点缀/角色（本地系统字体）。x, y, text(1–2 个 emoji 字符), fs(默认140), reveal。一屏 ≤2 个
 - chart_bar：手绘柱状图（数据对比）。x, y, w(默认560), h(默认360), values(2–6个数), labels(每柱≤6字), reveal
 - chart_line：手绘折线图（趋势变化）。x, y, w, h, values(3–8个数=折线点), labels(可选), reveal
 - chart_pie：手绘饼图（占比）。x, y, w, h(短边=直径), values(2–5), labels, reveal
@@ -504,7 +515,8 @@ scale ruler clipboard lightbulb-off zap-off anchor truck bike train bus ship sen
 ## 布局硬规则（校验器会拒收）
 %s
 - reveal 按讲解顺序递增、铺满词序（别堆在开头；最大词号 %d）
-- 语义呼应画面提示：主体物→icon（首选，配 label 命名）；数据对比→chart_bar；趋势→chart_line；占比→chart_pie；对比→双色便签左右分置；流程→箭头串联；数字→big；一屏最多一个图表（图表占主视觉位）
+- 语义呼应画面提示：主体物→image（实体名词首选）或 icon（抽象概念）；数据对比→chart_bar；趋势→chart_line；占比→chart_pie；对比→双色便签左右分置；流程→箭头串联；数字→big；一屏最多一个图表（图表占主视觉位）
+- 画面丰富度（重要）：每屏至少一个视觉锚点（image / 大 icon / 图表 / big 之一），大小拉开层次（主体 300px+、次级 120–200px），禁止全屏小元素平铺
 %s
 
 ## 输出（只输出 JSON，无围栏）
@@ -545,6 +557,11 @@ func (r *Runner) python(script string, projDir string, timeout time.Duration) er
 // renderSpecs spec → llm/comp-segNN.json（确定性渲染层）。
 func (r *Runner) renderSpecs(p *pipeline.Project) error {
 	return r.python("ai/render_spec.py", p.Dir, 2*time.Minute)
+}
+
+// fetchImages spec 里 image 元素的搜图本地化（必应 → Commons，失败便签兜底）。
+func (r *Runner) fetchImages(p *pipeline.Project) error {
+	return r.python("ai/fetch_images.py", p.Dir, 10*time.Minute)
 }
 
 // clearFrames 清旧帧（落盘阶段只补缺失文件，不清不会重写）。
