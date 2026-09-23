@@ -10,6 +10,7 @@ data/**
 data/projects/*
 !data/projects/_shared/
 !data/projects/_shared/**
+data/projects/_shared/__pycache__/
 
 # OS / 编辑器
 .DS_Store
