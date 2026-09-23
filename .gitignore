@@ -23,3 +23,6 @@ Thumbs.db
 # 本地构建产物
 bin/
 web/dist/
+
+# 3D 验证片渲染产物（不入库）
+demo/aegis3d/renders/
