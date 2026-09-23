@@ -69,3 +69,30 @@ func TestSanitizeSpecClamps(t *testing.T) {
 		t.Fatalf("清洗后仍越界: %+v %+v", s.Elements[0], s.Elements[1])
 	}
 }
+
+func TestValidateSpecIconChart(t *testing.T) {
+	cv := CanvasFor("16:9")
+	// icon + 图表合法布局
+	s := &CompSpec{Elements: []SpecElement{
+		{Kind: "icon", X: 700, Y: 380, Size: 200, Name: "rocket", Reveal: 2},
+		{Kind: "label", X: 300, Y: 250, Text: "运载火箭", Reveal: 1},
+		{Kind: "chart_bar", X: 160, Y: 480, W: 520, H: 320,
+			Values: []float64{12, 30, 8}, Labels: []string{"甲", "乙", "丙"}, Reveal: 5},
+	}}
+	if errs := ValidateSpec(s, 20, cv); len(errs) != 0 {
+		t.Fatalf("icon/图表合法布局被拒: %v", errs)
+	}
+	// icon 缺 name；图表 values/labels 不一致 + 单值折线
+	bad := &CompSpec{Elements: []SpecElement{
+		{Kind: "icon", X: 700, Y: 380, Size: 200, Reveal: 1},
+		{Kind: "chart_bar", X: 160, Y: 480, Values: []float64{1, 2}, Labels: []string{"a"}, Reveal: 2},
+		{Kind: "chart_line", X: 160, Y: 480, Values: []float64{5}, Reveal: 3},
+	}}
+	errs := ValidateSpec(bad, 20, cv)
+	joined := strings.Join(errs, "\n")
+	for _, want := range []string{"缺 name", "labels 数 1 与 values 数 2 不一致", "数量 1 不在 3–8"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("应包含 %q，得到: %v", want, errs)
+		}
+	}
+}

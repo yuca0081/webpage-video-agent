@@ -249,10 +249,10 @@ func (r *Runner) compositions(p *pipeline.Project) error {
 	return nil
 }
 
-// checkWithRepair check 失败 → 报错回喂 → 重生成 spec → 重渲染 → 重查（最多 2 轮）。
+// checkWithRepair check 失败 → 报错回喂 → 重生成 spec → 重渲染 → 重查（最多 3 轮，plan §4.5）。
 // only 非空 = 修复范围限定该段（rework），空 = 全片（首次制作）。
 func (r *Runner) checkWithRepair(p *pipeline.Project, only string) error {
-	for attempt := 1; attempt <= 2; attempt++ {
+	for attempt := 1; attempt <= 3; attempt++ {
 		r.emit(p.ID, "stage", "check", fmt.Sprintf("running（第 %d 次）", attempt))
 		_ = os.Remove(p.Artifact(".hyperframes-ok"))
 		err := pipeline.Run(p, "check")
@@ -260,9 +260,9 @@ func (r *Runner) checkWithRepair(p *pipeline.Project, only string) error {
 			r.emit(p.ID, "stage", "check", "done")
 			return nil
 		}
-		if attempt == 2 {
+		if attempt == 3 {
 			r.emit(p.ID, "stage", "check", "error: "+err.Error())
-			return fmt.Errorf("check 两轮未过: %w", err)
+			return fmt.Errorf("check 三轮未过: %w", err)
 		}
 		feedback := "上一版画面被自动布局检查拒绝，报错摘要：\n" + tail(err.Error(), 25) +
 			"\n常见原因：元素重叠/越界。请整体重排：拉开间距、避开底部字幕带（禁放区见布局规则）、必要时减少元素。"
@@ -334,6 +334,7 @@ func (r *Runner) genSpecs(p *pipeline.Project, feedback, only string) error {
 	}
 	cv := ProjectCanvas(p)
 	system := specSystemFor(p)
+	icons := scanIcons(r.DataDir)
 	if feedback != "" && only == "" { // 全片重生成：先清旧 spec
 		for _, seg := range sb.Segments {
 			_ = os.Remove(p.Artifact("llm/comp-" + seg.ID + ".spec.json"))
@@ -360,6 +361,7 @@ func (r *Runner) genSpecs(p *pipeline.Project, feedback, only string) error {
 			return fmt.Errorf("%s spec 生成失败: %w", seg.ID, err)
 		}
 		errs := contract.ValidateSpec(&spec, len(v.Words), cv)
+		errs = append(errs, iconErrors(&spec, icons)...)
 		for repair := 0; repair < 2 && len(errs) > 0; repair++ { // 修复：违规项回喂，最多 2 轮
 			fb := instruction + feedback + "\n上一版 spec 被契约校验拒绝，必须逐条修正：\n- " + strings.Join(errs, "\n- ")
 			var fixed contract.CompSpec
@@ -369,6 +371,7 @@ func (r *Runner) genSpecs(p *pipeline.Project, feedback, only string) error {
 			}
 			u1, spec = u2, fixed
 			errs = contract.ValidateSpec(&spec, len(v.Words), cv)
+			errs = append(errs, iconErrors(&spec, icons)...)
 		}
 		if len(errs) > 0 { // 保底：确定性清洗（删冲突/夹越界），不让整条任务死掉
 			remain := contract.SanitizeSpec(&spec, len(v.Words), cv)
@@ -411,6 +414,36 @@ func ProjectCanvas(p *pipeline.Project) contract.Canvas {
 	return contract.CanvasFor(meta.Aspect)
 }
 
+// scanIcons 本地图标库清单（_shared/assets/icons，lucide 全量）。
+func scanIcons(dataDir string) map[string]bool {
+	out := map[string]bool{}
+	entries, err := os.ReadDir(filepath.Join(dataDir, "projects", "_shared", "assets", "icons"))
+	if err != nil {
+		return out
+	}
+	for _, e := range entries {
+		if name := strings.TrimSuffix(e.Name(), ".svg"); name != e.Name() {
+			out[name] = true
+		}
+	}
+	return out
+}
+
+// iconErrors 图标名不在本地库 → 校验错误（回喂换名；渲染层另有兜底）。
+func iconErrors(s *contract.CompSpec, icons map[string]bool) []string {
+	if len(icons) == 0 {
+		return nil
+	}
+	var errs []string
+	for i := range s.Elements {
+		e := &s.Elements[i]
+		if e.Kind == "icon" && e.Name != "" && !icons[e.Name] {
+			errs = append(errs, fmt.Sprintf("元素%d(icon): name %q 不在本地图标库，换一个", i+1, e.Name))
+		}
+	}
+	return errs
+}
+
 func specUserPrompt(seg contract.Segment, v voiceMeta, instruction, feedback string, cv contract.Canvas) string {
 	var wb strings.Builder
 	for i, w := range v.Words {
@@ -445,10 +478,25 @@ func specUserPrompt(seg contract.Segment, v voiceMeta, instruction, feedback str
 - note：马克笔便签（给左上角坐标）。x, y, text(≤12字), bg(butter/mint/sky/coral/peach/pink), rot(±3), fs(默认40), reveal
 - label：文字标注。x, y, text(≤14字), fs(默认38), reveal
 - big：大数字/短语强调。x, y, text(≤8字), fs(默认110), reveal
-- disc：实心圆盘（主体物，给圆心）。cx, cy, r(60–180), bg(mint/sky/butter/coral), reveal
+- icon：手绘线稿图标（主体物首选，语义物体尽量用它而不是圆盘）。x, y, size(48–400，主体物 120–260), name, rot(±6), reveal
+- chart_bar：手绘柱状图（数据对比）。x, y, w(默认560), h(默认360), values(2–6个数), labels(每柱≤6字), reveal
+- chart_line：手绘折线图（趋势变化）。x, y, w, h, values(3–8个数=折线点), labels(可选), reveal
+- chart_pie：手绘饼图（占比）。x, y, w, h(短边=直径), values(2–5), labels, reveal
+- disc：实心圆盘（抽象主体/备用）。cx, cy, r(60–180), bg(mint/sky/butter/coral), reveal
 - circle：小圆点（小物体/角色）。cx, cy, r(20–60), fill(white/mint/sky/butter), reveal
 - beam：粗条（条状物/光束，给左上角）。x, y, w, h, rot, bg, reveal
 - arrow：箭头（给起终点）。x1, y1, x2, y2, text(可选), reveal
+
+## 可用图标名（节选，语义匹配优先；必须是列表或其近似的名字）
+rocket cat dog sun moon star atom brain heart zap cloud flame droplet eye bone dna
+battery lightbulb cog wrench search book pen mail clock thermometer coins gift lock
+key phone laptop car plane house tree-deciduous tree-pine sprout flower fish bird
+coffee music camera mic wifi shield flag target users user map compass calendar
+hourglass microscope flask-conical test-tube stethoscope pill syringe leaf mountain
+waves wind snowflake umbrella globe graduation-cap calculator cpu database server
+satellite antenna fuel bug virus magnet telescope orbit trending-up trending-down
+cloud-rain-wind cloud-sun robot-arm baby person-circle-stop dices trophy medal crown
+scale ruler clipboard lightbulb-off zap-off anchor truck bike train bus ship send
 
 ## 词序表（reveal = 揭示时刻的词序号，0 起）
 %s
@@ -456,7 +504,7 @@ func specUserPrompt(seg contract.Segment, v voiceMeta, instruction, feedback str
 ## 布局硬规则（校验器会拒收）
 %s
 - reveal 按讲解顺序递增、铺满词序（别堆在开头；最大词号 %d）
-- 语义呼应画面提示：对比→双色便签左右分置；流程→箭头串联；主体→disc+label 命名；数字→big
+- 语义呼应画面提示：主体物→icon（首选，配 label 命名）；数据对比→chart_bar；趋势→chart_line；占比→chart_pie；对比→双色便签左右分置；流程→箭头串联；数字→big；一屏最多一个图表（图表占主视觉位）
 %s
 
 ## 输出（只输出 JSON，无围栏）

@@ -19,6 +19,7 @@ import stylepack as sp  # noqa: E402
 
 COLORS = {'butter': sp.BUTTER, 'mint': sp.MINT, 'sky': sp.SKY, 'coral': sp.CORAL,
           'peach': sp.PEACH, 'pink': sp.PINK, 'turq': sp.TURQ, 'ink': sp.INK, 'white': '#FFFFFF'}
+CHART_FILLS = [sp.MINT, sp.SKY, sp.BUTTER, sp.CORAL, sp.PEACH, sp.PINK]
 PREFIX = 's'
 
 
@@ -75,6 +76,14 @@ def render_element(f, sid, e, i, words, W=1920):
                 f'style="top:{e["cy"] - r}px;left:{e["cx"] - r}px;width:{2 * r}px;height:{2 * r}px;'
                 f'background:{fill};border:3px solid {sp.INK};border-radius:50%;"></div>')
         return html, sp.fade(f'#{eid}', t)
+    if kind == 'icon':
+        return render_icon(f, sid, e, i, t)
+    if kind == 'chart_bar':
+        return render_chart_bar(f, sid, e, i, t)
+    if kind == 'chart_line':
+        return render_chart_line(f, sid, e, i, t)
+    if kind == 'chart_pie':
+        return render_chart_pie(f, sid, e, i, t)
     if kind == 'arrow':
         x1, y1, x2, y2 = e['x1'], e['y1'], e['x2'], e['y2']
         ln, ang = math.hypot(x2 - x1, y2 - y1), math.degrees(math.atan2(y2 - y1, x2 - x1))
@@ -97,6 +106,145 @@ def extract_elements(html):
     for m in re.finditer(r'<\w+\b[^>]*?id="([^"]+)"[^>]*?data-hf-name="([^"]+)"[^>]*>', html):
         els.append({'id': m.group(1), 'name': m.group(2)})
     return els
+
+
+# ── icon / 图表（手绘风 SVG 渲染层）──────────────────────────
+
+ICON_DIR = SHARED / 'assets' / 'icons'
+
+
+def render_icon(f, sid, e, i, t):
+    """本地 lucide 线稿图标：inline 进合成物（无网络/无外链，lint 安全）。"""
+    size = e.get('size', 120)
+    rot = e.get('rot', 0)
+    eid = f"{sid}-icon{i}"
+    name = str(e.get('name', '')).strip()
+    path = ICON_DIR / f"{name}.svg"
+    if not path.exists():  # 兜底：未知图标 → 便签盒子 + 名字（不阻塞管线）
+        note_html = sp.note(f, eid, e['x'], e['y'], name[:10] or '?', bg=sp.BUTTER, rot=-1.5, fs=36)
+        return note_html, sp.rise(f'#{eid}', t)
+    svg = path.read_text(encoding='utf-8')
+    svg = re.sub(r'<!--.*?-->', '', svg, flags=re.S)          # 许可注释不入帧
+    svg = re.sub(r'\sclass="[^"]*"', '', svg)                  # 去 lucide class
+    svg = re.sub(r'<svg\b', '<svg width="100%" height="100%"', svg, count=1)
+    stroke = e.get('color') or sp.INK
+    sw = 2 if size >= 140 else 1.5                             # 24 viewBox：放大后描边视觉补偿
+    svg = re.sub(r'stroke-width="[\d.]+"', f'stroke-width="{sw}"', svg, count=1)
+    rot_css = f'transform:rotate({rot}deg);' if abs(rot) > 0.01 else ''
+    html = (f'<div class="{f}-el" id="{eid}" data-hf-name="图标：{name}" '
+            f'style="top:{e["y"]}px;left:{e["x"]}px;width:{size}px;height:{size}px;'
+            f'color:{stroke};{rot_css}">{svg}</div>')
+    return html, sp.pop(f'#{eid}', t, scale=.55)
+
+
+def _fmt_num(v):
+    return f"{v:.4g}"
+
+
+def render_chart_bar(f, sid, e, i, t):
+    """手绘柱状图：SVG + 微旋转抖动（确定性），柱 stagger 生长。"""
+    eid = f"{sid}-cbar{i}"
+    x, y, w, h = e['x'], e['y'], e.get('w', 560), e.get('h', 360)
+    values = e.get('values') or [1, 1]
+    labels = e.get('labels') or [''] * len(values)
+    n = len(values)
+    vmax = max(values) or 1.0
+    bw = min(96, (w - 60) / n - 26)
+    gap = (w - 40 - n * bw) / max(n - 1, 1) if n > 1 else 0
+    pad_b, label_fs, pad_t = 56, 26, 48   # pad_t：数值标签头部空间（check 门禁测出的越界）
+    area_h = h - pad_b - pad_t
+    parts = []
+    for j, v in enumerate(values):
+        bx = 20 + j * (bw + gap)
+        bh = max(14, area_h * (v / vmax))
+        jitter = ((j % 3) - 1) * 0.8                          # 手绘感抖动收窄，防柱角越顶
+        fill = CHART_FILLS[j % len(CHART_FILLS)]
+        parts.append(
+            f'<g data-bar="{j}" style="transform:rotate({jitter:.1f}deg);transform-origin:{bx + bw/2:.0f}px {h:.0f}px;">'
+            f'<rect x="{bx:.0f}" y="{pad_t + area_h - bh:.0f}" width="{bw:.0f}" height="{bh:.0f}" rx="6" '
+            f'fill="{fill}" stroke="{sp.INK}" stroke-width="4"/></g>')
+        if labels[j]:
+            parts.append(f'<text x="{bx + bw/2:.0f}" y="{h - 18}" text-anchor="middle" '
+                         f'font-size="{label_fs}" fill="{sp.INK}" font-family="KaiTi,STKaiti,serif">{labels[j]}</text>')
+        vy = max(pad_t + area_h - bh - 10, label_fs + 4)      # 数值标签夹在 SVG 内
+        parts.append(f'<text x="{bx + bw/2:.0f}" y="{vy:.0f}" text-anchor="middle" '
+                     f'font-size="{label_fs + 2}" font-weight="700" fill="{sp.INK}" '
+                     f'font-family="KaiTi,STKaiti,serif">{_fmt_num(v)}</text>')
+    html = (f'<div class="{f}-el" id="{eid}" data-hf-name="柱状图" '
+            f'style="top:{y}px;left:{x}px;width:{w}px;height:{h}px;">'
+            f'<svg viewBox="0 0 {w} {h}" width="{w}" height="{h}">{"".join(parts)}</svg></div>')
+    return html, sp.stagger_grow(f'#{eid} [data-bar]', t, step=.22, origin='center bottom')
+
+
+def render_chart_line(f, sid, e, i, t):
+    """手绘折线图：描边生长（dashoffset）+ 逐点 pop。"""
+    eid = f"{sid}-cline{i}"
+    x, y, w, h = e['x'], e['y'], e.get('w', 560), e.get('h', 360)
+    values = e.get('values') or [1, 2, 1]
+    n = len(values)
+    vmax, vmin = max(values), min(values)
+    span = (vmax - vmin) or 1.0
+    pad_b, pad_t = 56, 26
+    area_h = h - pad_b - pad_t
+    pts = []
+    for j, v in enumerate(values):
+        px = 28 + (w - 56) * (j / max(n - 1, 1))
+        py = pad_t + area_h * (1 - (v - vmin) / span)
+        pts.append((px, py))
+    poly = ' '.join(f'{px:.0f},{py:.0f}' for px, py in pts)
+    dots = ''.join(
+        f'<circle data-pt="{j}" cx="{px:.0f}" cy="{py:.0f}" r="13" fill="{sp.CORAL}" stroke="{sp.INK}" stroke-width="4"/>'
+        for j, (px, py) in enumerate(pts))
+    labels = e.get('labels') or []
+    lbl = ''.join(
+        f'<text x="{px:.0f}" y="{h - 18}" text-anchor="middle" font-size="26" fill="{sp.INK}" '
+        f'font-family="KaiTi,STKaiti,serif">{labels[j]}</text>'
+        for j, (px, py) in enumerate(pts) if j < len(labels) and labels[j])
+    length = (w - 56) * 1.15 + area_h  # 折线长度近似（dash 动画用，宁多勿少）
+    html = (f'<div class="{f}-el" id="{eid}" data-hf-name="折线图" '
+            f'style="top:{y}px;left:{x}px;width:{w}px;height:{h}px;">'
+            f'<svg viewBox="0 0 {w} {h}" width="{w}" height="{h}">'
+            f'<polyline data-line points="{poly}" fill="none" stroke="{sp.INK}" stroke-width="6" '
+            f'stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="{length:.0f}" '
+            f'stroke-dashoffset="{length:.0f}"/>{dots}{lbl}</svg></div>')
+    js = (f"tl.to('#{eid} [data-line]',{{strokeDashoffset:0,duration:1.1,ease:'power2.out'}},{t:.2f});\n      "
+          + sp.stagger_pop(f'#{eid} [data-pt]', t + .5, step=.18))
+    return html, js
+
+
+def render_chart_pie(f, sid, e, i, t):
+    """手绘饼图：扇形逐个 pop；标签沿扇形外侧放置。"""
+    eid = f"{sid}-cpie{i}"
+    x, y, w, h = e['x'], e['y'], e.get('w', 360), e.get('h', 360)
+    values = e.get('values') or [1, 1]
+    labels = e.get('labels') or [''] * len(values)
+    total = sum(values) or 1.0
+    r = min(w, h) / 2 - 8
+    cx, cy = w / 2, h / 2
+    parts, angle = [], -90.0
+    for j, v in enumerate(values):
+        sweep = 360 * v / total
+        a0, a1 = angle, angle + sweep
+        large = 1 if sweep > 180 else 0
+        x0, y0 = cx + r * math.cos(math.radians(a0)), cy + r * math.sin(math.radians(a0))
+        x1, y1 = cx + r * math.cos(math.radians(a1)), cy + r * math.sin(math.radians(a1))
+        fill = CHART_FILLS[j % len(CHART_FILLS)]
+        parts.append(f'<path data-wedge="{j}" d="M{cx:.0f},{cy:.0f} L{x0:.0f},{y0:.0f} '
+                     f'A{r:.0f},{r:.0f} 0 {large} 1 {x1:.0f},{y1:.0f} Z" '
+                     f'fill="{fill}" stroke="{sp.INK}" stroke-width="4" stroke-linejoin="round"/>')
+        mid = math.radians(a0 + sweep / 2)
+        lx, ly = cx + (r + 44) * math.cos(mid), cy + (r + 44) * math.sin(mid)
+        anchor = 'middle' if abs(math.cos(mid)) < .35 else ('start' if math.cos(mid) > 0 else 'end')
+        parts.append(f'<text data-wlbl="{j}" x="{lx:.0f}" y="{ly:.0f}" text-anchor="{anchor}" '
+                     f'dominant-baseline="middle" font-size="27" fill="{sp.INK}" '
+                     f'font-family="KaiTi,STKaiti,serif">{labels[j]} {_fmt_num(v)}</text>')
+        angle = a1
+    html = (f'<div class="{f}-el" id="{eid}" data-hf-name="饼图" '
+            f'style="top:{y}px;left:{x}px;width:{w}px;height:{h}px;">'
+            f'<svg viewBox="0 0 {w} {h}" width="{w}" height="{h}">{"".join(parts)}</svg></div>')
+    js = sp.stagger_pop(f'#{eid} [data-wedge]', t, step=.25) + '\n      ' + \
+        sp.fade(f'#{eid} [data-wlbl]', t + .5)
+    return html, js
 
 
 def main(proj_dir: str) -> int:

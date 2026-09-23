@@ -38,8 +38,8 @@ func CanvasFor(aspect string) Canvas {
 
 // SpecElement 元素语义。坐标体系随画幅（CanvasFor），y ≥ CapTop 为字幕带禁放。
 type SpecElement struct {
-	Kind string `json:"kind"` // title|note|label|big|beam|disc|circle|arrow
-	X    float64 `json:"x,omitempty"`  // 左上角（note/label/big/beam）
+	Kind string `json:"kind"` // title|note|label|big|beam|disc|circle|arrow|icon|chart_bar|chart_line|chart_pie
+	X    float64 `json:"x,omitempty"`  // 左上角（note/label/big/beam/icon/chart_*）
 	Y    float64 `json:"y,omitempty"`
 	X1   float64 `json:"x1,omitempty"` // arrow 起点
 	Y1   float64 `json:"y1,omitempty"`
@@ -48,12 +48,16 @@ type SpecElement struct {
 	Cx   float64 `json:"cx,omitempty"` // 圆心（disc/circle）
 	Cy   float64 `json:"cy,omitempty"`
 	R    float64 `json:"r,omitempty"`  // 半径（disc/circle）
-	W    float64 `json:"w,omitempty"`  // 宽（beam）
+	W    float64 `json:"w,omitempty"`  // 宽（beam/chart_*）
 	H    float64 `json:"h,omitempty"`
 	Text string  `json:"text,omitempty"`
-	Bg   string  `json:"bg,omitempty"`   // butter|mint|sky|coral|peach|pink|turq|white|ink
+	Name string  `json:"name,omitempty"`  // icon 名（lucide kebab，本地库）
+	Size float64 `json:"size,omitempty"` // icon 边长
+	Values []float64 `json:"values,omitempty"` // 图表数值
+	Labels []string  `json:"labels,omitempty"` // 图表标签
+	Bg   string `json:"bg,omitempty"`   // butter|mint|sky|coral|peach|pink|turq|white|ink
 	Color string `json:"color,omitempty"`
-	Fill string  `json:"fill,omitempty"`
+	Fill string `json:"fill,omitempty"`
 	Rot  float64 `json:"rot,omitempty"`
 	Fs   float64 `json:"fs,omitempty"`
 	Reveal int   `json:"reveal,omitempty"` // 揭示词位（段内词序号，0 起）
@@ -62,6 +66,7 @@ type SpecElement struct {
 var specKinds = map[string]bool{
 	"title": true, "note": true, "label": true, "big": true,
 	"beam": true, "disc": true, "circle": true, "arrow": true,
+	"icon": true, "chart_bar": true, "chart_line": true, "chart_pie": true,
 }
 
 // bbox 保守估计元素占位（供边界与重叠检查）。
@@ -82,20 +87,42 @@ func (e *SpecElement) bbox(cv Canvas) (x0, y0, w, h float64, ok bool) {
 		if fs == 0 {
 			fs = 40
 		}
-		return e.X, e.Y, float64(runeLen)*fs + 56, fs + 40, true
+		// 保守估计：楷体全角+边框内衬+阴影；宁可误报重叠也不放进 check 门禁
+		return e.X, e.Y, float64(runeLen)*fs*1.15 + 96, fs + 52, true
 	case "label":
 		if fs == 0 {
 			fs = 38
 		}
-		return e.X, e.Y, float64(runeLen)*fs + 8, fs * 1.3, true
+		return e.X, e.Y, float64(runeLen)*fs*1.1 + 40, fs * 1.5, true
 	case "big":
 		if fs == 0 {
 			fs = 110
 		}
-		return e.X, e.Y, float64(runeLen)*fs*0.62, fs * 1.15, true
+		return e.X, e.Y, float64(runeLen)*fs*0.85, fs * 1.2, true
 	case "beam":
 		if e.H == 0 {
 			e.H = 22
+		}
+		return e.X, e.Y, e.W, e.H, true
+	case "icon":
+		if e.Size == 0 {
+			e.Size = 120
+		}
+		return e.X, e.Y, e.Size, e.Size, true
+	case "chart_bar", "chart_line":
+		if e.W == 0 {
+			e.W = 560
+		}
+		if e.H == 0 {
+			e.H = 360
+		}
+		return e.X, e.Y, e.W, e.H, true
+	case "chart_pie":
+		if e.W == 0 {
+			e.W = 360
+		}
+		if e.H == 0 {
+			e.H = 360
 		}
 		return e.X, e.Y, e.W, e.H, true
 	case "disc", "circle":
@@ -162,6 +189,34 @@ func ValidateSpec(s *CompSpec, wordCount int, cv Canvas) []string {
 		if e.Kind == "disc" || e.Kind == "circle" {
 			if e.R < 18 || e.R > 220 {
 				errs = append(errs, fmt.Sprintf("%s: 半径 %v 超范围 18–220", tag, e.R))
+			}
+		}
+		if e.Kind == "icon" {
+			if e.Name == "" {
+				errs = append(errs, tag+": 缺 name（图标名）")
+			}
+			if e.Size != 0 && (e.Size < 48 || e.Size > 400) {
+				errs = append(errs, fmt.Sprintf("%s: size %v 超范围 48–400", tag, e.Size))
+			}
+		}
+		if e.Kind == "chart_bar" || e.Kind == "chart_line" || e.Kind == "chart_pie" {
+			lim := map[string]int{"chart_bar": 6, "chart_line": 8, "chart_pie": 5}[e.Kind]
+			min := map[string]int{"chart_bar": 2, "chart_line": 3, "chart_pie": 2}[e.Kind]
+			if n := len(e.Values); n < min || n > lim {
+				errs = append(errs, fmt.Sprintf("%s: values 数量 %d 不在 %d–%d 范围", tag, n, min, lim))
+			}
+			for j, v := range e.Values {
+				if v < 0 {
+					errs = append(errs, fmt.Sprintf("%s: values[%d] 为负", tag, j))
+				}
+			}
+			if len(e.Labels) > 0 && len(e.Labels) != len(e.Values) {
+				errs = append(errs, fmt.Sprintf("%s: labels 数 %d 与 values 数 %d 不一致（或不给 labels）", tag, len(e.Labels), len(e.Values)))
+			}
+			for j, l := range e.Labels {
+				if utf8.RuneCountInString(l) > 6 {
+					errs = append(errs, fmt.Sprintf("%s: labels[%d]「%s」超长（≤6 字）", tag, j, l))
+				}
 			}
 		}
 		x0, y0, w, h, ok := e.bbox(cv)
@@ -235,9 +290,14 @@ func SanitizeSpec(s *CompSpec, wordCount int, cv Canvas) []string {
 			e.Reveal = wordCount - 1
 		}
 		// 文本/条状类夹进安全区上半段；圆类圆心留出半径余量
-		if e.Kind == "note" || e.Kind == "label" || e.Kind == "big" || e.Kind == "beam" {
+		if e.Kind == "note" || e.Kind == "label" || e.Kind == "big" || e.Kind == "beam" ||
+			e.Kind == "icon" || e.Kind == "chart_bar" || e.Kind == "chart_line" || e.Kind == "chart_pie" {
 			e.X = clamp(e.X, cv.X0+100, cv.X1-260)
 			e.Y = clamp(e.Y, cv.Y0+60, cv.Y1-120)
+		}
+		if e.Kind == "chart_bar" || e.Kind == "chart_line" || e.Kind == "chart_pie" {
+			e.W = clamp(e.W, 240, cv.W-2*cv.X0)
+			e.H = clamp(e.H, 200, cv.Y1-cv.Y0-200)
 		}
 		if e.Kind == "disc" || e.Kind == "circle" {
 			e.Cx = clamp(e.Cx, cv.X0+180, cv.X1-180)
