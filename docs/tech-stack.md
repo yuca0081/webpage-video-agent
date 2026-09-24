@@ -58,17 +58,10 @@
 
 ## 5. 部署形态
 
-```
-新服务器（本项目独占）
-  ├─ 容器 app       # Go 单二进制：API + SSE + 编排 + 队列消费 + 调 renderer
-  └─ 容器 renderer  # Node 22 + FFmpeg + 锁版本 hyperframes；挂工作区卷
-                    # 渲染并发度按本机配置（§4）
-
-原服务器（既有：Java 系统 / Redis / ES / PostgreSQL / MinIO）
-  └─ 仅跨网络接入 PG 与 MinIO（§2 白名单）；其余服务不动
-
-开发机（Windows）：M0 用 CLI 直跑管线；联调时 Docker Desktop 起同构两容器
-```
+单容器落地（app 进程内直接 exec node/python/ffmpeg，渲染并发度按 §4）：
+镜像内预装 Node 22 + 锁版 hyperframes + FFmpeg + Chromium + faster-whisper；
+host 网络直连宿主机 PG(5432)/MinIO(9000)；`data/projects` 宿主卷跨发版保留。
+构建、传输、迁移、起容器全部收敛在 `deploy/deploy.sh` 一键脚本，细节见 `docs/deploy.md`。
 
 密钥与连接串：`.env` + godotenv，沿用 v1。
 

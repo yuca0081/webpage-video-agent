@@ -170,5 +170,4 @@
 | `docs/plan.md` | 产品与架构唯一权威（v1：定位/流程/核心机制/数据模型/里程碑） |
 | `docs/tech-stack.md` | 技术选型定稿（v2：选型总览/复用边界/存储分层/M0 清单） |
 | `docs/references.md` | 开源参考映射（pi / MoneyPrinterTurbo / OpenHands 等，借什么不借什么） |
-| `demo/ui-demo.html` | v0 布局交互演示（已被新布局取代，M1 时重做） |
 | `videos/pi-agent-framework-explained/` | 管线验证片（faceless-explainer 全流程手工预演） |
