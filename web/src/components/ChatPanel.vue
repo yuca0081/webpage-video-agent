@@ -3,9 +3,9 @@ import { nextTick, ref, watch } from 'vue'
 import { NButton, NInput, NScrollbar, NSpin } from 'naive-ui'
 import { api } from '../api'
 import { fmtClock } from '../segtime'
-import type { ChatRef, Msg } from '../types'
+import type { ChatRef, Msg, ProjectView } from '../types'
 
-const props = defineProps<{ projectId: string; msgs: Msg[]; busy: boolean; refs: ChatRef[] }>()
+const props = defineProps<{ projectId: string; msgs: Msg[]; busy: boolean; refs: ChatRef[]; view: ProjectView | null }>()
 const draft = defineModel<string>('draft')
 const emit = defineEmits<{ sent: []; 'remove-ref': [ref: ChatRef]; 'clear-refs': [] }>()
 
@@ -41,6 +41,16 @@ const refKey = (r: ChatRef) => r.elementId ?? (r.t != null ? `s${r.idx}t${r.t}` 
     <div class="head">
       对话
       <span v-if="busy" class="busy"><NSpin :size="12" /> Agent 工作中</span>
+    </div>
+    <!-- 三前置硬门 + 成片状态（原标题行 chips 挪此处） -->
+    <div v-if="view" class="gates">
+      <span class="chip" :class="{ ok: view.gates.manuscript }">文稿</span>
+      <span class="chip" :class="{ ok: view.gates.storyboard }">分镜{{ view.gates.storyboard ? ` · ${view.seg_count}段` : '' }}</span>
+      <span class="chip" :class="{ ok: view.gates.style_confirmed, wait: view.gates.style_draft && !view.gates.style_confirmed }">
+        风格{{ view.gates.style_confirmed ? '已确认' : '' }}
+      </span>
+      <span v-if="view.has_video" class="chip ok">成片就绪</span>
+      <span v-if="view.producing" class="chip run">制作中</span>
     </div>
     <NScrollbar ref="listRef" class="list">
       <div v-if="!msgs.length" class="none">
@@ -96,6 +106,18 @@ const refKey = (r: ChatRef) => r.elementId ?? (r.t != null ? `s${r.idx}t${r.t}` 
   padding: 0 16px; font-weight: 600; color: #d9d9e0; border-bottom: 1px solid #1d1d24;
 }
 .busy { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 400; color: #8fc7ff; }
+/* 状态 chips 行（硬门进度，随项目状态点亮） */
+.gates {
+  flex: none; display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 8px 16px 0; border-bottom: 0;
+}
+.chip {
+  font-size: 11px; padding: 2px 9px; border-radius: 999px;
+  background: #1c1c23; color: #7c7c88; border: 1px solid #2b2b33;
+}
+.chip.ok { color: #7ee2a8; border-color: #2c5c40; background: #14211a; }
+.chip.wait { color: #f0c674; border-color: #5c4d24; background: #211d12; }
+.chip.run { color: #8fc7ff; border-color: #2b4a66; background: #121b24; }
 .list { flex: 1; padding: 14px 12px; }
 .none { color: #55555f; font-size: 13px; line-height: 1.9; text-align: center; padding: 40px 20px; }
 .row { margin-bottom: 12px; }

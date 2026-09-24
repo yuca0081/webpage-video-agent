@@ -8,7 +8,7 @@ import StagePanel from './components/StagePanel.vue'
 import ChatPanel from './components/ChatPanel.vue'
 import NewProjectModal from './components/NewProjectModal.vue'
 import LibraryPanel from './components/LibraryPanel.vue'
-import { api } from './api'
+import { api, videoURL } from './api'
 import type { AudioMeta, ChatRef, Msg, ProjectRow, ProjectView, Storyboard, StylePack, StyleSamples } from './types'
 import { segAt, segTable } from './segtime'
 
@@ -26,6 +26,7 @@ const audioMeta = ref<AudioMeta | null>(null) // 时间轴字幕/配音轨数据
 const stageState = ref<Record<string, string>>({})
 const agentBusy = ref(false)
 const library = ref<StylePack[]>([])
+const inspect = ref(false) // 检视模式（标题行按钮触发，StagePanel 消费）
 
 let es: EventSource | null = null
 let busyTimer: number | null = null
@@ -64,6 +65,7 @@ async function loadMsgs() {
 
 function selectProject(id: string) {
   current.value = id
+  inspect.value = false
   msgs.value = []
   chatRefs.value = []
   stageState.value = {}
@@ -177,14 +179,14 @@ const themeOverrides = {
               <span class="brand">帧述</span>
               <span class="name">{{ view?.name ?? '未选择项目' }}</span>
             </div>
-            <div v-if="view" class="gates">
-              <span class="chip" :class="{ ok: view.gates.manuscript }">文稿</span>
-              <span class="chip" :class="{ ok: view.gates.storyboard }">分镜{{ view.gates.storyboard ? ` · ${view.seg_count}段` : '' }}</span>
-              <span class="chip" :class="{ ok: view.gates.style_confirmed, wait: view.gates.style_draft && !view.gates.style_confirmed }">
-                风格{{ view.gates.style_confirmed ? '已确认' : '' }}
-              </span>
-              <span v-if="view.has_video" class="chip ok">成片就绪</span>
-              <span v-if="view.producing" class="chip run">制作中</span>
+            <!-- 成片态操作（状态 chips 在对话栏顶部） -->
+            <div v-if="view?.has_video" class="ops">
+              <button
+                class="op-btn" :class="{ on: inspect }"
+                :disabled="!!stageSummary || view.producing"
+                @click="inspect = !inspect"
+              >{{ inspect ? '退出检视' : '🔍 检视' }}</button>
+              <a class="op-btn" :href="videoURL(current)" :download="`${view.name}.mp4`">⬇ 下载成片</a>
             </div>
           </header>
           <!-- 首页（未选项目）：方法库（成片提炼 → 入库 → 复用的飞轮入口） -->
@@ -193,7 +195,7 @@ const themeOverrides = {
             v-else
             :view="view" :storyboard="storyboard" :style-samples="style" :manuscript="manuscript"
             :stage-summary="stageSummary" :video-id="current" :audio-meta="audioMeta"
-            :picked-idx="chatRefs.map(r => r.idx)"
+            :picked-idx="chatRefs.map(r => r.idx)" :inspect="inspect" @inspect-off="inspect = false"
             @confirm-style="async () => { if (current) { await api.confirmStyle(current); refresh() } }"
             @seg="addRef"
             @seg-element="addElementRef"
@@ -202,7 +204,7 @@ const themeOverrides = {
           />
         </main>
         <ChatPanel
-          :project-id="current" :msgs="msgs" :busy="agentBusy" v-model:draft="chatDraft" :refs="chatRefs"
+          :project-id="current" :msgs="msgs" :busy="agentBusy" v-model:draft="chatDraft" :refs="chatRefs" :view="view"
           @sent="markBusy" @remove-ref="removeRef" @clear-refs="chatRefs = []"
         />
       </div>
@@ -229,12 +231,13 @@ body {
 .title { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
 .brand { font-weight: 700; letter-spacing: 3px; color: #f0c674; }
 .name { font-size: 15px; color: #c9c9d1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.gates { display: flex; gap: 8px; }
-.chip {
-  font-size: 12px; padding: 3px 10px; border-radius: 999px;
-  background: #1c1c23; color: #7c7c88; border: 1px solid #2b2b33;
+.ops { display: flex; gap: 8px; }
+.op-btn {
+  border: 1px solid #5c4d24; background: #211d12; color: #f0c674;
+  font-size: 12px; padding: 4px 14px; border-radius: 999px; cursor: pointer;
+  text-decoration: none; display: inline-flex; align-items: center;
 }
-.chip.ok { color: #7ee2a8; border-color: #2c5c40; background: #14211a; }
-.chip.wait { color: #f0c674; border-color: #5c4d24; background: #211d12; }
-.chip.run { color: #8fc7ff; border-color: #2b4a66; background: #121b24; }
+.op-btn:hover { background: #2a2416; }
+.op-btn.on { background: #f0c674; color: #14140f; font-weight: 600; }
+.op-btn:disabled { opacity: .4; cursor: not-allowed; }
 </style>

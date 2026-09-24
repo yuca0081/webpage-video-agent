@@ -16,8 +16,9 @@ const props = defineProps<{
   videoId: string
   audioMeta: AudioMeta | null
   pickedIdx: number[]
+  inspect: boolean // 检视模式开关在标题行（App 持有），进入时定位到当前播放时刻
 }>()
-const emit = defineEmits<{ 'confirm-style': []; seg: [idx: number, key: string]; 'seg-element': [ref: ChatRef]; cancel: []; 'pick-time': [t: number] }>()
+const emit = defineEmits<{ 'confirm-style': []; seg: [idx: number, key: string]; 'seg-element': [ref: ChatRef]; cancel: []; 'pick-time': [t: number]; 'inspect-off': [] }>()
 
 const stageName: Record<string, string> = {
   tts: '配音', compositions: '画面', assemble: '组装', check: '检查', render: '渲染',
@@ -27,11 +28,12 @@ const stageName: Record<string, string> = {
 const videoEl = ref<HTMLVideoElement | null>(null)
 const cur = ref(0)
 const dur = ref(0)
+const playing = ref(false) // 播放中隐藏「引用此刻」悬浮钮
 function onSeek(t: number) {
   cur.value = t
   // video 用 v-show（检视时隐藏）：currentTime 保持同步，退出检视不跳变
   if (videoEl.value) videoEl.value.currentTime = t
-  if (inspect.value) {
+  if (props.inspect) {
     const hit = segAt(segsT.value, t)
     if (hit) { inspectSegId.value = hit.segId; inspectT.value = t }
   }
@@ -41,7 +43,6 @@ function pickSeg(idx: number, key: string) { emit('seg', idx, key) }
 function pickTime(t: number) { emit('pick-time', t) }
 
 // ── 检视模式（plan §4.3 修改态）：video ↔ 活合成物 LiveFrame ──
-const inspect = ref(false)
 const inspectSegId = ref('') // 当前加载的段（segNN）
 const inspectT = ref(0) // 检视时刻（全局秒）
 const frameRev = ref(0) // 重做完 bump，强制 LiveFrame 重载帧
@@ -53,15 +54,14 @@ const inspectLocalT = computed(() => {
   return c ? Math.max(0, inspectT.value - c.start) : 0
 })
 
-function toggleInspect() {
-  if (!segsT.value.length) return
-  if (inspect.value) { inspect.value = false; return }
+// 进入检视：暂停视频，定位到当前播放时刻所在段
+watch(() => props.inspect, v => {
+  if (!v) return
   videoEl.value?.pause()
   const hit = segAt(segsT.value, cur.value)
-  inspectSegId.value = hit?.segId ?? segsT.value[0].segId
+  inspectSegId.value = hit?.segId ?? segsT.value[0]?.segId ?? ''
   inspectT.value = cur.value
-  inspect.value = true
-}
+})
 
 // 元素点选 → 元素级 📎 引用（带上检视时刻）
 function onPickElement(p: { segId: string; id: string; name: string }) {
@@ -70,9 +70,9 @@ function onPickElement(p: { segId: string; id: string; name: string }) {
   emit('seg-element', { idx: c.idx, key: c.key, t: inspectT.value, elementId: p.id, elementName: p.name })
 }
 
-// 制作中帧文件在重写：退出检视；重做流程结束（stageSummary 消失）→ bump 重载
+// 制作中帧文件在重写：退出检视（App 持有开关）；重做流程结束（stageSummary 消失）→ bump 重载
 watch(() => props.stageSummary, (nv, ov) => {
-  if (nv) inspect.value = false
+  if (nv) emit('inspect-off')
   else if (ov) frameRev.value++
 })
 </script>
@@ -141,7 +141,7 @@ watch(() => props.stageSummary, (nv, ov) => {
         </NScrollbar>
       </div>
 
-      <!-- 状态 4：成片（含制作进度与时间轴分段条） -->
+      <!-- 状态 4：成片（检视/下载在标题行，「引用此刻」悬浮视频右下；舞台只留画面+时间轴） -->
       <div v-else-if="view.has_video" class="pane video-pane" :class="{ vertical: view.aspect === '9:16' }">
         <!-- 段级重做中：细进度条（其余段的画面/音频不动） -->
         <div v-if="stageSummary" class="rework-strip">
@@ -151,24 +151,16 @@ watch(() => props.stageSummary, (nv, ov) => {
           <span class="rework-hint">段级重做中</span>
           <button v-if="view.producing" class="stop-btn" @click="emit('cancel')">■ 停止</button>
         </div>
-        <div class="tool-row">
-          <button
-            class="inspect-btn" :class="{ on: inspect }"
-            :disabled="!!stageSummary || view.producing"
-            @click="toggleInspect"
-          >{{ inspect ? '退出检视' : '🔍 检视' }}</button>
-          <button v-if="!inspect" class="inspect-btn time-ref" @click="pickTime(cur)">
-            📎 引用此刻 {{ fmtClock(cur) }}
-          </button>
-          <span v-if="inspect" class="inspect-hint">活合成物：悬停显示元素名，点选加 📎 引用，时间轴拖动定位</span>
-          <span v-else class="tool-hint">点「检视」指元素说话；或双击下方时间轴 / 点「引用此刻」钉住某个瞬间</span>
-        </div>
         <div class="player">
           <video
             v-show="!inspect"
             ref="videoEl" :src="videoURL(videoId)" controls preload="metadata"
             @timeupdate="cur = videoEl!.currentTime" @loadedmetadata="dur = videoEl!.duration || 0"
+            @play="playing = true" @pause="playing = false" @ended="playing = false"
           />
+          <button v-show="!inspect && !playing" class="now-btn" @click="pickTime(cur)">
+            📎 引用此刻 {{ fmtClock(cur) }}
+          </button>
           <LiveFrame
             v-if="inspect && inspectSegId"
             :video-id="videoId" :seg-id="inspectSegId" :local-time="inspectLocalT" :rev="frameRev"
@@ -180,10 +172,6 @@ watch(() => props.stageSummary, (nv, ov) => {
           :storyboard="storyboard" :audio-meta="audioMeta" :current-time="cur" :duration="dur"
           :picked-idx="pickedIdx" @seek="onSeek" @pick="pickSeg" @pick-time="pickTime"
         />
-        <div class="foot-row">
-          <span class="video-hint">点分镜/字幕/配音块或检视点元素加 📎 引用，聊天里说要改什么——只重做那一段</span>
-          <a class="dl" :href="videoURL(videoId)" :download="`${view.name}.mp4`">下载成片 · {{ view.aspect === '9:16' ? '1080×1920' : '1080p' }}</a>
-        </div>
       </div>
 
       <!-- 制作中：进度面板（其余状态都不满足 = 管线在跑或等待中） -->
@@ -241,10 +229,11 @@ figcaption span { font-size: 12px; color: #8a8a96; }
 
 /* 成片 */
 .video-pane { align-items: center; justify-content: center; gap: 12px; padding: 16px 20px; }
-/* 播放器吃剩余高度，其余行（重做条/工具行/时间轴/底行）保持固有高度不被挤出面板 */
-.video-pane > .rework-strip, .video-pane > .tool-row, .video-pane > .tl, .video-pane > .foot-row { flex: none; }
-.player { width: min(100%, 1080px); flex: 1 1 0; min-height: 0; display: flex; justify-content: center; align-items: center; }
-.player video { max-width: 100%; max-height: 100%; width: auto; height: auto; border-radius: 8px; background: #000; display: block; }
+/* 播放器吃剩余高度，其余行（重做条/时间轴）保持固有高度不被挤出面板 */
+.video-pane > .rework-strip, .video-pane > .tl { flex: none; }
+.player { position: relative; width: min(100%, 1080px); flex: 1 1 0; min-height: 0; display: flex; justify-content: center; align-items: center; }
+/* video 铺满播放器、画面 contain 居中（letterbox 同为黑底）——悬浮钮/控制条贴视频框 */
+.player video { width: 100%; height: 100%; object-fit: contain; border-radius: 8px; background: #000; display: block; }
 .video-pane.vertical .player { width: auto; }
 /* 检视模式：LiveFrame 限高防溢出（横屏保持组件内 16:9，竖屏切 9:16） */
 .player :deep(.live-frame) { max-height: 100%; }
@@ -253,22 +242,15 @@ figcaption span { font-size: 12px; color: #8a8a96; }
 .video-pane.vertical .player :deep(.live-err) {
   width: auto; height: 100%; max-width: 100%; aspect-ratio: 9 / 16;
 }
-.tool-row { width: min(100%, 1080px); display: flex; align-items: center; gap: 10px; min-height: 26px; }
-.inspect-btn {
-  flex: none; border: 1px solid #5c4d24; background: #211d12; color: #f0c674;
-  font-size: 12px; padding: 3px 12px; border-radius: 999px; cursor: pointer;
+/* 「引用此刻」悬浮在视频右上角（播放中隐藏），避开底部原生控制条 */
+.now-btn {
+  position: absolute; right: 10px; top: 10px; z-index: 4; cursor: pointer;
+  border: 1px solid rgba(240, 198, 116, .45); background: rgba(16, 14, 8, .72); color: #f0c674;
+  font-size: 12px; padding: 4px 12px; border-radius: 999px; backdrop-filter: blur(3px);
 }
-.inspect-btn:hover { background: #2a2416; }
-.inspect-btn.on { background: #f0c674; color: #14140f; font-weight: 600; }
-.inspect-btn:disabled { opacity: .4; cursor: not-allowed; }
-.inspect-hint { font-size: 12px; color: #f0c674; }
-.tool-hint { font-size: 12px; color: #55555f; }
+.now-btn:hover { background: rgba(42, 36, 22, .9); }
 .rework-strip { display: flex; align-items: center; gap: 10px; }
 .rework-hint { font-size: 12px; color: #f0c674; }
-.foot-row { width: min(100%, 1080px); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.video-hint { color: #55555f; font-size: 12px; }
-.dl { color: #8fc7ff; font-size: 13px; text-decoration: none; border: 1px solid #2b4a66; padding: 6px 14px; border-radius: 999px; flex: none; }
-.dl:hover { background: #121b24; }
 
 /* 制作中（pstage = 进度胶囊；不能叫 .stage，会和外层舞台 section 撞类名导致 align/padding 污染） */
 .producing { align-items: center; justify-content: center; gap: 18px; }
