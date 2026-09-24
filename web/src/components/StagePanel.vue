@@ -241,11 +241,13 @@ figcaption span { font-size: 12px; color: #8a8a96; }
 
 /* 成片 */
 .video-pane { align-items: center; justify-content: center; gap: 12px; padding: 16px 20px; }
-.player { width: min(100%, 1080px); }
-.player video { width: 100%; border-radius: 8px; background: #000; display: block; }
-.video-pane.vertical .player { width: auto; flex: 1 1 0; min-height: 0; display: flex; justify-content: center; }
-.video-pane.vertical .player video { width: auto; height: auto; max-width: 100%; max-height: 100%; }
-/* 检视模式：LiveFrame 竖屏适配（横屏走组件内默认 16:9） */
+/* 播放器吃剩余高度，其余行（重做条/工具行/时间轴/底行）保持固有高度不被挤出面板 */
+.video-pane > .rework-strip, .video-pane > .tool-row, .video-pane > .tl, .video-pane > .foot-row { flex: none; }
+.player { width: min(100%, 1080px); flex: 1 1 0; min-height: 0; display: flex; justify-content: center; align-items: center; }
+.player video { max-width: 100%; max-height: 100%; width: auto; height: auto; border-radius: 8px; background: #000; display: block; }
+.video-pane.vertical .player { width: auto; }
+/* 检视模式：LiveFrame 限高防溢出（横屏保持组件内 16:9，竖屏切 9:16） */
+.player :deep(.live-frame) { max-height: 100%; }
 .video-pane.vertical .player :deep(.live-frame),
 .video-pane.vertical .player :deep(.live-loading),
 .video-pane.vertical .player :deep(.live-err) {
