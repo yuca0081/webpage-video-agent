@@ -88,7 +88,7 @@ const refKey = (r: ChatRef) => r.elementId ?? (r.t != null ? `s${r.idx}t${r.t}` 
     <div class="input">
       <NInput
         ref="inputRef" v-model:value="draft" type="textarea" :rows="3" :maxlength="4000"
-        placeholder="对话或下指令（Enter 发送）｜点时间轴可加引用"
+        placeholder="对话或下指令（Enter 发送）｜Ctrl+点时间轴加引用"
         @keydown.enter.exact.prevent="send"
       />
       <NButton type="primary" :disabled="!draft?.trim() || !projectId" @click="send">发送</NButton>

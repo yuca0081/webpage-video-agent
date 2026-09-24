@@ -98,9 +98,16 @@ function onScrubEnd() { dragging.value = false }
 
 function onRulerClick(e: PointerEvent) { emit('seek', tAt(e)) }
 function onRulerDblClick(e: MouseEvent) { emit('pick-time', tAt(e)); emit('seek', tAt(e)) }
-function pickSeg(s: SegCol) { emit('pick', s.idx, s.key); emit('seek', s.start + 0.01) }
-function pickPhrase(p: Phrase) { emit('pick', p.idx, p.key); emit('seek', p.start + 0.01) }
-// 双击任意轨道 = 引用该时刻（单击语义不变：标尺定位 / 块选段）
+// 单击 = 只定位预览；Ctrl/Cmd+单击 = 引用该段；双击 = 引用该时刻
+function pickSeg(s: SegCol, e?: MouseEvent) {
+  emit('seek', s.start + 0.01)
+  if (e?.ctrlKey || e?.metaKey) emit('pick', s.idx, s.key)
+}
+function pickPhrase(p: Phrase, e: MouseEvent) {
+  emit('seek', p.start + 0.01)
+  if (e.ctrlKey || e.metaKey) emit('pick', p.idx, p.key)
+}
+// 双击任意轨道 = 引用该时刻
 function onLaneDblClick(e: MouseEvent, start: number, dur: number) {
   const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
   const local = Math.min(Math.max((e.clientX - r.left) / r.width, 0), 1) * dur
@@ -138,8 +145,8 @@ function onLaneDblClick(e: MouseEvent, start: number, dur: number) {
           v-for="s in segs" :key="s.idx" class="blk"
           :class="{ on: s.idx === activeIdx, picked: pickedIdx.includes(s.idx) }"
           :style="{ left: pct(s.start), width: pct(s.dur) }"
-          :title="`段${s.idx} ${s.key}（双击引用时刻）`"
-          @click="pickSeg(s)"
+          :title="`段${s.idx} ${s.key}（Ctrl+点击引用 · 双击引用时刻）`"
+          @click="pickSeg(s, $event)"
           @dblclick.stop="onLaneDblClick($event, s.start, s.dur)"
         >
           <span v-if="pickedIdx.includes(s.idx)" class="pin">📎</span>
@@ -153,8 +160,8 @@ function onLaneDblClick(e: MouseEvent, start: number, dur: number) {
         <div
           v-for="(p, i) in phrases" :key="i" class="ph"
           :style="{ left: pct(p.start), width: pct(p.dur) }"
-          :title="p.text"
-          @click="pickPhrase(p)"
+          :title="`${p.text}（Ctrl+点击引用）`"
+          @click="pickPhrase(p, $event)"
           @dblclick.stop="onLaneDblClick($event, p.start, p.dur)"
         >{{ p.text }}</div>
       </div>
@@ -165,8 +172,8 @@ function onLaneDblClick(e: MouseEvent, start: number, dur: number) {
           v-for="(s, i) in segs" :key="s.idx" class="wav"
           :class="{ on: s.idx === activeIdx }"
           :style="{ left: pct(s.start), width: pct(s.dur) }"
-          :title="`段${s.idx} 配音 ${s.dur.toFixed(1)}s`"
-          @click="pickSeg(s)"
+          :title="`段${s.idx} 配音 ${s.dur.toFixed(1)}s（Ctrl+点击引用）`"
+          @click="pickSeg(s, $event)"
           @dblclick.stop="onLaneDblClick($event, s.start, s.dur)"
         >
           <i
