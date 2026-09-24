@@ -68,6 +68,8 @@ func (s *Server) Router() *gin.Engine {
 				c.JSON(404, gin.H{"error": "not found"})
 				return
 			}
+			// SPA 入口不缓存：发版后浏览器立刻拿到新壳（带 hash 的 assets 才长期缓存）
+			c.Header("Cache-Control", "no-store")
 			c.File(filepath.Join(dist, "index.html"))
 		})
 	}
