@@ -75,9 +75,11 @@ var specKinds = map[string]bool{
 	"title": true, "note": true, "label": true, "big": true,
 	"beam": true, "disc": true, "circle": true, "arrow": true,
 	"icon": true, "chart_bar": true, "chart_line": true, "chart_pie": true,
+	"chart_donut": true,
 	"image": true, "emoji": true, "panel": true, "chip": true,
 	"zone": true, "timeline": true, "bracket": true, "strip": true,
 	"barrow": true, "table": true,
+	"quote": true, "checklist": true, "stat": true,
 }
 
 // bbox 保守估计元素占位（供边界与重叠检查）。
@@ -164,6 +166,49 @@ func (e *SpecElement) bbox(cv Canvas) (x0, y0, w, h float64, ok bool) {
 			e.H = 360
 		}
 		return e.X, e.Y, e.W, e.H, true
+	case "chart_donut":
+		if e.W == 0 {
+			e.W = 460
+		}
+		if e.H == 0 {
+			e.H = 360
+		}
+		return e.X, e.Y, e.W, e.H, true
+	case "quote":
+		if e.W == 0 {
+			e.W = 1240
+		}
+		if fs == 0 {
+			fs = 64
+		}
+		cap := math.Max(8, math.Floor(e.W/(fs*1.02)))
+		lines := math.Ceil(float64(runeLen) / cap)
+		return e.X, e.Y, e.W, lines*fs*1.6+130, true
+	case "checklist":
+		if e.Gap == 0 {
+			e.Gap = 96
+		}
+		if fs == 0 {
+			fs = 40
+		}
+		maxLen := 0
+		for _, s := range e.Nodes {
+			if l := utf8.RuneCountInString(s); l > maxLen {
+				maxLen = l
+			}
+		}
+		w := 70 + float64(maxLen)*fs*1.1
+		h := float64(len(e.Nodes)-1)*e.Gap + 52
+		return e.X, e.Y, w, h, true
+	case "stat":
+		if e.W == 0 {
+			e.W = 420
+		}
+		if fs == 0 {
+			fs = 96
+		}
+		lab := math.Max(28, fs*0.32)
+		return e.X, e.Y, e.W, fs*1.7+lab*1.5, true
 	case "disc", "circle":
 		return e.Cx - e.R, e.Cy - e.R, 2 * e.R, 2 * e.R, true
 	case "zone":
@@ -292,11 +337,13 @@ func ValidateSpec(s *CompSpec, wordCount int, cv Canvas) []string {
 		if e.Reveal < 0 || (wordCount > 0 && e.Reveal >= wordCount) {
 			errs = append(errs, fmt.Sprintf("%s: reveal=%d 超出词数 %d", tag, e.Reveal, wordCount))
 		}
-		needText := e.Kind == "title" || e.Kind == "note" || e.Kind == "label" || e.Kind == "big" || e.Kind == "chip"
+		needText := e.Kind == "title" || e.Kind == "note" || e.Kind == "label" || e.Kind == "big" ||
+			e.Kind == "chip" || e.Kind == "quote" || e.Kind == "stat"
 		if needText && e.Text == "" {
 			errs = append(errs, tag+": 缺 text")
 		}
-		lim := map[string]int{"title": 14, "note": 14, "label": 16, "big": 9, "chip": 12}
+		lim := map[string]int{"title": 14, "note": 14, "label": 16, "big": 9, "chip": 12,
+			"quote": 22, "stat": 8}
 		if lim[e.Kind] > 0 && utf8.RuneCountInString(e.Text) > lim[e.Kind] {
 			errs = append(errs, fmt.Sprintf("%s: 文案「%s」超长（≤%d 字）", tag, e.Text, lim[e.Kind]))
 		}
@@ -355,9 +402,35 @@ func ValidateSpec(s *CompSpec, wordCount int, cv Canvas) []string {
 				errs = append(errs, fmt.Sprintf("%s: fs %v 超 300", tag, e.Fs))
 			}
 		}
-		if e.Kind == "chart_bar" || e.Kind == "chart_line" || e.Kind == "chart_pie" {
-			lim := map[string]int{"chart_bar": 6, "chart_line": 8, "chart_pie": 5}[e.Kind]
-			min := map[string]int{"chart_bar": 2, "chart_line": 3, "chart_pie": 2}[e.Kind]
+		if e.Kind == "quote" {
+			if n := utf8.RuneCountInString(e.Name); n > 10 {
+				errs = append(errs, fmt.Sprintf("%s: 署名 name「%s」超长（≤10 字）", tag, e.Name))
+			}
+			if e.W != 0 && (e.W < 500 || e.W > 1700) {
+				errs = append(errs, fmt.Sprintf("%s: w %v 超范围 500–1700", tag, e.W))
+			}
+		}
+		if e.Kind == "stat" {
+			if n := utf8.RuneCountInString(e.Title); n > 12 {
+				errs = append(errs, fmt.Sprintf("%s: title「%s」超长（≤12 字）", tag, e.Title))
+			}
+			if e.W != 0 && (e.W < 280 || e.W > 900) {
+				errs = append(errs, fmt.Sprintf("%s: w %v 超范围 280–900", tag, e.W))
+			}
+		}
+		if e.Kind == "checklist" {
+			if n := len(e.Nodes); n < 2 || n > 5 {
+				errs = append(errs, fmt.Sprintf("%s: nodes %d 条不在 2–5 范围", tag, n))
+			}
+			for j, s := range e.Nodes {
+				if l := utf8.RuneCountInString(s); l > 14 {
+					errs = append(errs, fmt.Sprintf("%s: nodes[%d]「%s」超长（≤14 字）", tag, j, s))
+				}
+			}
+		}
+		if e.Kind == "chart_bar" || e.Kind == "chart_line" || e.Kind == "chart_pie" || e.Kind == "chart_donut" {
+			lim := map[string]int{"chart_bar": 6, "chart_line": 8, "chart_pie": 5, "chart_donut": 5}[e.Kind]
+			min := map[string]int{"chart_bar": 2, "chart_line": 3, "chart_pie": 2, "chart_donut": 2}[e.Kind]
 			if n := len(e.Values); n < min || n > lim {
 				errs = append(errs, fmt.Sprintf("%s: values 数量 %d 不在 %d–%d 范围", tag, n, min, lim))
 			}

@@ -160,6 +160,7 @@
 - Agent 工具链：`save_manuscript` / `draft_storyboard` / `update_storyboard` / `draft_style_samples` / `run_selfcheck` / `start_production` / `rework`（段级重做，修改要求置顶喂给画面 spec）/ `extract_stylepack` / `export`
 - 画幅：项目级 `aspect`（**默认 9:16**，可切 16:9），spec 校验/prompt/渲染/组装全链路跟随
 - 方法库 v1：`data/library/stylepacks.json`，成片提炼（Agent 起草）→ 用户确认入库 → 新建项目复用
+- 风格积木扩充（2026-09-24）：内置 **风格注册表** `data/projects/_shared/styles.json`（13 个风格方向：深空渐变/数学线框/地缘档案/高能说明书/发布会深色/轻快多彩/渐变玻璃/财经图表/公益数据/清洁医疗/自然环保/深色等距科技/黑板粉笔，均带色板 hex/背景画法/字幕条/配图调性），由 **通用 token 引擎** `stylepack_generic.py` 按方向关键词渲染；手绘/扁平两套手写引擎保留。新元素 4 种：`quote`（金句）/`checklist`（对勾清单）/`stat`（指标卡）/`chart_donut`（环形图）。对比度门禁：`colorutil.py` 自动把色块文字/图形拉到 ≥3.5:1。方法库里 13 个风格已播种为可直接选用的样张条目
 - 待办：10 篇真实文章 MVP 验收、`cancel_production`、帧/元素级寻址（M2）
 
 ## 7. 文档地图

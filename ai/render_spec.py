@@ -17,6 +17,8 @@ SHARED = pathlib.Path(__file__).resolve().parent.parent / 'data' / 'projects' / 
 sys.path.insert(0, str(SHARED))
 import stylepack as sp  # noqa: E402  默认引擎（手绘叙事）；main 按项目风格方向分发
 
+import colorutil as cu  # noqa: E402  WCAG 对比度工具
+
 COLORS = {}
 CHART_FILLS = []
 PREFIX = 's'
@@ -25,7 +27,11 @@ PREFIX = 's'
 def init_engine(proj):
     """按项目 style_samples.json 的 direction 选风格引擎，重建色表。
 
-    direction 含「扁平」→ stylepack_flat（厚描边·色块）；否则手绘叙事。
+    direction 含「扁平」→ stylepack_flat（厚描边·色块）；含「手绘」→ stylepack；
+    其余按 _shared/styles.json 注册表关键词匹配 → stylepack_generic（token 驱动，
+    13 个注册风格：深空渐变/数学线框/地缘档案/高能说明书/发布会深色/轻快多彩/
+    渐变玻璃/财经图表/公益数据/清洁医疗/自然环保/深色等距科技/黑板粉笔）；
+    未命中回退手绘叙事。
     """
     global sp, COLORS, CHART_FILLS
     d = ''
@@ -34,17 +40,40 @@ def init_engine(proj):
             d = (json.load(fh) or {}).get('direction', '')
     except Exception:
         d = ''
+    generic = None
     if '扁平' in d:
         import stylepack_flat
         sp = stylepack_flat
-    else:
+    elif '手绘' in d or not d:
         import stylepack
         sp = stylepack
+    else:
+        import stylepack_generic
+        generic = stylepack_generic.match(d)
+        if generic:
+            stylepack_generic.configure(generic['tokens'])
+            sp = stylepack_generic
+        else:
+            import stylepack
+            sp = stylepack
     COLORS = {'butter': sp.BUTTER, 'mint': sp.MINT, 'sky': sp.SKY, 'coral': sp.CORAL,
               'peach': sp.PEACH, 'pink': sp.PINK, 'turq': sp.TURQ, 'ink': sp.INK,
               'white': '#FFFFFF', 'navy': getattr(sp, 'NAVY', sp.INK),
               'green': getattr(sp, 'GREEN', sp.TURQ)}
     CHART_FILLS = [sp.MINT, sp.SKY, sp.BUTTER, sp.CORAL, sp.PEACH, sp.PINK]
+
+
+def th(key, default):
+    """引擎主题值（暗底文字/描边/表面色/图片框等）；手绘与扁平引擎无 THEME → 走缺省。"""
+    return (getattr(sp, 'THEME', {}) or {}).get(key, default)
+
+
+def _on_paper(c):
+    """文字/装饰色落在页面纸底上：token 引擎按纸底自动加深/提亮过对比门禁。"""
+    paper = th('paper', None)
+    if not paper:
+        return c
+    return cu.ensure_readable(c, paper)
 
 
 def col(name, default):
@@ -78,12 +107,12 @@ def render_element(f, sid, e, i, words, W=1920):
         return html, sp.rise(f'#{eid}', t)
     if kind == 'label':
         fs = e.get('fs', 38)
-        color = col(e.get('color'), sp.INK)
+        color = col(e.get('color'), th('txt', sp.INK))
         html = sp.label(f, eid, e['x'], e['y'], text, color=color, fs=fs)
         return html, sp.fade(f'#{eid}', t)
     if kind == 'big':
         fs = e.get('fs', 110)
-        color = col(e.get('color'), getattr(sp, 'BIG', '#B45309'))
+        color = _on_paper(col(e.get('color'), getattr(sp, 'BIG', '#B45309')))
         html = sp.big(f, eid, e['x'], e['y'], text, fs=fs, color=color)
         return html, sp.pop(f'#{eid}', t)
     if kind == 'beam':
@@ -98,7 +127,7 @@ def render_element(f, sid, e, i, words, W=1920):
         r, fill = e.get('r', 36), col(e.get('fill'), '#FFFFFF')
         html = (f'<div class="{f}-el" id="{eid}" data-hf-name="圆点" '
                 f'style="top:{e["cy"] - r}px;left:{e["cx"] - r}px;width:{2 * r}px;height:{2 * r}px;'
-                f'background:{fill};border:3px solid {sp.INK};border-radius:50%;"></div>')
+                f'background:{fill};border:3px solid {th("line", sp.INK)};border-radius:50%;"></div>')
         return html, sp.fade(f'#{eid}', t)
     if kind == 'icon':
         return render_icon(f, sid, e, i, t)
@@ -128,6 +157,14 @@ def render_element(f, sid, e, i, words, W=1920):
         return render_chart_line(f, sid, e, i, t)
     if kind == 'chart_pie':
         return render_chart_pie(f, sid, e, i, t)
+    if kind == 'chart_donut':
+        return render_chart_donut(f, sid, e, i, t)
+    if kind == 'quote':
+        return render_quote(f, sid, e, i, t)
+    if kind == 'checklist':
+        return render_checklist(f, sid, e, i, t)
+    if kind == 'stat':
+        return render_stat(f, sid, e, i, t)
     if kind == 'arrow':
         x1, y1, x2, y2 = e['x1'], e['y1'], e['x2'], e['y2']
         ln, ang = math.hypot(x2 - x1, y2 - y1), math.degrees(math.atan2(y2 - y1, x2 - x1))
@@ -158,7 +195,8 @@ ICON_DIR = SHARED / 'assets' / 'icons'
 
 
 def render_image(f, sid, e, i, t):
-    """真实照片：制作期已下载到本地（assets/img/），拍立得白框+墨线阴影呈现。
+    """真实照片：制作期已下载到本地（assets/img/）。相框质感随风格 THEME：
+    polaroid（白框手绘感）/ clean（细描边圆角）/ glass（半透明玻璃）。
     src 空 = 搜图无源 → 便签兜底（管线不死）。"""
     eid = f"{sid}-img{i}"
     q = str(e.get('query', '配图')).strip()[:10]
@@ -169,12 +207,27 @@ def render_image(f, sid, e, i, t):
         return note_html, sp.rise(f'#{eid}', t)
     rot = e.get('rot')
     if rot is None:
-        rot = 0 if getattr(sp, 'FLAT', False) else (-1.8 if i % 2 else 1.8)
+        if getattr(sp, 'THEME', None):  # token 引擎：风格自带照片倾斜角
+            rot = getattr(sp, 'IMG_ROT', 0) * (1 if i % 2 else -1)
+        else:
+            rot = 0 if getattr(sp, 'FLAT', False) else (-1.8 if i % 2 else 1.8)
+    frame = th('img_frame', 'polaroid')
+    if frame == 'glass':
+        box = (f'background:rgba(255,255,255,.10);border:1px solid {th("line", sp.INK)};'
+               f'border-radius:{th("radius", 18)}px;padding:0;'
+               f'box-shadow:{th("img_shadow", "0 20px 50px rgba(0,0,0,.4)")};backdrop-filter:blur(6px);')
+    elif frame == 'clean':
+        box = (f'background:{th("surface", "#FFF")};border:1px solid {th("line", sp.INK)};'
+               f'border-radius:{th("radius", 12)}px;padding:0;'
+               f'box-shadow:{th("img_shadow", "0 12px 28px rgba(0,0,0,.16)")};')
+    else:  # polaroid：拍立得白框（手绘/纸面传统）
+        box = (f'background:#FFF;border:3px solid {sp.INK};padding:12px 12px 18px;'
+               f'box-shadow:{th("img_shadow", f"7px 7px 0 {sp.INK}")};')
     html = (f'<div class="{f}-el" id="{eid}" data-hf-name="图片：{q}" '
-            f'style="top:{e["y"]}px;left:{e["x"]}px;width:{w}px;height:{h}px;'
-            f'background:#FFF;border:3px solid {sp.INK};padding:12px 12px 18px;'
-            f'box-shadow:7px 7px 0 {sp.INK};transform:rotate({rot}deg);">'
-            f'<img src="{src}" style="width:100%;height:100%;object-fit:cover;display:block;" /></div>')
+            f'style="top:{e["y"]}px;left:{e["x"]}px;width:{w}px;height:{h}px;{box}'
+            f'transform:rotate({rot}deg);">'
+            f'<img src="{src}" style="width:100%;height:100%;object-fit:cover;display:block;'
+            f'border-radius:{th("radius", 8) if frame != "polaroid" else 0}px;" /></div>')
     return html, sp.pop(f'#{eid}', t, scale=.85)
 
 
@@ -230,7 +283,7 @@ def render_timeline(f, sid, e, i, t):
                      f'background:{c};{border}"></div>')
         parts.append(f'<div data-{eid}-lbl="{k}" style="position:absolute;top:{cy - fs * 0.72}px;'
                      f'left:{2 * r + 34}px;font-size:{fs}px;font-weight:900;'
-                     f'color:{sp.INK};white-space:nowrap;">{txt}</div>')
+                     f'color:{th("txt", sp.INK)};white-space:nowrap;">{txt}</div>')
     html = (f'<div class="{f}-el" id="{eid}" data-hf-name="时间线" '
             f'style="top:{y - r - 8}px;left:{x - r - 8}px;width:{width:.0f}px;height:{h + 16:.0f}px;">'
             + ''.join(parts) + '</div>')
@@ -276,15 +329,15 @@ def render_strip(f, sid, e, i, t):
     for k in range(n):
         parts.append(f'<div data-{eid}-sq="{k}" style="position:absolute;top:0;'
                      f'left:{k * (size + gap)}px;width:{size}px;height:{size}px;'
-                     f'border-radius:10px;background:{c};border:3px solid {sp.INK};"></div>')
+                     f'border-radius:10px;background:{c};border:3px solid {th("line", sp.INK)};"></div>')
     cx = n * (size + gap)
     if e.get('ellipsis', True):
         parts.append(f'<div style="position:absolute;top:{-size * 0.28:.0f}px;left:{cx}px;'
-                     f'font-size:{size}px;font-weight:900;color:{sp.INK};">…</div>')
+                     f'font-size:{size}px;font-weight:900;color:{th("txt", sp.INK)};">…</div>')
         cx += size * 0.8
     if txt:
         parts.append(f'<div style="position:absolute;top:{size * 0.12:.0f}px;left:{cx + 14}px;'
-                     f'font-size:{e.get("fs", 36)}px;font-weight:900;color:{sp.INK};">{txt}</div>')
+                     f'font-size:{e.get("fs", 36)}px;font-weight:900;color:{th("txt", sp.INK)};">{txt}</div>')
     html = (f'<div class="{f}-el" id="{eid}" data-hf-name="方块序列：{txt or n}" '
             f'style="top:{y}px;left:{x}px;width:{w:.0f}px;height:{size}px;">' + ''.join(parts) + '</div>')
     js = (f"gsap.set('#{eid} [data-{eid}-sq]',{{opacity:0,scale:.3,transformOrigin:'50% 50%'}});\n      "
@@ -323,10 +376,10 @@ def render_table(f, sid, e, i, t):
             val = row[ci] if ci < len(row) else ''
             parts.append(f'<div data-{eid}-c="{ri}-{ci}" style="position:absolute;'
                          f'top:{ri * (cell_h + 10)}px;left:{ci * (cw + 10):.0f}px;'
-                         f'width:{cw:.0f}px;height:{cell_h}px;background:#FFFFFF;'
-                         f'border:3px solid {sp.INK};border-radius:10px;display:flex;'
+                         f'width:{cw:.0f}px;height:{cell_h}px;background:{th("surface", "#FFFFFF")};'
+                         f'border:3px solid {th("line", sp.INK)};border-radius:10px;display:flex;'
                          f'align-items:center;justify-content:center;font-size:{fs}px;'
-                         f'font-weight:700;color:{sp.INK};">{val}</div>')
+                         f'font-weight:700;color:{th("surface_txt", sp.INK)};">{val}</div>')
     h_ = nrow * cell_h + (nrow - 1) * 10
     html = (f'<div class="{f}-el" id="{eid}" data-hf-name="表格" '
             f'style="top:{e["y"]}px;left:{e["x"]}px;width:{w_}px;height:{h_}px;">' + ''.join(parts) + '</div>')
@@ -359,7 +412,7 @@ def render_icon(f, sid, e, i, t):
     svg = re.sub(r'<!--.*?-->', '', svg, flags=re.S)          # 许可注释不入帧
     svg = re.sub(r'\sclass="[^"]*"', '', svg)                  # 去 lucide class
     svg = re.sub(r'<svg\b', '<svg width="100%" height="100%"', svg, count=1)
-    stroke = e.get('color') or sp.INK
+    stroke = e.get('color') or th('txt', sp.INK)  # 图标是视觉锚点：用正文色而非半透明描边色
     sw = 2 if size >= 140 else 1.5                             # 24 viewBox：放大后描边视觉补偿
     svg = re.sub(r'stroke-width="[\d.]+"', f'stroke-width="{sw}"', svg, count=1)
     rot_css = f'transform:rotate({rot}deg);' if abs(rot) > 0.01 else ''
@@ -367,6 +420,152 @@ def render_icon(f, sid, e, i, t):
             f'style="top:{e["y"]}px;left:{e["x"]}px;width:{size}px;height:{size}px;'
             f'color:{stroke};{rot_css}">{svg}</div>')
     return html, sp.pop(f'#{eid}', t, scale=.55)
+
+
+def render_quote(f, sid, e, i, t):
+    """金句/引用：行内大引号 + 重磅大字 + 署名（风格主色装饰）。"""
+    eid = f"{sid}-quote{i}"
+    x, y = e['x'], e['y']
+    w = e.get('w', 1240)
+    fs = e.get('fs', 64)
+    text = str(e.get('text', '')).strip()
+    name = str(e.get('name', '')).strip()
+    c = _on_paper(col(e.get('color'), getattr(sp, 'PRIMARY', getattr(sp, 'BIG', sp.INK))))
+    body = (f'<div data-{eid}-txt style="font-size:{fs}px;'
+            f'font-weight:800;line-height:1.5;color:{th("txt", sp.INK)};white-space:pre-wrap;">'
+            f'<span data-{eid}-mark style="font-size:{fs * 1.45:.0f}px;line-height:0;'
+            f'font-weight:900;color:{c};vertical-align:-0.12em;margin-right:.08em;">“</span>{text}</div>')
+    who = ''
+    if name:
+        who = (f'<div data-{eid}-who style="margin-top:{fs * 0.4:.0f}px;text-align:right;'
+               f'font-size:{max(26, fs * 0.42):.0f}px;font-weight:700;color:{c};">—— {name}</div>')
+    html = (f'<div class="{f}-el" id="{eid}" data-hf-name="金句：{text[:10]}" '
+            f'style="top:{y}px;left:{x}px;width:{w}px;">{body}{who}</div>')
+    js = (f"gsap.set('#{eid} [data-{eid}-mark]',{{opacity:0,scale:2.4,transformOrigin:'0% 60%',display:'inline-block'}});\n      "
+          f"tl.to('#{eid} [data-{eid}-mark]',{{opacity:1,scale:1,duration:.5,ease:'power3.out'}},{t:.2f});\n      "
+          + sp.fade(f'#{eid} [data-{eid}-who]', t + .7))
+    return html, js
+
+
+def render_checklist(f, sid, e, i, t):
+    """要点清单：对勾圆徽 + 粗体条目，逐条落位（卖点/论据/清单）。"""
+    eid = f"{sid}-cl{i}"
+    x, y = e['x'], e['y']
+    gap = e.get('gap', 96)
+    nodes = e.get('nodes') or ['要点']
+    c = col(e.get('color'), getattr(sp, 'PRIMARY', sp.MINT))
+    fs = e.get('fs', 40)
+    r = 26
+    width = 70 + max((len(str(n)) for n in nodes), default=4) * fs * 1.1
+    parts = []
+    for k, txt in enumerate(nodes):
+        cy = r + k * gap
+        cc, tc = cu.pair(c)
+        parts.append(f'<div data-{eid}-chk="{k}" style="position:absolute;top:{cy - r}px;left:0;'
+                     f'width:{2 * r}px;height:{2 * r}px;border-radius:50%;background:{cc};'
+                     f'display:flex;align-items:center;justify-content:center;'
+                     f'font-size:{r + 4}px;font-weight:900;color:{tc};">✓</div>')
+        parts.append(f'<div data-{eid}-lbl="{k}" style="position:absolute;top:{cy - fs * 0.68}px;'
+                     f'left:{2 * r + 28}px;font-size:{fs}px;font-weight:800;'
+                     f'color:{th("txt", sp.INK)};white-space:nowrap;">{txt}</div>')
+    h = (len(nodes) - 1) * gap + 2 * r
+    html = (f'<div class="{f}-el" id="{eid}" data-hf-name="清单：{nodes[0][:8]}" '
+            f'style="top:{y}px;left:{x}px;width:{width:.0f}px;height:{h}px;">' + ''.join(parts) + '</div>')
+    js = (f"gsap.set('#{eid} [data-{eid}-chk]',{{opacity:0,scale:.2,transformOrigin:'50% 50%'}});\n      "
+          f"tl.to('#{eid} [data-{eid}-chk]',{{opacity:1,scale:1,duration:.35,stagger:.3,ease:'back.out(2)'}},{t:.2f});\n      "
+          f"gsap.set('#{eid} [data-{eid}-lbl]',{{opacity:0,x:-18}});\n      "
+          f"tl.to('#{eid} [data-{eid}-lbl]',{{opacity:1,x:0,duration:.35,stagger:.3,ease:'power2.out'}},{t + .1:.2f});")
+    return html, js
+
+
+def render_stat(f, sid, e, i, t):
+    """指标卡：大数字 + 标签（KPI/参数，发布会/财经气质）。"""
+    eid = f"{sid}-stat{i}"
+    x, y = e['x'], e['y']
+    w = e.get('w', 420)
+    fs = e.get('fs', 96)
+    text = str(e.get('text', '')).strip()
+    title = str(e.get('title', '')).strip()
+    lab_fs = max(28, int(fs * 0.32))
+    accent = col(e.get('bg'), getattr(sp, 'PRIMARY', getattr(sp, 'BIG', sp.INK)))
+    num_c = col(e.get('color'), accent)
+    surface = th('surface', '#FFFFFF')
+    if not (isinstance(surface, str) and surface.startswith('#') and len(surface) == 7):
+        surface = th('paper', None)  # 玻璃等 rgba 表面：按纸底（合成后的近似）保障
+    if isinstance(surface, str) and surface.startswith('#') and len(surface) == 7:
+        num_c = cu.ensure_readable(num_c, surface)  # 彩字自动加深/提亮过门禁
+    if getattr(sp, 'THEME', None):
+        border = f'border:1px solid {th("line", sp.INK)};'
+    elif getattr(sp, 'FLAT', False):
+        border = f'border:4px solid {accent};'
+    else:
+        border = f'border:3px solid {sp.INK};'
+    inner = (f'<div data-{eid}-num style="font-size:{fs}px;font-weight:900;line-height:1.12;'
+             f'color:{num_c};letter-spacing:1px;">{text}</div>')
+    if title:
+        inner += (f'<div data-{eid}-lab style="margin-top:{int(fs * 0.06)}px;font-size:{lab_fs}px;'
+                  f'font-weight:700;color:{th("surface_txt", sp.INK)};opacity:.85;">{title}</div>')
+    html = (f'<div class="{f}-el" id="{eid}" data-hf-name="指标：{text[:10]}" '
+            f'style="top:{y}px;left:{x}px;width:{w}px;padding:{int(fs * 0.22)}px {int(fs * 0.3)}px;'
+            f'background:{th("surface", "#FFFFFF")};{border}'
+            f'border-radius:{th("radius", 16)}px;box-shadow:{th("img_shadow", "0 12px 30px rgba(0,0,0,.14)")};">'
+            f'{inner}</div>')
+    return html, sp.pop(f'#{eid}', t, scale=.86)
+
+
+def render_chart_donut(f, sid, e, i, t):
+    """环形图：扇环逐段描画 + 右侧图例；中心可放标题/合计。"""
+    eid = f"{sid}-donut{i}"
+    x, y = e['x'], e['y']
+    w, h = e.get('w', 460), e.get('h', 360)
+    values = e.get('values') or [1, 1]
+    labels = e.get('labels') or [''] * len(values)
+    total = sum(values) or 1.0
+    title = str(e.get('title', '')).strip()
+    dia = min(h, w - (200 if labels else 0))          # 右侧留图例列
+    dia = max(dia, 160)
+    sw = max(34, int(dia * 0.16))                     # 环厚
+    r = (dia - sw) / 2
+    cx = cy = dia / 2
+    C = 2 * math.pi * r
+    parts = []
+    acc = 0.0
+    for j, v in enumerate(values):
+        frac = v / total
+        fill = CHART_FILLS[j % len(CHART_FILLS)]
+        rot = -90 + 360 * acc
+        parts.append(f'<circle data-seg="{j}" cx="{cx:.0f}" cy="{cy:.0f}" r="{r:.0f}" fill="none" '
+                     f'stroke="{fill}" stroke-width="{sw}"'
+                     f' transform="rotate({rot:.1f} {cx:.0f} {cy:.0f})" '
+                     f'stroke-dasharray="0 {C:.1f}"/>')
+        acc += frac
+    if title:
+        parts.append(f'<text x="{cx:.0f}" y="{cy + 12:.0f}" text-anchor="middle" '
+                     f'font-size="{dia * 0.13:.0f}" font-weight="800" fill="{th("txt", sp.INK)}" '
+                     f'font-family="{sp.FONT}">{title}</text>')
+    legend = []
+    lx = dia + 36
+    for j, v in enumerate(values):
+        fill = CHART_FILLS[j % len(CHART_FILLS)]
+        legend.append(f'<div data-lg="{j}" style="position:absolute;top:{j * 64 + 8}px;left:{lx}px;'
+                      f'display:flex;align-items:center;font-size:30px;font-weight:700;'
+                      f'color:{th("txt", sp.INK)};white-space:nowrap;">'
+                      f'<span style="width:26px;height:26px;border-radius:8px;background:{fill};'
+                      f'display:inline-block;margin-right:14px;"></span>'
+                      f'{labels[j] or "项" + str(j + 1)}&nbsp;&nbsp;{_fmt_num(v / total * 100)}%</div>')
+    html = (f'<div class="{f}-el" id="{eid}" data-hf-name="环形图" '
+            f'style="top:{y}px;left:{x}px;width:{w}px;height:{h}px;">'
+            f'<svg width="{dia}" height="{dia}">{"".join(parts)}</svg>' + ''.join(legend) + '</div>')
+    # 逐段顺序描画（GSAP attr tween 只吃字面值，最终 dasharray 在 Python 侧算好）
+    seg_js = ''
+    acc_t = t
+    for j, v in enumerate(values):
+        final = f'{v / total * C:.1f} {C:.1f}'
+        seg_js += (f"tl.to('#{eid} [data-seg=\"{j}\"]',{{attr:{{'stroke-dasharray':'{final}'}},"
+                   f"duration:.55,ease:'power2.inOut'}},{acc_t:.2f});\n      ")
+        acc_t += 0.28
+    js = seg_js + sp.stagger_pop(f'#{eid} [data-lg]', t + .3, step=.2)
+    return html, js
 
 
 def _fmt_num(v):
@@ -394,13 +593,13 @@ def render_chart_bar(f, sid, e, i, t):
         parts.append(
             f'<g data-bar="{j}" style="transform:rotate({jitter:.1f}deg);transform-origin:{bx + bw/2:.0f}px {h:.0f}px;">'
             f'<rect x="{bx:.0f}" y="{pad_t + area_h - bh:.0f}" width="{bw:.0f}" height="{bh:.0f}" rx="6" '
-            f'fill="{fill}" stroke="{sp.INK}" stroke-width="4"/></g>')
+            f'fill="{fill}" stroke="{th("line", sp.INK)}" stroke-width="4"/></g>')
         if labels[j]:
             parts.append(f'<text x="{bx + bw/2:.0f}" y="{h - 18}" text-anchor="middle" '
-                         f'font-size="{label_fs}" fill="{sp.INK}" font-family="{sp.FONT}">{labels[j]}</text>')
+                         f'font-size="{label_fs}" fill="{th("txt", sp.INK)}" font-family="{sp.FONT}">{labels[j]}</text>')
         vy = max(pad_t + area_h - bh - 10, label_fs + 4)      # 数值标签夹在 SVG 内
         parts.append(f'<text x="{bx + bw/2:.0f}" y="{vy:.0f}" text-anchor="middle" '
-                     f'font-size="{label_fs + 2}" font-weight="700" fill="{sp.INK}" '
+                     f'font-size="{label_fs + 2}" font-weight="700" fill="{th("txt", sp.INK)}" '
                      f'font-family="{sp.FONT}">{_fmt_num(v)}</text>')
     html = (f'<div class="{f}-el" id="{eid}" data-hf-name="柱状图" '
             f'style="top:{y}px;left:{x}px;width:{w}px;height:{h}px;">'
@@ -425,18 +624,18 @@ def render_chart_line(f, sid, e, i, t):
         pts.append((px, py))
     poly = ' '.join(f'{px:.0f},{py:.0f}' for px, py in pts)
     dots = ''.join(
-        f'<circle data-pt="{j}" cx="{px:.0f}" cy="{py:.0f}" r="13" fill="{sp.CORAL}" stroke="{sp.INK}" stroke-width="4"/>'
+        f'<circle data-pt="{j}" cx="{px:.0f}" cy="{py:.0f}" r="13" fill="{sp.CORAL}" stroke="{th("line", sp.INK)}" stroke-width="4"/>'
         for j, (px, py) in enumerate(pts))
     labels = e.get('labels') or []
     lbl = ''.join(
-        f'<text x="{px:.0f}" y="{h - 18}" text-anchor="middle" font-size="26" fill="{sp.INK}" '
+        f'<text x="{px:.0f}" y="{h - 18}" text-anchor="middle" font-size="26" fill="{th("txt", sp.INK)}" '
         f'font-family="{sp.FONT}">{labels[j]}</text>'
         for j, (px, py) in enumerate(pts) if j < len(labels) and labels[j])
     length = (w - 56) * 1.15 + area_h  # 折线长度近似（dash 动画用，宁多勿少）
     html = (f'<div class="{f}-el" id="{eid}" data-hf-name="折线图" '
             f'style="top:{y}px;left:{x}px;width:{w}px;height:{h}px;">'
             f'<svg viewBox="0 0 {w} {h}" width="{w}" height="{h}">'
-            f'<polyline data-line points="{poly}" fill="none" stroke="{sp.INK}" stroke-width="6" '
+            f'<polyline data-line points="{poly}" fill="none" stroke="{th("line", sp.INK)}" stroke-width="6" '
             f'stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="{length:.0f}" '
             f'stroke-dashoffset="{length:.0f}"/>{dots}{lbl}</svg></div>')
     js = (f"tl.to('#{eid} [data-line]',{{strokeDashoffset:0,duration:1.1,ease:'power2.out'}},{t:.2f});\n      "
@@ -463,12 +662,12 @@ def render_chart_pie(f, sid, e, i, t):
         fill = CHART_FILLS[j % len(CHART_FILLS)]
         parts.append(f'<path data-wedge="{j}" d="M{cx:.0f},{cy:.0f} L{x0:.0f},{y0:.0f} '
                      f'A{r:.0f},{r:.0f} 0 {large} 1 {x1:.0f},{y1:.0f} Z" '
-                     f'fill="{fill}" stroke="{sp.INK}" stroke-width="4" stroke-linejoin="round"/>')
+                     f'fill="{fill}" stroke="{th("line", sp.INK)}" stroke-width="4" stroke-linejoin="round"/>')
         mid = math.radians(a0 + sweep / 2)
         lx, ly = cx + (r + 44) * math.cos(mid), cy + (r + 44) * math.sin(mid)
         anchor = 'middle' if abs(math.cos(mid)) < .35 else ('start' if math.cos(mid) > 0 else 'end')
         parts.append(f'<text data-wlbl="{j}" x="{lx:.0f}" y="{ly:.0f}" text-anchor="{anchor}" '
-                     f'dominant-baseline="middle" font-size="27" fill="{sp.INK}" '
+                     f'dominant-baseline="middle" font-size="27" fill="{th("txt", sp.INK)}" '
                      f'font-family="{sp.FONT}">{labels[j]} {_fmt_num(v)}</text>')
         angle = a1
     html = (f'<div class="{f}-el" id="{eid}" data-hf-name="饼图" '

@@ -26,3 +26,6 @@ web/dist/
 
 # 3D 验证片渲染产物（不入库）
 demo/aegis3d/renders/
+
+# 多风格验证管线产物（style_test_harness.py 可再生）
+demo/styletest/

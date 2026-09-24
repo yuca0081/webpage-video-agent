@@ -343,6 +343,7 @@ func (r *Runner) genSpecs(p *pipeline.Project, feedback, only string) error {
 	}
 	cv := ProjectCanvas(p)
 	system := specSystemFor(p)
+	style := styleNoteFor(p, r.DataDir)
 	icons := scanIcons(r.DataDir)
 	if feedback != "" && only == "" { // 全片重生成：先清旧 spec
 		for _, seg := range sb.Segments {
@@ -365,7 +366,7 @@ func (r *Runner) genSpecs(p *pipeline.Project, feedback, only string) error {
 		}
 		v := voices[seg.ID]
 		var spec contract.CompSpec
-		u1, err := prov.GenerateJSON(context.Background(), system, specUserPrompt(seg, v, instruction, feedback, cv), &spec)
+		u1, err := prov.GenerateJSON(context.Background(), system, specUserPrompt(seg, v, instruction, feedback, cv, style), &spec)
 		if err != nil {
 			return fmt.Errorf("%s spec 生成失败: %w", seg.ID, err)
 		}
@@ -374,7 +375,7 @@ func (r *Runner) genSpecs(p *pipeline.Project, feedback, only string) error {
 		for repair := 0; repair < 2 && len(errs) > 0; repair++ { // 修复：违规项回喂，最多 2 轮
 			fb := instruction + feedback + "\n上一版 spec 被契约校验拒绝，必须逐条修正：\n- " + strings.Join(errs, "\n- ")
 			var fixed contract.CompSpec
-			u2, err2 := prov.GenerateJSON(context.Background(), system, specUserPrompt(seg, v, "", fb, cv), &fixed)
+			u2, err2 := prov.GenerateJSON(context.Background(), system, specUserPrompt(seg, v, "", fb, cv, style), &fixed)
 			if err2 != nil {
 				return fmt.Errorf("%s spec 修复失败: %w", seg.ID, err2)
 			}
@@ -391,8 +392,8 @@ func (r *Runner) genSpecs(p *pipeline.Project, feedback, only string) error {
 				var retry contract.CompSpec
 				u2, err2 := prov.GenerateJSON(context.Background(), system,
 					specUserPrompt(seg, v, instruction,
-						"上一版几乎每个元素的 kind 都是空的或不认识的。kind 必须从可用元素菜单里逐字选取（title/note/panel/chip/zone/timeline/bracket/strip/barrow/table/image/icon/emoji/chart_bar/chart_line/chart_pie/label/big/beam/disc/circle/arrow），每个元素都必须有 kind。",
-						cv), &retry)
+						"上一版几乎每个元素的 kind 都是空的或不认识的。kind 必须从可用元素菜单里逐字选取（title/note/panel/chip/zone/timeline/bracket/strip/barrow/table/image/icon/emoji/chart_bar/chart_line/chart_pie/chart_donut/quote/checklist/stat/label/big/beam/disc/circle/arrow），每个元素都必须有 kind。",
+						cv, style), &retry)
 				if err2 == nil {
 					errs2 := contract.ValidateSpec(&retry, len(v.Words), cv)
 					errs2 = append(errs2, iconErrors(&retry, icons)...)
@@ -479,7 +480,7 @@ func iconErrors(s *contract.CompSpec, icons map[string]bool) []string {
 	return errs
 }
 
-func specUserPrompt(seg contract.Segment, v voiceMeta, instruction, feedback string, cv contract.Canvas) string {
+func specUserPrompt(seg contract.Segment, v voiceMeta, instruction, feedback string, cv contract.Canvas, style string) string {
 	var wb strings.Builder
 	for i, w := range v.Words {
 		if i > 0 && i%10 == 0 {
@@ -507,7 +508,7 @@ func specUserPrompt(seg contract.Segment, v voiceMeta, instruction, feedback str
 - 标题：%s
 - 旁白（%d 词，%.1f 秒）：%s
 - %s：%s
-
+%s
 ## 可用元素（kind 与参数；坐标基于 %d×%d 画布%s）
 - title：大标题（整行居中，只给 y）。y, text(≤12字), fs(默认84), reveal
 - note：便签/色块标签（给左上角坐标）。x, y, text(≤12字), bg(butter/mint/sky/coral/peach/pink), rot(±3), fs(默认40), reveal
@@ -519,6 +520,9 @@ func specUserPrompt(seg contract.Segment, v voiceMeta, instruction, feedback str
 - strip：小方块序列+省略号（向量/维度/批量示意）。x, y, n(2–8), size(默认44), color, text(≤10字,如"512维"), reveal
 - barrow：粗块箭头（流程指向，实心大箭头，可配 rot 转向）。x, y, w(默认260), h(默认90), rot(角度), color, reveal
 - table：格子表格（数字/短文本行列对比）。x, y, w(默认520), rows(2–7行×最多4列,每格≤8字), cell_h(默认76), fs(默认30), reveal
+- quote：金句/引用（大引号+重磅大字+署名）。x, y, w(默认1240), text(≤22字=金句本体), name(≤10字,可选=出处/署名), reveal
+- checklist：对勾清单（卖点/论据/要点，逐条打勾）。x, y, nodes(2–5条,每条≤14字), gap(默认96), color, fs(默认40), reveal
+- stat：指标卡（大数字+小标签，关键参数/数据）。x, y, w(默认420), text(≤8字=数值如"13年"/"48%%"), title(≤12字=标签), reveal
 - label：文字标注。x, y, text(≤14字), fs(默认38), reveal
 - big：大数字/短语强调。x, y, text(≤8字), fs(默认110), reveal
 - image：真实照片（制作时按 query 自动搜图下载本地化，拍立得白框呈现）——有实体名词（动物/地标/物品/场景）时的主视觉首选。x, y, w(默认520), h(默认360), query(中文搜索词2–12字，如"蓝鲸 海面"), rot(±3), reveal
@@ -527,6 +531,7 @@ func specUserPrompt(seg contract.Segment, v voiceMeta, instruction, feedback str
 - chart_bar：手绘柱状图（数据对比）。x, y, w(默认560), h(默认360), values(2–6个数), labels(每柱≤6字), reveal
 - chart_line：手绘折线图（趋势变化）。x, y, w, h, values(3–8个数=折线点), labels(可选), reveal
 - chart_pie：手绘饼图（占比）。x, y, w, h(短边=直径), values(2–5), labels, reveal
+- chart_donut：环形图（占比，现代感；中心可放标题）。x, y, w(默认460), h(默认360), values(2–5), labels(每项≤6字), title(≤6字,可选=中心文字), reveal
 - disc：实心圆盘（抽象主体/备用）。cx, cy, r(60–180), bg(mint/sky/butter/coral), reveal
 - circle：小圆点（小物体/角色）。cx, cy, r(20–60), fill(white/mint/sky/butter), reveal
 - beam：粗条（条状物/光束，给左上角）。x, y, w, h, rot, bg, reveal
@@ -549,15 +554,65 @@ scale ruler clipboard lightbulb-off zap-off anchor truck bike train bus ship sen
 ## 布局硬规则（校验器会拒收）
 %s
 - reveal 按讲解顺序递增、铺满词序（别堆在开头；最大词号 %d）
-- 语义呼应画面提示：主体物→image（实体名词首选）或 icon（抽象概念）；数据对比→chart_bar；趋势→chart_line；占比→chart_pie；对比→双色便签左右分置或 table；流程/步骤→timeline 或箭头串联；指向→barrow；向量/维度/批量→strip；分组圈注→zone(+bracket)；数字→big；一屏最多一个图表（图表占主视觉位）
+- 语义呼应画面提示：主体物→image（实体名词首选）或 icon（抽象概念）；数据对比→chart_bar；趋势→chart_line；占比→chart_donut 或 chart_pie；对比→双色便签左右分置或 table；流程/步骤→timeline 或箭头串联；要点/卖点→checklist；金句/名言→quote；关键数字→stat 或 big；指向→barrow；向量/维度/批量→strip；分组圈注→zone(+bracket)；一屏最多一个图表（图表占主视觉位）
 - 画面丰富度（重要）：每屏至少一个视觉锚点（image / 大 icon / 图表 / big / panel 之一），大小拉开层次（主体 300px+、次级 120–200px），禁止全屏小元素平铺
 %s
 
 ## 输出（只输出 JSON，无围栏）
 {"note":"布局思路一句话","elements":[…]}
-`, instrBlock, seg.Key, len(v.Words), v.DurationS, seg.Narration, briefLabel, seg.VisualBrief,
+`, instrBlock, seg.Key, len(v.Words), v.DurationS, seg.Narration, briefLabel, seg.VisualBrief, style,
 		int(cv.W), int(cv.H), map[bool]string{true: " 竖屏 9:16", false: ""}[cv.Aspect == "9:16"],
 		wb.String(), rules, len(v.Words)-1, feedbackBlock(feedback))
+}
+
+// styleNoteFor 项目风格方向 → spec 提示里的风格说明（题材 + 配图调性）。
+// 方向在 _shared/styles.json 注册表命中时给出题材与配图 query 调性，未命中只给方向名。
+func styleNoteFor(p *pipeline.Project, dataDir string) string {
+	b, err := os.ReadFile(p.Artifact("style/style_samples.json"))
+	if err != nil {
+		return ""
+	}
+	var ss struct {
+		Direction string `json:"direction"`
+	}
+	if json.Unmarshal(b, &ss) != nil || ss.Direction == "" {
+		return ""
+	}
+	note := "\n## 本片风格\n- 方向：" + ss.Direction
+	reg, err := os.ReadFile(filepath.Join(dataDir, "projects", "_shared", "styles.json"))
+	if err != nil {
+		return note
+	}
+	var styles []struct {
+		Direction string   `json:"direction"`
+		Keywords  []string `json:"keywords"`
+		Genre     string   `json:"genre"`
+		Photo     string   `json:"photo"`
+	}
+	if json.Unmarshal(reg, &styles) != nil {
+		return note
+	}
+	for _, st := range styles {
+		hit := st.Direction != "" && strings.Contains(ss.Direction, st.Direction)
+		if !hit {
+			for _, kw := range st.Keywords {
+				if kw != "" && strings.Contains(ss.Direction, kw) {
+					hit = true
+					break
+				}
+			}
+		}
+		if hit {
+			if st.Genre != "" {
+				note += "\n- 适用题材：" + st.Genre
+			}
+			if st.Photo != "" {
+				note += "\n- 配图 query 调性：" + st.Photo + "（image 的 query 往这个调性上靠）"
+			}
+			break
+		}
+	}
+	return note
 }
 
 func feedbackBlock(f string) string {

@@ -156,3 +156,33 @@ func TestValidateSpecIconChart(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateSpecQuoteChecklistStatDonut(t *testing.T) {
+	cv := CanvasFor("16:9")
+	// quote/checklist/stat/chart_donut 合法布局
+	s := &CompSpec{Elements: []SpecElement{
+		{Kind: "title", Y: 100, Text: "风格样张"},
+		{Kind: "quote", X: 170, Y: 250, W: 940, Text: "每一种风格都是一套可复用的语言", Name: "注册表", Reveal: 2},
+		{Kind: "stat", X: 640, Y: 620, W: 420, Text: "13套", Title: "注册风格包", Reveal: 6},
+		{Kind: "checklist", X: 170, Y: 620, Nodes: []string{"暗底反白", "系列色", "相框质感"}, Reveal: 4},
+		{Kind: "chart_donut", X: 1120, Y: 140, W: 640, H: 380,
+			Values: []float64{45, 30, 25}, Labels: []string{"甲", "乙", "丙"}, Title: "占比", Reveal: 2},
+	}}
+	if errs := ValidateSpec(s, 20, cv); len(errs) != 0 {
+		t.Fatalf("新元素合法布局被拒: %v", errs)
+	}
+	// 违规：quote 超长+署名超长；stat 缺 text；checklist 节点数越界+单条超长；donut values 越界
+	bad := &CompSpec{Elements: []SpecElement{
+		{Kind: "quote", X: 170, Y: 250, Text: "这句话远远超过了二十两个字的上限所以必须被拒绝才对", Name: "一个特别特别长的署名字", Reveal: 1},
+		{Kind: "stat", X: 170, Y: 560, Title: "缺数值", Reveal: 2},
+		{Kind: "checklist", X: 700, Y: 200, Nodes: []string{"一", "二", "三", "四", "五", "六"}, Reveal: 3},
+		{Kind: "chart_donut", X: 1120, Y: 140, Values: []float64{1, 2, 3, 4, 5, 6}, Reveal: 4},
+	}}
+	errs := ValidateSpec(bad, 20, cv)
+	joined := strings.Join(errs, "\n")
+	for _, want := range []string{"quote", "署名", "缺 text", "nodes 6 条不在 2–5", "数量 6 不在 2–5"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("应包含 %q，得到: %v", want, errs)
+		}
+	}
+}
