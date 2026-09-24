@@ -13,7 +13,7 @@ const props = defineProps<{
   duration: number
   pickedIdx: number[]
 }>()
-const emit = defineEmits<{ seek: [t: number]; pick: [idx: number, key: string] }>()
+const emit = defineEmits<{ seek: [t: number]; pick: [idx: number, key: string]; 'pick-time': [t: number] }>()
 
 const PUNCT = '，。！？；、：,.!?;:…—·'
 const hasPunct = (s: string) => [...s].some(ch => PUNCT.includes(ch))
@@ -79,7 +79,7 @@ const activeIdx = computed(() =>
 const tracksEl = ref<HTMLElement | null>(null)
 const dragging = ref(false)
 const dragT = ref(0)
-function tAt(e: PointerEvent) {
+function tAt(e: { clientX: number }) {
   const r = tracksEl.value!.getBoundingClientRect()
   return Math.min(Math.max((e.clientX - r.left) / r.width, 0), 1) * total.value
 }
@@ -97,8 +97,16 @@ function onScrubMove(e: PointerEvent) {
 function onScrubEnd() { dragging.value = false }
 
 function onRulerClick(e: PointerEvent) { emit('seek', tAt(e)) }
+function onRulerDblClick(e: MouseEvent) { emit('pick-time', tAt(e)); emit('seek', tAt(e)) }
 function pickSeg(s: SegCol) { emit('pick', s.idx, s.key); emit('seek', s.start + 0.01) }
 function pickPhrase(p: Phrase) { emit('pick', p.idx, p.key); emit('seek', p.start + 0.01) }
+// 双击任意轨道 = 引用该时刻（单击语义不变：标尺定位 / 块选段）
+function onLaneDblClick(e: MouseEvent, start: number, dur: number) {
+  const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  const local = Math.min(Math.max((e.clientX - r.left) / r.width, 0), 1) * dur
+  emit('pick-time', start + local)
+  emit('seek', start + local)
+}
 </script>
 
 <template>
@@ -111,8 +119,8 @@ function pickPhrase(p: Phrase) { emit('pick', p.idx, p.key); emit('seek', p.star
     </div>
 
     <div ref="tracksEl" class="tracks">
-      <!-- 标尺：点击定位；播放头手柄在此拖动 -->
-      <div class="ruler" @pointerdown="onRulerClick">
+      <!-- 标尺：点击定位 / 双击引用该时刻；播放头手柄在此拖动 -->
+      <div class="ruler" @pointerdown="onRulerClick" @dblclick="onRulerDblClick">
         <i v-for="m in minors" :key="`m${m}`" class="minor" :style="{ left: pct(m) }" />
         <span v-for="tk in ticks" :key="`t${tk.t}`" class="tick" :style="{ left: pct(tk.t) }">{{ tk.label }}</span>
         <div
@@ -130,8 +138,9 @@ function pickPhrase(p: Phrase) { emit('pick', p.idx, p.key); emit('seek', p.star
           v-for="s in segs" :key="s.idx" class="blk"
           :class="{ on: s.idx === activeIdx, picked: pickedIdx.includes(s.idx) }"
           :style="{ left: pct(s.start), width: pct(s.dur) }"
-          :title="`段${s.idx} ${s.key}`"
+          :title="`段${s.idx} ${s.key}（双击引用时刻）`"
           @click="pickSeg(s)"
+          @dblclick.stop="onLaneDblClick($event, s.start, s.dur)"
         >
           <span v-if="pickedIdx.includes(s.idx)" class="pin">📎</span>
           <b>{{ s.idx }}</b>
@@ -146,6 +155,7 @@ function pickPhrase(p: Phrase) { emit('pick', p.idx, p.key); emit('seek', p.star
           :style="{ left: pct(p.start), width: pct(p.dur) }"
           :title="p.text"
           @click="pickPhrase(p)"
+          @dblclick.stop="onLaneDblClick($event, p.start, p.dur)"
         >{{ p.text }}</div>
       </div>
 
@@ -157,6 +167,7 @@ function pickPhrase(p: Phrase) { emit('pick', p.idx, p.key); emit('seek', p.star
           :style="{ left: pct(s.start), width: pct(s.dur) }"
           :title="`段${s.idx} 配音 ${s.dur.toFixed(1)}s`"
           @click="pickSeg(s)"
+          @dblclick.stop="onLaneDblClick($event, s.start, s.dur)"
         >
           <i
             v-for="(w, j) in (audioMeta.voices[i]?.words ?? [])" :key="j"

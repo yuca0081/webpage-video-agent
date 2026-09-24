@@ -10,6 +10,7 @@ import NewProjectModal from './components/NewProjectModal.vue'
 import LibraryPanel from './components/LibraryPanel.vue'
 import { api } from './api'
 import type { AudioMeta, ChatRef, Msg, ProjectRow, ProjectView, Storyboard, StylePack, StyleSamples } from './types'
+import { segAt, segTable } from './segtime'
 
 const projects = ref<ProjectRow[]>([])
 const current = ref<string>('')
@@ -68,7 +69,8 @@ function selectProject(id: string) {
   stageState.value = {}
 }
 
-// 📎 引用：点分镜/时间轴加段级（按段去重）；检视点元素加元素级（按元素去重）；可单删、可清空
+// 📎 引用：点分镜/时间轴加段级（按段去重）；双击轨道/「引用此刻」加时刻级（按 ±0.75s 去重）；
+// 检视点元素加元素级（按元素去重）；可单删、可清空
 function addRef(idx: number, key: string) {
   if (!chatRefs.value.some(r => r.idx === idx)) chatRefs.value = [...chatRefs.value, { idx, key }]
 }
@@ -76,9 +78,17 @@ function addElementRef(ref: ChatRef) {
   if (ref.elementId && chatRefs.value.some(r => r.elementId === ref.elementId)) return
   chatRefs.value = [...chatRefs.value, ref]
 }
+function addTimeRef(t: number) {
+  const hit = segAt(segTable(storyboard.value, audioMeta.value), t)
+  if (!hit) return
+  if (chatRefs.value.some(r => r.idx === hit.idx && r.t != null && Math.abs(r.t - t) < 0.75)) return
+  chatRefs.value = [...chatRefs.value, { idx: hit.idx, key: hit.key, t }]
+}
 function removeRef(ref: ChatRef) {
   chatRefs.value = chatRefs.value.filter(r =>
-    ref.elementId ? r.elementId !== ref.elementId : r.idx !== ref.idx)
+    ref.elementId ? r.elementId !== ref.elementId
+      : ref.t != null ? !(r.idx === ref.idx && r.t != null && Math.abs(r.t - ref.t) < 0.75)
+      : r.idx !== ref.idx)
 }
 
 async function refresh() {
@@ -187,6 +197,7 @@ const themeOverrides = {
             @confirm-style="async () => { if (current) { await api.confirmStyle(current); refresh() } }"
             @seg="addRef"
             @seg-element="addElementRef"
+            @pick-time="addTimeRef"
             @cancel="async () => { if (current) { await api.cancel(current).catch(() => {}); refresh() } }"
           />
         </main>

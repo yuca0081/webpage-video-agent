@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { NButton, NScrollbar, NSpin, NTag } from 'naive-ui'
 import type { AudioMeta, ChatRef, ProjectView, Storyboard, StyleSamples } from '../types'
-import { segAt, segTable } from '../segtime'
+import { fmtClock, segAt, segTable } from '../segtime'
 import { videoURL } from '../api'
 import Timeline from './Timeline.vue'
 import LiveFrame from './LiveFrame.vue'
@@ -17,7 +17,7 @@ const props = defineProps<{
   audioMeta: AudioMeta | null
   pickedIdx: number[]
 }>()
-const emit = defineEmits<{ 'confirm-style': []; seg: [idx: number, key: string]; 'seg-element': [ref: ChatRef]; cancel: [] }>()
+const emit = defineEmits<{ 'confirm-style': []; seg: [idx: number, key: string]; 'seg-element': [ref: ChatRef]; cancel: []; 'pick-time': [t: number] }>()
 
 const stageName: Record<string, string> = {
   tts: '配音', compositions: '画面', assemble: '组装', check: '检查', render: '渲染',
@@ -37,6 +37,8 @@ function onSeek(t: number) {
   }
 }
 function pickSeg(idx: number, key: string) { emit('seg', idx, key) }
+// 时刻引用：播放器「引用此刻」按钮 / 时间轴双击（全局秒，随消息结构化发出）
+function pickTime(t: number) { emit('pick-time', t) }
 
 // ── 检视模式（plan §4.3 修改态）：video ↔ 活合成物 LiveFrame ──
 const inspect = ref(false)
@@ -155,8 +157,11 @@ watch(() => props.stageSummary, (nv, ov) => {
             :disabled="!!stageSummary || view.producing"
             @click="toggleInspect"
           >{{ inspect ? '退出检视' : '🔍 检视' }}</button>
+          <button v-if="!inspect" class="inspect-btn time-ref" @click="pickTime(cur)">
+            📎 引用此刻 {{ fmtClock(cur) }}
+          </button>
           <span v-if="inspect" class="inspect-hint">活合成物：悬停显示元素名，点选加 📎 引用，时间轴拖动定位</span>
-          <span v-else class="tool-hint">暂停后点「检视」，可直接指着画面里的元素说话</span>
+          <span v-else class="tool-hint">点「检视」指元素说话；或双击下方时间轴 / 点「引用此刻」钉住某个瞬间</span>
         </div>
         <div class="player">
           <video
@@ -173,7 +178,7 @@ watch(() => props.stageSummary, (nv, ov) => {
         <Timeline
           v-if="storyboard"
           :storyboard="storyboard" :audio-meta="audioMeta" :current-time="cur" :duration="dur"
-          :picked-idx="pickedIdx" @seek="onSeek" @pick="pickSeg"
+          :picked-idx="pickedIdx" @seek="onSeek" @pick="pickSeg" @pick-time="pickTime"
         />
         <div class="foot-row">
           <span class="video-hint">点分镜/字幕/配音块或检视点元素加 📎 引用，聊天里说要改什么——只重做那一段</span>

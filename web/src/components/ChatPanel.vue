@@ -26,12 +26,14 @@ watch(() => props.msgs.length, () => nextTick(() => listRef.value?.scrollTo({ to
 
 const fmtTime = (iso: string) => (iso ? iso.slice(11, 16) : '')
 
-// 引用三态：段级 / 元素级（段 + 时刻 + 人话名）
+// 引用三态：段级 / 时刻级（段 + 时间码）/ 元素级（段 + 时刻 + 人话名）
 const refLabel = (r: ChatRef) =>
   r.elementName
     ? `📎 段${r.idx} · ${fmtClock(r.t)} ·「${r.elementName}」`
-    : `📎 段${r.idx}「${r.key}」`
-const refKey = (r: ChatRef) => r.elementId ?? `s${r.idx}`
+    : r.t != null
+      ? `📎 段${r.idx} · ${fmtClock(r.t)}`
+      : `📎 段${r.idx}「${r.key}」`
+const refKey = (r: ChatRef) => r.elementId ?? (r.t != null ? `s${r.idx}t${r.t}` : `s${r.idx}`)
 </script>
 
 <template>

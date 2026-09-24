@@ -96,10 +96,11 @@ export interface AudioMeta {
 }
 
 // 聊天输入框上方的引用项（时间轴/分镜/检视点选加入，随消息结构化发给 Agent）
+// 三态：段级（idx+key）/ 时刻级（idx+key+t）/ 元素级（+elementId+elementName）
 export interface ChatRef {
   idx: number
   key: string
-  t?: number           // 全局时刻（秒），元素引用携带
+  t?: number           // 全局时刻（秒），时刻/元素引用携带
   elementId?: string   // 元素 DOM id（如 seg03-arrow2）
   elementName?: string // 人话名（如 箭头：蓝光弹开）
 }

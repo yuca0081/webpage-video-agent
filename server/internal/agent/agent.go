@@ -508,7 +508,7 @@ func (a *Agent) Run(projectID, userText string, refs []store.Ref) {
 	// 实时状态随最新 user 消息注入（模型对最新消息权重最高，防聊天历史锚定幻觉）
 	msgs = append(msgs, openai.ChatCompletionMessage{Role: openai.ChatMessageRoleUser, Content:
 		fmt.Sprintf("［系统·实时项目状态，以此为准］\n%s\n%s\n用户消息：%s",
-			a.State(projectID).summary(), formatRefs(refs), userText)})
+			a.State(projectID).summary(), a.formatRefs(p, refs), userText)})
 
 	final := ""
 	for step := 0; step < maxSteps; step++ {
@@ -539,10 +539,12 @@ func (a *Agent) Run(projectID, userText string, refs []store.Ref) {
 }
 
 // formatRefs 引用卡片 → 模型可读的引用块（空则空串，不占位）。
-func formatRefs(refs []store.Ref) string {
+// 时刻引用换算段内偏移（口径与 MP4 拼接一致：配音时长+0.35 尾垫），模型能精确理解"这里"。
+func (a *Agent) formatRefs(p *pipeline.Project, refs []store.Ref) string {
 	if len(refs) == 0 {
 		return ""
 	}
+	starts := segStarts(p)
 	var b strings.Builder
 	b.WriteString("用户引用（点选自舞台，精确上下文，优先于口头描述）：\n")
 	for _, r := range refs {
@@ -551,7 +553,10 @@ func formatRefs(refs []store.Ref) string {
 			line += fmt.Sprintf("「%s」", r.Key)
 		}
 		if r.T > 0 {
-			line += fmt.Sprintf(" · %.1fs", r.T)
+			line += fmt.Sprintf(" · 全片 %.1fs（第 %d 帧）", r.T, int(r.T*30+0.5))
+			if start, ok := starts[r.Idx]; ok && r.T >= start {
+				line += fmt.Sprintf("，该段第 %.1fs", r.T-start)
+			}
 		}
 		if r.ElementName != "" {
 			line += fmt.Sprintf(" · 元素「%s」", r.ElementName)
@@ -562,6 +567,38 @@ func formatRefs(refs []store.Ref) string {
 		b.WriteString(line + "\n")
 	}
 	return b.String()
+}
+
+// segStarts 段起点表：audio duration_s + 0.35 尾垫累计（与 ai/assemble.py、前端 segtime.ts 同口径）；
+// 无音频对齐产物时退回分镜 duration_hint。
+func segStarts(p *pipeline.Project) map[int]float64 {
+	sb, err := p.LoadStoryboard()
+	if err != nil {
+		return nil
+	}
+	durs := map[string]float64{}
+	var meta struct {
+		Voices []struct {
+			ID        string  `json:"id"`
+			DurationS float64 `json:"duration_s"`
+		} `json:"voices"`
+	}
+	if b, rerr := os.ReadFile(p.Artifact("audio_meta.json")); rerr == nil && json.Unmarshal(b, &meta) == nil {
+		for _, v := range meta.Voices {
+			durs[v.ID] = v.DurationS + 0.35
+		}
+	}
+	starts := map[int]float64{}
+	acc := 0.0
+	for _, seg := range sb.Segments {
+		starts[seg.Idx] = acc
+		if d, ok := durs[seg.ID]; ok && d > 0 {
+			acc += d
+		} else {
+			acc += seg.DurationHint
+		}
+	}
+	return starts
 }
 
 // execTool 门禁 + 执行 + 记账（工具轨迹入聊天案卷）。
