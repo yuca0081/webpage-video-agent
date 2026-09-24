@@ -3,6 +3,8 @@
 package store
 
 import (
+	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"log"
 	"sync"
@@ -19,10 +21,49 @@ type Msg struct {
 	Role      string `json:"role"`                                  // user | agent | system
 	Type      string `json:"type"`                                  // text | tool_call | progress | error
 	Content   string `json:"content"`
+	Refs      Refs   `gorm:"type:jsonb"            json:"refs,omitempty"` // 引用卡片（段/秒/帧/元素，plan §3.5）
 	ToolName  string `gorm:"column:tool_name"      json:"tool_name,omitempty"`
 	ToolArgs  string `gorm:"type:jsonb"            json:"tool_args,omitempty"`
 	ToolResult string `gorm:"type:jsonb"           json:"tool_result,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+// Ref 引用卡片：段级 {idx,key}；元素级再带 t（全局秒）与元素 id/人话名（四级寻址之段/秒/帧/元素）。
+// JSON 字段名与前端 ChatRef 对齐（camelCase）。
+type Ref struct {
+	Idx         int     `json:"idx"`
+	Key         string  `json:"key,omitempty"`
+	T           float64 `json:"t,omitempty"`
+	ElementID   string  `json:"elementId,omitempty"`
+	ElementName string  `json:"elementName,omitempty"`
+}
+
+// Refs 兼顾两层：PG 里是 jsonb（Value/Scan 走 JSON 文本），接口层序列化为数组。
+type Refs []Ref
+
+func (r Refs) Value() (driver.Value, error) {
+	if len(r) == 0 {
+		return nil, nil
+	}
+	b, err := json.Marshal(r)
+	return string(b), err
+}
+
+func (r *Refs) Scan(src any) error {
+	if src == nil {
+		*r = nil
+		return nil
+	}
+	var b []byte
+	switch v := src.(type) {
+	case []byte:
+		b = v
+	case string:
+		b = []byte(v)
+	default:
+		return fmt.Errorf("refs: 不支持的扫描类型 %T", src)
+	}
+	return json.Unmarshal(b, r)
 }
 
 type ProjectRow struct {
@@ -118,9 +159,9 @@ func (s *pgStore) SaveMsg(m *Msg) error {
 	if err != nil {
 		return err
 	}
-	return s.db.Exec(`INSERT INTO chat_messages (project_id, role, type, content, tool_name, tool_args, tool_result)
-		VALUES (?, ?, ?, ?, ?, NULLIF(?, '')::jsonb, NULLIF(?, '')::jsonb)`,
-		uuid, m.Role, m.Type, m.Content, m.ToolName, m.ToolArgs, m.ToolResult).Error
+	return s.db.Exec(`INSERT INTO chat_messages (project_id, role, type, content, refs, tool_name, tool_args, tool_result)
+		VALUES (?, ?, ?, ?, ?, ?, NULLIF(?, '')::jsonb, NULLIF(?, '')::jsonb)`,
+		uuid, m.Role, m.Type, m.Content, m.Refs, m.ToolName, m.ToolArgs, m.ToolResult).Error
 }
 
 func (s *pgStore) ListMsgs(projectID string, afterID int64, limit int) ([]Msg, error) {
@@ -130,7 +171,7 @@ func (s *pgStore) ListMsgs(projectID string, afterID int64, limit int) ([]Msg, e
 	}
 	var rows []Msg
 	err = s.db.Table("chat_messages").
-		Select("id, role, type, content, tool_name, created_at").
+		Select("id, role, type, content, refs, tool_name, created_at").
 		Where("project_id = ? AND id > ? AND type IN ('text','tool_call','error')", uuid, afterID).
 		Order("id ASC").Limit(limit).Scan(&rows).Error
 	for i := range rows {

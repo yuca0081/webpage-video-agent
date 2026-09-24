@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -53,6 +54,8 @@ func (s *Server) Router() *gin.Engine {
 	r.POST("/api/projects/:id/produce", s.startProduce)
 	r.GET("/api/projects/:id/video/main.mp4", s.video)
 	r.GET("/api/projects/:id/audio_meta", s.audioMeta)
+	r.GET("/api/projects/:id/frames/:seg", s.frame)
+	r.GET("/api/projects/:id/assets/*filepath", s.asset)
 	r.GET("/api/library", s.listLibrary)
 	r.POST("/api/library/:id/publish", s.publishPack)
 
@@ -313,7 +316,8 @@ func (s *Server) draftManuscript(c *gin.Context) {
 func (s *Server) chat(c *gin.Context) {
 	id := c.Param("id")
 	var in struct {
-		Content string `json:"content"`
+		Content string       `json:"content"`
+		Refs    []store.Ref  `json:"refs"` // 引用卡片（段/元素，M2 起结构化）
 	}
 	if err := c.ShouldBindJSON(&in); err != nil || strings.TrimSpace(in.Content) == "" {
 		c.JSON(400, gin.H{"error": "消息不能为空"})
@@ -323,11 +327,40 @@ func (s *Server) chat(c *gin.Context) {
 		c.JSON(404, gin.H{"error": "项目不存在"})
 		return
 	}
-	m := &store.Msg{ProjectID: id, Role: "user", Type: "text", Content: in.Content}
+	in.Refs = sanitizeRefs(in.Refs)
+	m := &store.Msg{ProjectID: id, Role: "user", Type: "text", Content: in.Content, Refs: in.Refs}
 	_ = s.Store.SaveMsg(m)
 	s.Hub.Emit(id, "msg", "", in.Content)
-	go s.Agent.Run(id, in.Content)
+	go s.Agent.Run(id, in.Content, in.Refs)
 	c.JSON(202, gin.H{"ok": true})
+}
+
+// sanitizeRefs 引用卡片是模型上下文也是落盘数据：限量、限长、剔无效。
+func sanitizeRefs(refs []store.Ref) []store.Ref {
+	if len(refs) > 8 {
+		refs = refs[:8]
+	}
+	out := refs[:0]
+	for _, r := range refs {
+		if r.Idx < 1 {
+			continue
+		}
+		r.Key = clip(r.Key, 64)
+		r.ElementID = clip(r.ElementID, 64)
+		r.ElementName = clip(r.ElementName, 64)
+		if r.T < 0 {
+			r.T = 0
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+func clip(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n])
+	}
+	return s
 }
 
 func (s *Server) messages(c *gin.Context) {
@@ -378,6 +411,58 @@ func (s *Server) video(c *gin.Context) {
 	}
 	c.Header("Cache-Control", "no-store")
 	http.ServeContent(c.Writer, c.Request, "main.mp4", time.Now(), mustOpen(path))
+}
+
+// frame 修改态活合成物：单段帧 HTML（<template> 片段，plan §4.3 预览双模）。
+// 前端 LiveFrame 以 srcdoc 壳消费：壳内引项目 assets/gsap.min.js 并自行激活时间轴。
+func (s *Server) frame(c *gin.Context) {
+	seg := c.Param("seg")
+	if !isSegID(seg) {
+		c.JSON(400, gin.H{"error": "非法段标识"})
+		return
+	}
+	f, err := os.Open(pipeline.NewProject(s.DataDir, c.Param("id")).Artifact("compositions/frames/" + seg + ".html"))
+	if err != nil {
+		c.JSON(404, gin.H{"error": "合成物不存在"})
+		return
+	}
+	defer f.Close()
+	c.Header("Cache-Control", "no-store")
+	http.ServeContent(c.Writer, c.Request, seg+".html", time.Now(), f)
+}
+
+// asset 项目资产（gsap.min.js 等）——活合成物壳的确定性依赖，渲染引擎同款本地 gsap，无 CDN。
+func (s *Server) asset(c *gin.Context) {
+	// path.Clean 以 "/" 锚定后 ".." 全部被解析掉，再校验只剩相对路径
+	rel := strings.TrimPrefix(path.Clean("/"+strings.TrimPrefix(c.Param("filepath"), "/")), "/")
+	if rel == "" {
+		c.JSON(400, gin.H{"error": "非法路径"})
+		return
+	}
+	f, err := os.Open(filepath.Join(pipeline.NewProject(s.DataDir, c.Param("id")).Dir, "assets", filepath.FromSlash(rel)))
+	if err != nil {
+		c.JSON(404, gin.H{"error": "资产不存在"})
+		return
+	}
+	defer f.Close()
+	st, _ := f.Stat()
+	if st == nil || st.IsDir() {
+		c.JSON(404, gin.H{"error": "资产不存在"})
+		return
+	}
+	http.ServeContent(c.Writer, c.Request, st.Name(), time.Now(), f)
+}
+
+func isSegID(s string) bool {
+	if !strings.HasPrefix(s, "seg") || len(s) == 3 {
+		return false
+	}
+	for _, r := range s[3:] {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // ── 方法库（plan.md §4.6：起草自动 + 入库确认）───────────────

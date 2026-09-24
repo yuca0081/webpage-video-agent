@@ -2,11 +2,12 @@
 import { nextTick, ref, watch } from 'vue'
 import { NButton, NInput, NScrollbar, NSpin } from 'naive-ui'
 import { api } from '../api'
+import { fmtClock } from '../segtime'
 import type { ChatRef, Msg } from '../types'
 
 const props = defineProps<{ projectId: string; msgs: Msg[]; busy: boolean; refs: ChatRef[] }>()
 const draft = defineModel<string>('draft')
-const emit = defineEmits<{ sent: []; 'remove-ref': [idx: number]; 'clear-refs': [] }>()
+const emit = defineEmits<{ sent: []; 'remove-ref': [ref: ChatRef]; 'clear-refs': [] }>()
 
 const inputRef = ref<InstanceType<typeof NInput> | null>(null)
 const listRef = ref<InstanceType<typeof NScrollbar> | null>(null)
@@ -14,17 +15,23 @@ const listRef = ref<InstanceType<typeof NScrollbar> | null>(null)
 async function send() {
   const text = (draft.value ?? '').trim()
   if (!text || !props.projectId) return
-  // 引用列表随消息一并发给 Agent（每行一个 📎），发送后清空
-  const refLines = props.refs.map(r => `📎 段${r.idx}「${r.key}」`).join('\n')
+  // 引用卡片结构化随消息发出（落库 refs、Agent 拿精确上下文），发送后清空
   draft.value = ''
   emit('clear-refs')
-  await api.chat(props.projectId, refLines ? `${text}\n${refLines}` : text).catch(() => {})
+  await api.chat(props.projectId, text, props.refs).catch(() => {})
   emit('sent')
 }
 
 watch(() => props.msgs.length, () => nextTick(() => listRef.value?.scrollTo({ top: 1e9, behavior: 'smooth' })))
 
 const fmtTime = (iso: string) => (iso ? iso.slice(11, 16) : '')
+
+// 引用三态：段级 / 元素级（段 + 时刻 + 人话名）
+const refLabel = (r: ChatRef) =>
+  r.elementName
+    ? `📎 段${r.idx} · ${fmtClock(r.t)} ·「${r.elementName}」`
+    : `📎 段${r.idx}「${r.key}」`
+const refKey = (r: ChatRef) => r.elementId ?? `s${r.idx}`
 </script>
 
 <template>
@@ -49,17 +56,20 @@ const fmtTime = (iso: string) => (iso ? iso.slice(11, 16) : '')
         <template v-else>
           <div class="meta">{{ m.role === 'user' ? '我' : '帧述' }} · {{ fmtTime(m.created_at) }}</div>
           <div class="bubble" :class="m.role">{{ m.content }}</div>
+          <div v-if="m.role === 'user' && m.refs?.length" class="msg-refs">
+            <span v-for="r in m.refs" :key="refKey(r)" class="msg-ref">{{ refLabel(r) }}</span>
+          </div>
         </template>
       </div>
       <div v-if="busy && !msgs.length" class="none"><NSpin :size="14" /></div>
     </NScrollbar>
-    <!-- 引用列表：时间轴/分镜点选加入，可单删；随下一条消息发出 -->
+    <!-- 引用列表：时间轴/分镜/检视点选加入，可单删；随下一条消息结构化发出 -->
     <div v-if="refs.length" class="refs">
       <span class="refs-label">引用 {{ refs.length }}</span>
       <div class="ref-chips">
-        <span v-for="r in refs" :key="r.idx" class="ref-chip">
-          📎 段{{ r.idx }}「{{ r.key }}」
-          <button class="rm" title="移除" @click="emit('remove-ref', r.idx)">×</button>
+        <span v-for="r in refs" :key="refKey(r)" class="ref-chip">
+          {{ refLabel(r) }}
+          <button class="rm" title="移除" @click="emit('remove-ref', r)">×</button>
         </span>
       </div>
     </div>
@@ -121,5 +131,11 @@ const fmtTime = (iso: string) => (iso ? iso.slice(11, 16) : '')
   width: 16px; height: 16px; line-height: 1; border-radius: 50%; padding: 0;
 }
 .rm:hover { color: #fff; background: rgba(240, 198, 116, .3); }
+/* 历史消息内的引用 chips（结构化 refs 回显） */
+.msg-refs { display: flex; flex-wrap: wrap; gap: 4px; margin: 3px 6px 0 auto; justify-content: flex-end; }
+.msg-ref {
+  font-size: 11px; color: #c9a75f; background: #1d1a12; border: 1px solid rgba(240, 198, 116, .25);
+  border-radius: 999px; padding: 1px 8px;
+}
 .input { flex: none; display: flex; gap: 8px; padding: 10px; border-top: 1px solid #1d1d24; align-items: flex-end; }
 </style>

@@ -487,14 +487,14 @@ func (a *Agent) systemPrompt(id string, s State) string {
 工作准则：
 - 上面这份状态是唯一事实：状态说成片就绪就是已就绪，直接给下载地址 /api/projects/%s/video/main.mp4；不确定就先 read_project 核对，禁止按聊天历史想象状态。
 - 三前置硬门：文稿、分镜、风格样张（用户确认）——齐了才能 start_production，代码强制，别硬闯；成片就绪后不再 start_production。
-- 成片就绪后：改某段画面用 rework（整段重生成画面、音频不动）；用户带 📎 段引用的消息几乎都是 rework 意图。出片后主动 extract_stylepack 沉淀风格（一次就够，已提炼过不必重复）。
+- 成片就绪后：改某段画面用 rework（整段重生成画面、音频不动）；用户带 📎 段/元素引用的消息几乎都是 rework 意图。元素引用指名了改哪个元素，rework 的 instruction 里点名它（人话名，必要时带元素 id 与时刻）。出片后主动 extract_stylepack 沉淀风格（一次就够，已提炼过不必重复）。
 - 默认自主连贯：能做的直接做（出分镜→出样张→自检一路做下去），到用户门（风格确认）停下说清楚等什么。
 - 工具被拒就换路或向用户解释，不重复硬试；每轮最多 %d 步。
 - 回复短：一段话讲清做了什么、下一步是什么，不堆术语、不复述参数。`, s.Name, id, s.summary(), id, maxSteps)
 }
 
-// Run 一轮对话：userText 已入库。Agent 循环产出最终回复入库并广播。
-func (a *Agent) Run(projectID, userText string) {
+// Run 一轮对话：userText 与 refs 已入库。Agent 循环产出最终回复入库并广播。
+func (a *Agent) Run(projectID, userText string, refs []store.Ref) {
 	p := pipeline.NewProject(a.DataDir, projectID)
 	prov, err := llm.FromEnv(llm.RoleDialogue)
 	if err != nil {
@@ -507,7 +507,8 @@ func (a *Agent) Run(projectID, userText string) {
 	}
 	// 实时状态随最新 user 消息注入（模型对最新消息权重最高，防聊天历史锚定幻觉）
 	msgs = append(msgs, openai.ChatCompletionMessage{Role: openai.ChatMessageRoleUser, Content:
-		fmt.Sprintf("［系统·实时项目状态，以此为准］\n%s\n\n用户消息：%s", a.State(projectID).summary(), userText)})
+		fmt.Sprintf("［系统·实时项目状态，以此为准］\n%s\n%s\n用户消息：%s",
+			a.State(projectID).summary(), formatRefs(refs), userText)})
 
 	final := ""
 	for step := 0; step < maxSteps; step++ {
@@ -535,6 +536,32 @@ func (a *Agent) Run(projectID, userText string) {
 		final = "我先停一下：这轮动作做完了，等你的下一步指示。"
 	}
 	a.finish(projectID, final, "text")
+}
+
+// formatRefs 引用卡片 → 模型可读的引用块（空则空串，不占位）。
+func formatRefs(refs []store.Ref) string {
+	if len(refs) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("用户引用（点选自舞台，精确上下文，优先于口头描述）：\n")
+	for _, r := range refs {
+		line := fmt.Sprintf("- 段%d", r.Idx)
+		if r.Key != "" {
+			line += fmt.Sprintf("「%s」", r.Key)
+		}
+		if r.T > 0 {
+			line += fmt.Sprintf(" · %.1fs", r.T)
+		}
+		if r.ElementName != "" {
+			line += fmt.Sprintf(" · 元素「%s」", r.ElementName)
+			if r.ElementID != "" {
+				line += fmt.Sprintf("（%s）", r.ElementID)
+			}
+		}
+		b.WriteString(line + "\n")
+	}
+	return b.String()
 }
 
 // execTool 门禁 + 执行 + 记账（工具轨迹入聊天案卷）。

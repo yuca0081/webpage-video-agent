@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { NButton, NScrollbar, NSpin, NTag } from 'naive-ui'
-import type { AudioMeta, ProjectView, Storyboard, StyleSamples } from '../types'
+import type { AudioMeta, ChatRef, ProjectView, Storyboard, StyleSamples } from '../types'
+import { segAt, segTable } from '../segtime'
 import { videoURL } from '../api'
 import Timeline from './Timeline.vue'
+import LiveFrame from './LiveFrame.vue'
 
 const props = defineProps<{
   view: ProjectView | null
@@ -15,7 +17,7 @@ const props = defineProps<{
   audioMeta: AudioMeta | null
   pickedIdx: number[]
 }>()
-const emit = defineEmits<{ 'confirm-style': []; seg: [idx: number, key: string] }>()
+const emit = defineEmits<{ 'confirm-style': []; seg: [idx: number, key: string]; 'seg-element': [ref: ChatRef] }>()
 
 const stageName: Record<string, string> = {
   tts: '配音', compositions: '画面', assemble: '组装', check: '检查', render: '渲染',
@@ -27,9 +29,50 @@ const cur = ref(0)
 const dur = ref(0)
 function onSeek(t: number) {
   cur.value = t
+  // video 用 v-show（检视时隐藏）：currentTime 保持同步，退出检视不跳变
   if (videoEl.value) videoEl.value.currentTime = t
+  if (inspect.value) {
+    const hit = segAt(segsT.value, t)
+    if (hit) { inspectSegId.value = hit.segId; inspectT.value = t }
+  }
 }
 function pickSeg(idx: number, key: string) { emit('seg', idx, key) }
+
+// ── 检视模式（plan §4.3 修改态）：video ↔ 活合成物 LiveFrame ──
+const inspect = ref(false)
+const inspectSegId = ref('') // 当前加载的段（segNN）
+const inspectT = ref(0) // 检视时刻（全局秒）
+const frameRev = ref(0) // 重做完 bump，强制 LiveFrame 重载帧
+
+const segsT = computed(() => segTable(props.storyboard, props.audioMeta))
+const inspectCol = computed(() => segsT.value.find(s => s.segId === inspectSegId.value) ?? null)
+const inspectLocalT = computed(() => {
+  const c = inspectCol.value
+  return c ? Math.max(0, inspectT.value - c.start) : 0
+})
+
+function toggleInspect() {
+  if (!segsT.value.length) return
+  if (inspect.value) { inspect.value = false; return }
+  videoEl.value?.pause()
+  const hit = segAt(segsT.value, cur.value)
+  inspectSegId.value = hit?.segId ?? segsT.value[0].segId
+  inspectT.value = cur.value
+  inspect.value = true
+}
+
+// 元素点选 → 元素级 📎 引用（带上检视时刻）
+function onPickElement(p: { segId: string; id: string; name: string }) {
+  const c = segsT.value.find(s => s.segId === p.segId)
+  if (!c) return
+  emit('seg-element', { idx: c.idx, key: c.key, t: inspectT.value, elementId: p.id, elementName: p.name })
+}
+
+// 制作中帧文件在重写：退出检视；重做流程结束（stageSummary 消失）→ bump 重载
+watch(() => props.stageSummary, (nv, ov) => {
+  if (nv) inspect.value = false
+  else if (ov) frameRev.value++
+})
 </script>
 
 <template>
@@ -105,10 +148,25 @@ function pickSeg(idx: number, key: string) { emit('seg', idx, key) }
           </div>
           <span class="rework-hint">段级重做中</span>
         </div>
+        <div class="tool-row">
+          <button
+            class="inspect-btn" :class="{ on: inspect }"
+            :disabled="!!stageSummary || view.producing"
+            @click="toggleInspect"
+          >{{ inspect ? '退出检视' : '🔍 检视' }}</button>
+          <span v-if="inspect" class="inspect-hint">活合成物：悬停显示元素名，点选加 📎 引用，时间轴拖动定位</span>
+          <span v-else class="tool-hint">暂停后点「检视」，可直接指着画面里的元素说话</span>
+        </div>
         <div class="player">
           <video
+            v-show="!inspect"
             ref="videoEl" :src="videoURL(videoId)" controls preload="metadata"
             @timeupdate="cur = videoEl!.currentTime" @loadedmetadata="dur = videoEl!.duration || 0"
+          />
+          <LiveFrame
+            v-if="inspect && inspectSegId"
+            :video-id="videoId" :seg-id="inspectSegId" :local-time="inspectLocalT" :rev="frameRev"
+            @pick="onPickElement"
           />
         </div>
         <Timeline
@@ -117,7 +175,7 @@ function pickSeg(idx: number, key: string) { emit('seg', idx, key) }
           :picked-idx="pickedIdx" @seek="onSeek" @pick="pickSeg"
         />
         <div class="foot-row">
-          <span class="video-hint">点分镜/字幕/配音块加 📎 引用，拖播放头定位，聊天里说要改什么——只重做那一段</span>
+          <span class="video-hint">点分镜/字幕/配音块或检视点元素加 📎 引用，聊天里说要改什么——只重做那一段</span>
           <a class="dl" :href="videoURL(videoId)" :download="`${view.name}.mp4`">下载成片 · {{ view.aspect === '9:16' ? '1080×1920' : '1080p' }}</a>
         </div>
       </div>
@@ -180,6 +238,22 @@ figcaption span { font-size: 12px; color: #8a8a96; }
 .player video { width: 100%; border-radius: 8px; background: #000; display: block; }
 .video-pane.vertical .player { width: auto; flex: 1 1 0; min-height: 0; display: flex; justify-content: center; }
 .video-pane.vertical .player video { width: auto; height: auto; max-width: 100%; max-height: 100%; }
+/* 检视模式：LiveFrame 竖屏适配（横屏走组件内默认 16:9） */
+.video-pane.vertical .player :deep(.live-frame),
+.video-pane.vertical .player :deep(.live-loading),
+.video-pane.vertical .player :deep(.live-err) {
+  width: auto; height: 100%; max-width: 100%; aspect-ratio: 9 / 16;
+}
+.tool-row { width: min(100%, 1080px); display: flex; align-items: center; gap: 10px; min-height: 26px; }
+.inspect-btn {
+  flex: none; border: 1px solid #5c4d24; background: #211d12; color: #f0c674;
+  font-size: 12px; padding: 3px 12px; border-radius: 999px; cursor: pointer;
+}
+.inspect-btn:hover { background: #2a2416; }
+.inspect-btn.on { background: #f0c674; color: #14140f; font-weight: 600; }
+.inspect-btn:disabled { opacity: .4; cursor: not-allowed; }
+.inspect-hint { font-size: 12px; color: #f0c674; }
+.tool-hint { font-size: 12px; color: #55555f; }
 .rework-strip { display: flex; align-items: center; gap: 10px; }
 .rework-hint { font-size: 12px; color: #f0c674; }
 .foot-row { width: min(100%, 1080px); display: flex; align-items: center; justify-content: space-between; gap: 12px; }

@@ -1,4 +1,4 @@
-import type { AudioMeta, Msg, ProjectRow, ProjectView, Storyboard, StylePack, StyleSamples } from './types'
+import type { AudioMeta, ChatRef, Msg, ProjectRow, ProjectView, Storyboard, StylePack, StyleSamples } from './types'
 
 async function j<T>(res: Response): Promise<T> {
   if (!res.ok) throw new Error((await res.json().catch(() => ({} as any))).error ?? res.statusText)
@@ -29,12 +29,18 @@ export const api = {
   confirmStyle: (id: string) =>
     fetch(`/api/projects/${id}/style/confirm`, { method: 'POST' }).then(r => j<{ ok: boolean }>(r)),
 
-  chat: (id: string, content: string) =>
+  chat: (id: string, content: string, refs: ChatRef[] = []) =>
     fetch(`/api/projects/${id}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, refs }),
     }).then(r => j<{ ok: boolean }>(r)),
+
+  frameText: (id: string, seg: string) =>
+    fetch(`/api/projects/${id}/frames/${seg}`).then(r => {
+      if (!r.ok) throw new Error(r.statusText)
+      return r.text()
+    }),
 
   draftManuscript: (topic: string, minutes = 1) =>
     fetch('/api/draft/manuscript', {
@@ -56,3 +62,5 @@ export const api = {
 }
 
 export const videoURL = (id: string) => `/api/projects/${id}/video/main.mp4`
+// 活合成物壳的确定性依赖：项目内本地 gsap（与渲染引擎同一份，无 CDN）
+export const assetURL = (id: string, p: string) => `/api/projects/${id}/assets/${p}`

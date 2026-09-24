@@ -68,12 +68,17 @@ function selectProject(id: string) {
   stageState.value = {}
 }
 
-// 📎 引用：点分镜/时间轴加入（按段去重），可单删、可清空
+// 📎 引用：点分镜/时间轴加段级（按段去重）；检视点元素加元素级（按元素去重）；可单删、可清空
 function addRef(idx: number, key: string) {
   if (!chatRefs.value.some(r => r.idx === idx)) chatRefs.value = [...chatRefs.value, { idx, key }]
 }
-function removeRef(idx: number) {
-  chatRefs.value = chatRefs.value.filter(r => r.idx !== idx)
+function addElementRef(ref: ChatRef) {
+  if (ref.elementId && chatRefs.value.some(r => r.elementId === ref.elementId)) return
+  chatRefs.value = [...chatRefs.value, ref]
+}
+function removeRef(ref: ChatRef) {
+  chatRefs.value = chatRefs.value.filter(r =>
+    ref.elementId ? r.elementId !== ref.elementId : r.idx !== ref.idx)
 }
 
 async function refresh() {
@@ -180,6 +185,7 @@ const themeOverrides = {
             :picked-idx="chatRefs.map(r => r.idx)"
             @confirm-style="async () => { if (current) { await api.confirmStyle(current); refresh() } }"
             @seg="addRef"
+            @seg-element="addElementRef"
           />
         </main>
         <ChatPanel

@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import type { AudioMeta, Storyboard } from '../types'
+import { segTable } from '../segtime'
 
 // 多轨时间轴：标尺（可点/拖擦洗）+ 分镜/字幕/配音三轨 + 播放头。
-// 数据：分镜 duration_hint；有 audio_meta 时用真实配音时长和字级时间戳切短语字幕。
+// 数据：分镜 duration_hint；有 audio_meta 时用真实配音时长（+0.35 尾垫，与 MP4 拼接口径一致）
+// 和字级时间戳切短语字幕。
 const props = defineProps<{
   storyboard: Storyboard | null
   audioMeta: AudioMeta | null
@@ -16,21 +18,10 @@ const emit = defineEmits<{ seek: [t: number]; pick: [idx: number, key: string] }
 const PUNCT = '，。！？；、：,.!?;:…—·'
 const hasPunct = (s: string) => [...s].some(ch => PUNCT.includes(ch))
 
-interface SegCol { idx: number; key: string; dur: number; start: number }
+interface SegCol { idx: number; segId: string; key: string; dur: number; start: number }
 interface Phrase { idx: number; key: string; start: number; dur: number; text: string }
 
-const segs = computed<SegCol[]>(() => {
-  const sb = props.storyboard
-  if (!sb) return []
-  let acc = 0
-  return sb.segments.map((s, i) => {
-    const v = props.audioMeta?.voices[i]
-    const dur = v?.duration_s || s.duration_hint || 3
-    const col = { idx: s.idx, key: s.key, dur, start: acc }
-    acc += dur
-    return col
-  })
-})
+const segs = computed<SegCol[]>(() => segTable(props.storyboard, props.audioMeta))
 const total = computed(() => segs.value.reduce((a, s) => a + s.dur, 0) || 1)
 
 // 短语字幕：按标点收句，超 4.5 秒强收（与管线 tts_align 的断句习惯一致）

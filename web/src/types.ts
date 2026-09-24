@@ -57,6 +57,7 @@ export interface Msg {
   role: 'user' | 'agent' | 'system'
   type: 'text' | 'tool_call' | 'progress' | 'error'
   content: string
+  refs?: ChatRef[]
   tool_name?: string
   tool_args?: string
   created_at: string
@@ -94,8 +95,11 @@ export interface AudioMeta {
   voices: AudioVoice[]
 }
 
-// 聊天输入框上方的引用项（时间轴/分镜点击加入，随消息发给 Agent）
+// 聊天输入框上方的引用项（时间轴/分镜/检视点选加入，随消息结构化发给 Agent）
 export interface ChatRef {
   idx: number
   key: string
+  t?: number           // 全局时刻（秒），元素引用携带
+  elementId?: string   // 元素 DOM id（如 seg03-arrow2）
+  elementName?: string // 人话名（如 箭头：蓝光弹开）
 }
