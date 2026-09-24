@@ -189,7 +189,7 @@ var tools = []tool{
 			return ""
 		},
 		run: func(a *Agent, p *pipeline.Project, _ string) string {
-			if err := pipeline.Run(p, "storyboard"); err != nil {
+			if err := pipeline.Run(context.Background(), p, "storyboard"); err != nil {
 				return "分镜生成失败：" + err.Error()
 			}
 			sb, _ := p.LoadStoryboard()
@@ -227,7 +227,7 @@ var tools = []tool{
 			_ = os.WriteFile(p.Artifact("input/storyboard_notes.txt"), []byte(in.Instruction), 0o644)
 			_ = os.Remove(p.Artifact("storyboards/storyboard.json"))
 			_ = os.Remove(p.LLMOutput("storyboard"))
-			if err := pipeline.Run(p, "storyboard"); err != nil {
+			if err := pipeline.Run(context.Background(), p, "storyboard"); err != nil {
 				return "分镜重生成失败：" + err.Error()
 			}
 			sb, _ := p.LoadStoryboard()

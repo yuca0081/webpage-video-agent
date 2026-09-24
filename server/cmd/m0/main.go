@@ -12,6 +12,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -116,7 +117,7 @@ func cmdRun(cfg *config.Config, id, until string) {
 		fatal(fmt.Errorf("项目不存在: %s", p.Dir))
 	}
 	fmt.Printf("项目 %s · LLM 模式: %s\n", id, cfg.LLMMode)
-	if err := pipeline.Run(p, until); err != nil {
+	if err := pipeline.Run(context.Background(), p, until); err != nil {
 		// 等待 LLM / 待实现 属正常停点，退出码 0 方便脚本串联
 		os.Exit(0)
 	}

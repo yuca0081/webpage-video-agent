@@ -115,6 +115,7 @@ function openSSE(id: string) {
   })
   es.addEventListener('style_confirmed', () => loadProject(id).catch(() => {}))
   es.addEventListener('done', () => { stageState.value = {}; refresh() })
+  es.addEventListener('cancelled', () => { stageState.value = {}; refresh() })
   es.addEventListener('error', () => refresh()) // SSE 层错误 → 全量刷新
 }
 
@@ -186,6 +187,7 @@ const themeOverrides = {
             @confirm-style="async () => { if (current) { await api.confirmStyle(current); refresh() } }"
             @seg="addRef"
             @seg-element="addElementRef"
+            @cancel="async () => { if (current) { await api.cancel(current).catch(() => {}); refresh() } }"
           />
         </main>
         <ChatPanel

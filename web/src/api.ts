@@ -55,6 +55,9 @@ export const api = {
   produce: (id: string) =>
     fetch(`/api/projects/${id}/produce`, { method: 'POST' }).then(r => j<{ ok: boolean }>(r)),
 
+  cancel: (id: string) =>
+    fetch(`/api/projects/${id}/cancel`, { method: 'POST' }).then(r => j<{ ok: boolean }>(r)),
+
   listLibrary: () => fetch('/api/library').then(r => j<StylePack[]>(r)),
 
   publishPack: (id: string) =>

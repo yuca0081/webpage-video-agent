@@ -17,7 +17,7 @@ const props = defineProps<{
   audioMeta: AudioMeta | null
   pickedIdx: number[]
 }>()
-const emit = defineEmits<{ 'confirm-style': []; seg: [idx: number, key: string]; 'seg-element': [ref: ChatRef] }>()
+const emit = defineEmits<{ 'confirm-style': []; seg: [idx: number, key: string]; 'seg-element': [ref: ChatRef]; cancel: [] }>()
 
 const stageName: Record<string, string> = {
   tts: '配音', compositions: '画面', assemble: '组装', check: '检查', render: '渲染',
@@ -147,6 +147,7 @@ watch(() => props.stageSummary, (nv, ov) => {
             <span class="dot" />{{ stageName[st.key] ?? st.key }}
           </div>
           <span class="rework-hint">段级重做中</span>
+          <button v-if="view.producing" class="stop-btn" @click="emit('cancel')">■ 停止</button>
         </div>
         <div class="tool-row">
           <button
@@ -189,6 +190,7 @@ watch(() => props.stageSummary, (nv, ov) => {
             <span class="dot" />{{ stageName[st.key] ?? st.key }}
           </div>
         </div>
+        <button v-if="view.producing" class="stop-btn" @click="emit('cancel')">■ 停止制作</button>
       </div>
     </template>
 
@@ -276,6 +278,11 @@ figcaption span { font-size: 12px; color: #8a8a96; }
 .pstage[data-state="done"] .dot { background: #7ee2a8; }
 .pstage[data-state="error"] { color: #ff9d9d; border-color: #66302b; }
 .pstage[data-state="error"] .dot { background: #ff9d9d; }
+.stop-btn {
+  align-self: center; padding: 6px 16px; border-radius: 8px; cursor: pointer;
+  color: #ffb3b3; background: #2a1a1c; border: 1px solid #5a3230; font-size: 13px;
+}
+.stop-btn:hover { background: #3a2224; border-color: #7a403e; }
 @keyframes pulse { 50% { opacity: .35; } }
 .empty { align-items: center; justify-content: center; }
 .none { color: #55555f; }

@@ -34,28 +34,38 @@ type Runner struct {
 
 var (
 	mu      sync.Mutex
-	running = map[string]bool{}
+	running = map[string]context.CancelFunc{}
 )
 
 // Start 启动制作（同项目幂等：已在跑则返回 false）。
 func (r *Runner) Start(projectID string) (bool, error) {
 	mu.Lock()
 	defer mu.Unlock()
-	if running[projectID] {
+	if _, live := running[projectID]; live {
 		return false, nil
 	}
 	p := pipeline.NewProject(r.DataDir, projectID)
 	if _, err := os.Stat(p.Dir); err != nil {
 		return false, fmt.Errorf("项目不存在: %w", err)
 	}
-	running[projectID] = true
+	ctx, cancel := context.WithCancel(context.Background())
+	running[projectID] = cancel
 	go func() {
 		defer func() {
 			mu.Lock()
 			delete(running, projectID)
 			mu.Unlock()
 		}()
-		err := r.run(p)
+		err := r.run(ctx, p)
+		if errors.Is(err, context.Canceled) {
+			r.emit(projectID, "stage", "pipeline", "cancelled")
+			r.emit(projectID, "cancelled", "", "用户取消制作")
+			r.Manifest(p, "produce.cancelled", "")
+			if r.OnDone != nil {
+				r.OnDone(projectID, "cancelled")
+			}
+			return
+		}
 		if err != nil {
 			r.emit(projectID, "stage", "pipeline", "error: "+err.Error())
 			r.emit(projectID, "error", "", err.Error())
@@ -68,19 +78,35 @@ func (r *Runner) Start(projectID string) (bool, error) {
 	return true, nil
 }
 
+// Cancel 请求取消进行中的制作/重做（协作式：杀子进程 + 阶段边界退出）。
+// 返回 false = 该项目没有在跑的任务。
+func (r *Runner) Cancel(projectID string) bool {
+	mu.Lock()
+	cancel, live := running[projectID]
+	mu.Unlock()
+	if !live {
+		return false
+	}
+	cancel()
+	return true
+}
+
 // Rework 段级重做（plan.md §3.5：修改单元可到元素，重做单元=段）。
 // 只重生成该段画面（音频/时长不变）→ 组装 → 检查 → 整片重渲拼接。
 func (r *Runner) Rework(projectID, segID, instruction string) (bool, error) {
+	ctx, cancel := context.WithCancel(context.Background())
 	mu.Lock()
-	if running[projectID] {
+	if _, live := running[projectID]; live {
 		mu.Unlock()
+		cancel()
 		return false, nil
 	}
-	running[projectID] = true
+	running[projectID] = cancel
 	mu.Unlock()
 	p := pipeline.NewProject(r.DataDir, projectID)
 	sb, err := p.LoadStoryboard()
 	if err != nil {
+		cancel()
 		mu.Lock()
 		delete(running, projectID)
 		mu.Unlock()
@@ -88,6 +114,7 @@ func (r *Runner) Rework(projectID, segID, instruction string) (bool, error) {
 	}
 	seg, found := findSegment(sb, segID)
 	if !found {
+		cancel()
 		mu.Lock()
 		delete(running, projectID)
 		mu.Unlock()
@@ -99,7 +126,16 @@ func (r *Runner) Rework(projectID, segID, instruction string) (bool, error) {
 			delete(running, projectID)
 			mu.Unlock()
 		}()
-		err := r.runRework(p, seg, instruction)
+		err := r.runRework(ctx, p, seg, instruction)
+		if errors.Is(err, context.Canceled) {
+			r.emit(projectID, "stage", "pipeline", "cancelled")
+			r.emit(projectID, "cancelled", "", "用户取消重做")
+			r.Manifest(p, "rework.cancelled", seg.ID)
+			if r.OnDone != nil {
+				r.OnDone(projectID, "cancelled")
+			}
+			return
+		}
 		if err != nil {
 			r.emit(projectID, "stage", "pipeline", "error: "+err.Error())
 			r.emit(projectID, "error", "", err.Error())
@@ -122,7 +158,7 @@ func findSegment(sb *contract.Storyboard, segID string) (contract.Segment, bool)
 }
 
 // runRework 单段重做管线。旁白/音频不动；instruction 作为画面改写要求回喂。
-func (r *Runner) runRework(p *pipeline.Project, seg contract.Segment, instruction string) error {
+func (r *Runner) runRework(ctx context.Context, p *pipeline.Project, seg contract.Segment, instruction string) error {
 	id := p.ID
 	r.Manifest(p, "rework.start", fmt.Sprintf("%s: %s", seg.ID, firstLine(instruction, 80)))
 	r.emit(id, "progress", "rework", fmt.Sprintf("重做 段%d「%s」", seg.Idx, seg.Key))
@@ -130,28 +166,28 @@ func (r *Runner) runRework(p *pipeline.Project, seg contract.Segment, instructio
 	// 1. 该段画面重生成（删旧 spec 强制重出；其余段产物原样复用）
 	r.emit(id, "stage", "compositions", "running")
 	feedback := "用户对这一段画面的修改要求（必须落实）：\n" + instruction
-	if err := r.genSpecs(p, feedback, seg.ID); err != nil {
+	if err := r.genSpecs(ctx, p, feedback, seg.ID); err != nil {
 		return err
 	}
-	if err := r.fetchImages(p); err != nil {
+	if err := r.fetchImages(ctx, p); err != nil {
 		return err
 	}
-	if err := r.renderSpecs(p); err != nil {
+	if err := r.renderSpecs(ctx, p); err != nil {
 		return err
 	}
 	r.clearFrames(p, seg.ID)
-	if err := pipeline.Run(p, "compositions"); err != nil {
+	if err := pipeline.Run(ctx, p, "compositions"); err != nil {
 		return fmt.Errorf("合成物落盘失败: %w", err)
 	}
 	r.emit(id, "stage", "compositions", "done")
 
 	// 2. 重组装（时间轴不变）+ 检查（失败只修这一段）
 	r.emit(id, "stage", "assemble", "running")
-	if err := r.python("ai/assemble.py", p.Dir, 2*time.Minute); err != nil {
+	if err := r.python(ctx, "ai/assemble.py", p.Dir, 2*time.Minute); err != nil {
 		return fmt.Errorf("组装失败: %w", err)
 	}
 	r.emit(id, "stage", "assemble", "done")
-	if err := r.checkWithRepair(p, seg.ID); err != nil {
+	if err := r.checkWithRepair(ctx, p, seg.ID); err != nil {
 		return err
 	}
 
@@ -160,10 +196,10 @@ func (r *Runner) runRework(p *pipeline.Project, seg contract.Segment, instructio
 	if err := os.Remove(p.Artifact("renders/main.mp4")); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	if err := pipeline.Run(p, "render"); err != nil {
+	if err := pipeline.Run(ctx, p, "render"); err != nil {
 		return fmt.Errorf("渲染失败: %w", err)
 	}
-	if err := pipeline.Run(p, "stitch"); err != nil {
+	if err := pipeline.Run(ctx, p, "stitch"); err != nil {
 		return err
 	}
 	r.emit(id, "stage", "render", "done")
@@ -178,7 +214,8 @@ func (r *Runner) runRework(p *pipeline.Project, seg contract.Segment, instructio
 func (r *Runner) IsRunning(projectID string) bool {
 	mu.Lock()
 	defer mu.Unlock()
-	return running[projectID]
+	_, live := running[projectID]
+	return live
 }
 
 func (r *Runner) emit(id, typ, stage, detail string) {
@@ -187,31 +224,31 @@ func (r *Runner) emit(id, typ, stage, detail string) {
 
 func (r *Runner) Manifest(p *pipeline.Project, event, detail string) { p.Manifest(event, detail) }
 
-func (r *Runner) run(p *pipeline.Project) error {
+func (r *Runner) run(ctx context.Context, p *pipeline.Project) error {
 	id := p.ID
 
 	// ── 1. TTS + 词级对齐（幂等：缺什么补什么）─────────────────
 	r.emit(id, "stage", "tts", "running")
-	if err := r.python("ai/tts_align.py", p.Dir, 30*time.Minute); err != nil {
+	if err := r.python(ctx, "ai/tts_align.py", p.Dir, 30*time.Minute); err != nil {
 		return fmt.Errorf("TTS/对齐失败: %w", err)
 	}
 	r.emit(id, "stage", "tts", "done")
 	r.Manifest(p, "produce.tts", "done")
 
 	// ── 2. 语义 spec 生成（LLM）+ 确定性渲染 + 合成物落盘 ────────
-	if err := r.compositions(p); err != nil {
+	if err := r.compositions(ctx, p); err != nil {
 		return err
 	}
 
 	// ── 3. 组装 ─────────────────────────────────────────────
 	r.emit(id, "stage", "assemble", "running")
-	if err := r.python("ai/assemble.py", p.Dir, 2*time.Minute); err != nil {
+	if err := r.python(ctx, "ai/assemble.py", p.Dir, 2*time.Minute); err != nil {
 		return fmt.Errorf("组装失败: %w", err)
 	}
 	r.emit(id, "stage", "assemble", "done")
 
 	// ── 4. check 门禁（自修复：报错回喂重生成 spec）────────────
-	if err := r.checkWithRepair(p, ""); err != nil {
+	if err := r.checkWithRepair(ctx, p, ""); err != nil {
 		return err
 	}
 
@@ -220,10 +257,10 @@ func (r *Runner) run(p *pipeline.Project) error {
 	if err := os.Remove(p.Artifact("renders/main.mp4")); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	if err := pipeline.Run(p, "render"); err != nil {
+	if err := pipeline.Run(ctx, p, "render"); err != nil {
 		return fmt.Errorf("渲染失败: %w", err)
 	}
-	if err := pipeline.Run(p, "stitch"); err != nil {
+	if err := pipeline.Run(ctx, p, "stitch"); err != nil {
 		return err
 	}
 	r.emit(id, "stage", "render", "done")
@@ -236,19 +273,19 @@ func (r *Runner) run(p *pipeline.Project) error {
 }
 
 // compositions 生成/复用 spec → 搜图本地化 → 渲染 HTML → 清旧帧 → 管线落盘。
-func (r *Runner) compositions(p *pipeline.Project) error {
+func (r *Runner) compositions(ctx context.Context, p *pipeline.Project) error {
 	r.emit(p.ID, "stage", "compositions", "running")
-	if err := r.genSpecs(p, "", ""); err != nil {
+	if err := r.genSpecs(ctx, p, "", ""); err != nil {
 		return err
 	}
-	if err := r.fetchImages(p); err != nil {
+	if err := r.fetchImages(ctx, p); err != nil {
 		return err
 	}
-	if err := r.renderSpecs(p); err != nil {
+	if err := r.renderSpecs(ctx, p); err != nil {
 		return err
 	}
 	r.clearFrames(p, "")
-	if err := pipeline.Run(p, "compositions"); err != nil {
+	if err := pipeline.Run(ctx, p, "compositions"); err != nil {
 		return fmt.Errorf("合成物落盘失败: %w", err)
 	}
 	r.emit(p.ID, "stage", "compositions", "done")
@@ -257,14 +294,20 @@ func (r *Runner) compositions(p *pipeline.Project) error {
 
 // checkWithRepair check 失败 → 报错回喂 → 重生成 spec → 重渲染 → 重查（最多 3 轮，plan §4.5）。
 // only 非空 = 修复范围限定该段（rework），空 = 全片（首次制作）。
-func (r *Runner) checkWithRepair(p *pipeline.Project, only string) error {
+func (r *Runner) checkWithRepair(ctx context.Context, p *pipeline.Project, only string) error {
 	for attempt := 1; attempt <= 3; attempt++ {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		r.emit(p.ID, "stage", "check", fmt.Sprintf("running（第 %d 次）", attempt))
 		_ = os.Remove(p.Artifact(".hyperframes-ok"))
-		err := pipeline.Run(p, "check")
+		err := pipeline.Run(ctx, p, "check")
 		if err == nil {
 			r.emit(p.ID, "stage", "check", "done")
 			return nil
+		}
+		if ctx.Err() != nil { // 用户取消 ≠ check 失败，别进修复轮
+			return ctx.Err()
 		}
 		if attempt == 3 {
 			r.emit(p.ID, "stage", "check", "error: "+err.Error())
@@ -274,20 +317,20 @@ func (r *Runner) checkWithRepair(p *pipeline.Project, only string) error {
 			"\n常见原因：元素重叠/越界。请整体重排：拉开间距、避开底部字幕带（禁放区见布局规则）、必要时减少元素。"
 		r.emit(p.ID, "stage", "check", "repair：带着报错重生成画面")
 		r.Manifest(p, "check.repair", tail(err.Error(), 10))
-		if err := r.genSpecs(p, feedback, only); err != nil {
+		if err := r.genSpecs(ctx, p, feedback, only); err != nil {
 			return err
 		}
-		if err := r.fetchImages(p); err != nil {
+		if err := r.fetchImages(ctx, p); err != nil {
 			return err
 		}
-		if err := r.renderSpecs(p); err != nil {
+		if err := r.renderSpecs(ctx, p); err != nil {
 			return err
 		}
 		r.clearFrames(p, only)
-		if err := pipeline.Run(p, "compositions"); err != nil {
+		if err := pipeline.Run(ctx, p, "compositions"); err != nil {
 			return fmt.Errorf("合成物落盘失败: %w", err)
 		}
-		if err := r.python("ai/assemble.py", p.Dir, 2*time.Minute); err != nil {
+		if err := r.python(ctx, "ai/assemble.py", p.Dir, 2*time.Minute); err != nil {
 			return fmt.Errorf("组装失败: %w", err)
 		}
 	}
@@ -328,7 +371,7 @@ func loadAudioMeta(p *pipeline.Project) (map[string]voiceMeta, error) {
 
 // genSpecs 每段一份语义 spec（llm/comp-segNN.spec.json）。
 // feedback 非空 = 带要求重生成；only 非空 = 只处理该段（rework），空 = 全片。
-func (r *Runner) genSpecs(p *pipeline.Project, feedback, only string) error {
+func (r *Runner) genSpecs(ctx context.Context, p *pipeline.Project, feedback, only string) error {
 	sb, err := p.LoadStoryboard()
 	if err != nil {
 		return fmt.Errorf("先完成 storyboard: %w", err)
@@ -360,13 +403,16 @@ func (r *Runner) genSpecs(p *pipeline.Project, feedback, only string) error {
 		if only != "" && seg.ID != only {
 			continue
 		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		specPath := p.Artifact("llm/comp-" + seg.ID + ".spec.json")
 		if _, err := os.Stat(specPath); err == nil && feedback == "" && instruction == "" {
 			continue // 已有产物，跳过（重放语义）
 		}
 		v := voices[seg.ID]
 		var spec contract.CompSpec
-		u1, err := prov.GenerateJSON(context.Background(), system, specUserPrompt(seg, v, instruction, feedback, cv, style), &spec)
+		u1, err := prov.GenerateJSON(ctx, system, specUserPrompt(seg, v, instruction, feedback, cv, style), &spec)
 		if err != nil {
 			return fmt.Errorf("%s spec 生成失败: %w", seg.ID, err)
 		}
@@ -375,7 +421,7 @@ func (r *Runner) genSpecs(p *pipeline.Project, feedback, only string) error {
 		for repair := 0; repair < 2 && len(errs) > 0; repair++ { // 修复：违规项回喂，最多 2 轮
 			fb := instruction + feedback + "\n上一版 spec 被契约校验拒绝，必须逐条修正：\n- " + strings.Join(errs, "\n- ")
 			var fixed contract.CompSpec
-			u2, err2 := prov.GenerateJSON(context.Background(), system, specUserPrompt(seg, v, "", fb, cv, style), &fixed)
+			u2, err2 := prov.GenerateJSON(ctx, system, specUserPrompt(seg, v, "", fb, cv, style), &fixed)
 			if err2 != nil {
 				return fmt.Errorf("%s spec 修复失败: %w", seg.ID, err2)
 			}
@@ -390,7 +436,7 @@ func (r *Runner) genSpecs(p *pipeline.Project, feedback, only string) error {
 			if len(spec.Elements) < 3 {
 				r.emit(p.ID, "progress", "compositions", fmt.Sprintf("%s 清洗后仅 %d 元素，整段重出", seg.ID, len(spec.Elements)))
 				var retry contract.CompSpec
-				u2, err2 := prov.GenerateJSON(context.Background(), system,
+					u2, err2 := prov.GenerateJSON(ctx, system,
 					specUserPrompt(seg, v, instruction,
 						"上一版几乎每个元素的 kind 都是空的或不认识的。kind 必须从可用元素菜单里逐字选取（title/note/panel/chip/zone/timeline/bracket/strip/barrow/table/image/icon/emoji/chart_bar/chart_line/chart_pie/chart_donut/quote/checklist/stat/label/big/beam/disc/circle/arrow），每个元素都必须有 kind。",
 						cv, style), &retry)
@@ -624,19 +670,22 @@ func feedbackBlock(f string) string {
 
 // ── 子进程与工具 ─────────────────────────────────────────────
 
-// python 跑仓库 ai/ 脚本（cwd = 仓库根）。
-func (r *Runner) python(script string, projDir string, timeout time.Duration) error {
+// python 跑仓库 ai/ 脚本（cwd = 仓库根）。任务取消时连带杀掉子进程。
+func (r *Runner) python(ctx context.Context, script string, projDir string, timeout time.Duration) error {
 	py, err := exec.LookPath("python")
 	if err != nil {
 		return fmt.Errorf("python 不在 PATH: %w", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, py, filepath.Join(r.RootDir, script), projDir)
 	cmd.Dir = r.RootDir
 	var buf bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &buf, &buf
 	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil { // 被取消/超时杀掉：报可识别的 ctx 错误而非 killed
+			return ctx.Err()
+		}
 		return fmt.Errorf("%s 退出: %w\n%s", script, err, tail(buf.String(), 15))
 	}
 	fmt.Println(buf.String())
@@ -644,13 +693,13 @@ func (r *Runner) python(script string, projDir string, timeout time.Duration) er
 }
 
 // renderSpecs spec → llm/comp-segNN.json（确定性渲染层）。
-func (r *Runner) renderSpecs(p *pipeline.Project) error {
-	return r.python("ai/render_spec.py", p.Dir, 2*time.Minute)
+func (r *Runner) renderSpecs(ctx context.Context, p *pipeline.Project) error {
+	return r.python(ctx, "ai/render_spec.py", p.Dir, 2*time.Minute)
 }
 
 // fetchImages spec 里 image 元素的搜图本地化（必应 → Commons，失败便签兜底）。
-func (r *Runner) fetchImages(p *pipeline.Project) error {
-	return r.python("ai/fetch_images.py", p.Dir, 10*time.Minute)
+func (r *Runner) fetchImages(ctx context.Context, p *pipeline.Project) error {
+	return r.python(ctx, "ai/fetch_images.py", p.Dir, 10*time.Minute)
 }
 
 // clearFrames 清旧帧（落盘阶段只补缺失文件，不清不会重写）。

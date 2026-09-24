@@ -43,6 +43,9 @@ var ErrTodo = errors.New("阶段待实现（后续里程碑）")
 type Project struct {
 	ID  string
 	Dir string
+	// Ctx 任务级取消信号（pipeline.Run 注入）；runCLI 等长作业用其杀子进程。
+	// 为 nil 时视为 context.Background()（CLI 直跑 m0 run 场景）。
+	Ctx context.Context
 }
 
 func NewProject(dataDir, id string) *Project {
@@ -120,9 +123,17 @@ func Stages() []Stage {
 }
 
 // Run 顺序执行阶段；遇 等待LLM/待实现/错误 即停（产物已落盘，重跑续上）。
-// until 非空时执行到该阶段为止（含）。
-func Run(p *Project, until string) error {
+// until 非空时执行到该阶段为止（含）。ctx 取消时在阶段边界退出（渲染中的
+// 子进程由 runCLI 经 p.Ctx 连带杀掉）。
+func Run(ctx context.Context, p *Project, until string) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	p.Ctx = ctx
 	for _, st := range Stages() {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		fmt.Printf("▶ %-14s ", st.Name)
 		err := st.Run(p)
 		var await *ErrAwaitLLM
@@ -433,7 +444,11 @@ func SetExtraPATH(dir string) { extraPATH = dir }
 // npx 一律 --offline：hyperframes 锁版本已在本地缓存，渲染管线不依赖 registry 网络。
 func runCLI(p *Project, name string, args ...string) (string, error) {
 	full := append([]string{"--offline", "--yes"}, args...)
-	cmd := exec.CommandContext(context.Background(), name, full...)
+	ctx := p.Ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	cmd := exec.CommandContext(ctx, name, full...)
 	cmd.Dir = p.Dir
 	if extraPATH != "" {
 		cmd.Env = append(os.Environ(), "PATH="+extraPATH+string(os.PathListSeparator)+os.Getenv("PATH"))
@@ -442,6 +457,9 @@ func runCLI(p *Project, name string, args ...string) (string, error) {
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
 	err := cmd.Run()
+	if err != nil && ctx.Err() != nil { // 被取消杀掉：报可识别的 ctx 错误而非 killed
+		return buf.String(), ctx.Err()
+	}
 	return buf.String(), err
 }
 

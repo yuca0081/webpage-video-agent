@@ -52,6 +52,7 @@ func (s *Server) Router() *gin.Engine {
 	r.GET("/api/projects/:id/messages", s.messages)
 	r.GET("/api/projects/:id/events", s.sse)
 	r.POST("/api/projects/:id/produce", s.startProduce)
+	r.POST("/api/projects/:id/cancel", s.cancelProduce)
 	r.GET("/api/projects/:id/video/main.mp4", s.video)
 	r.GET("/api/projects/:id/audio_meta", s.audioMeta)
 	r.GET("/api/projects/:id/frames/:seg", s.frame)
@@ -392,6 +393,16 @@ func (s *Server) startProduce(c *gin.Context) {
 	}
 	s.updateStatus(id, "producing")
 	c.JSON(202, gin.H{"ok": true, "started": ok})
+}
+
+// cancelProduce 取消进行中的制作/重做（M1 遗留 cancel_production）。
+// 已在收尾的任务可能来不及响应，返回 ok=true 表示取消信号已发出。
+func (s *Server) cancelProduce(c *gin.Context) {
+	if !s.Producer.Cancel(c.Param("id")) {
+		c.JSON(409, gin.H{"error": "没有正在进行的制作任务"})
+		return
+	}
+	c.JSON(202, gin.H{"ok": true})
 }
 
 // audioMeta 时间轴数据源：每段配音时长 + 字级时间戳（TTS 对齐产物），供前端画字幕/音频轨。
