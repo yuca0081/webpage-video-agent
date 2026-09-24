@@ -1,6 +1,6 @@
 // server — 帧述 M1 HTTP 服务（API + SSE + Agent + 制作编排）。
 //
-//	go run ./cmd/server          （默认 :8080；前端 web/ 另起 Vite dev 或用 dist 托管）
+//	cd server && go run ./cmd/server   （默认 :8080；DATA_DIR 相对 .env 解析，启动目录无关）
 package main
 
 import (

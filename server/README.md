@@ -44,7 +44,7 @@ LLM 作业契约（请求 md → 产物 json）：
 | 风格样张 | `llm/style_samples.request.md` | `llm/style_samples.json` | `ValidateStyleSamples`（含 confirmed 硬门） |
 | 段合成物×N | `llm/comp-segNN.request.md` | `llm/comp-segNN.json` | html 非空 + elements 非空（元素命名规范） |
 
-切 API 模式：`LLM_MODE=api` + `DEEPSEEK_API_KEY`（适配器实现属后续工作，契约不变）。
+切 API 模式：`LLM_MODE=api` + `LLM_API_KEY`（默认 GLM 编码套餐端点，任何 OpenAI 兼容平台改 `LLM_BASE_URL`/`LLM_MODEL` 即换）。
 
 ## M1 前置事项（服务器侧）
 

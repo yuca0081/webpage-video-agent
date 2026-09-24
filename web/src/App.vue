@@ -9,7 +9,7 @@ import ChatPanel from './components/ChatPanel.vue'
 import NewProjectModal from './components/NewProjectModal.vue'
 import LibraryPanel from './components/LibraryPanel.vue'
 import { api } from './api'
-import type { Msg, ProjectRow, ProjectView, Storyboard, StylePack, StyleSamples } from './types'
+import type { AudioMeta, ChatRef, Msg, ProjectRow, ProjectView, Storyboard, StylePack, StyleSamples } from './types'
 
 const projects = ref<ProjectRow[]>([])
 const current = ref<string>('')
@@ -18,7 +18,9 @@ const storyboard = ref<Storyboard | null>(null)
 const style = ref<StyleSamples | null>(null)
 const manuscript = ref<{ content: string; word_count: number } | null>(null)
 const msgs = ref<Msg[]>([])
-const chatDraft = ref('') // 📎 引用插入通道（时间轴点段 → 聊天输入框）
+const chatDraft = ref('')
+const chatRefs = ref<ChatRef[]>([]) // 📎 引用列表（时间轴/分镜点选加入，输入框上方展示）
+const audioMeta = ref<AudioMeta | null>(null) // 时间轴字幕/配音轨数据源
 // 制作管线各段状态：'' | running | done | error
 const stageState = ref<Record<string, string>>({})
 const agentBusy = ref(false)
@@ -47,6 +49,7 @@ async function loadProject(id: string) {
   storyboard.value = view.value.gates.storyboard ? await api.storyboard(id).catch(() => null) : null
   style.value = view.value.gates.style_draft ? await api.style(id).catch(() => null) : null
   if (view.value.gates.manuscript) manuscript.value = await api.manuscript(id).catch(() => null)
+  audioMeta.value = await api.audioMeta(id).catch(() => null)
 }
 
 async function loadMsgs() {
@@ -61,7 +64,16 @@ async function loadMsgs() {
 function selectProject(id: string) {
   current.value = id
   msgs.value = []
+  chatRefs.value = []
   stageState.value = {}
+}
+
+// 📎 引用：点分镜/时间轴加入（按段去重），可单删、可清空
+function addRef(idx: number, key: string) {
+  if (!chatRefs.value.some(r => r.idx === idx)) chatRefs.value = [...chatRefs.value, { idx, key }]
+}
+function removeRef(idx: number) {
+  chatRefs.value = chatRefs.value.filter(r => r.idx !== idx)
 }
 
 async function refresh() {
@@ -120,19 +132,26 @@ async function onCreated(id: string) {
   selectProject(id)
 }
 
-const segRef = (idx: number, key: string) => {
-  chatDraft.value = (chatDraft.value ? chatDraft.value + ' ' : '') + `📎 段${idx}「${key}」`
-}
-
 const stageSummary = computed(() => {
   const states = stageOrder.map(s => stageState.value[s] ?? (view.value?.producing ? 'pending' : ''))
   if (!states.some(Boolean)) return null
   return stageOrder.map((s, i) => ({ key: s, state: states[i] }))
 })
+
+// naive-ui 全局主色对齐页面金色（创建按钮/单选/焦点等不再出现默认绿）
+const themeOverrides = {
+  common: {
+    primaryColor: '#f0c674',
+    primaryColorHover: '#ffdd9a',
+    primaryColorPressed: '#d9ae5b',
+    primaryColorSuppl: '#f0c674',
+    borderRadius: '8px',
+  },
+}
 </script>
 
 <template>
-  <n-config-provider :theme="darkTheme">
+  <n-config-provider :theme="darkTheme" :theme-overrides="themeOverrides">
     <n-message-provider>
       <div class="shell">
         <HistoryRail :projects="projects" :current="current" @select="selectProject" @new="showNew = true" />
@@ -157,14 +176,15 @@ const stageSummary = computed(() => {
           <StagePanel
             v-else
             :view="view" :storyboard="storyboard" :style-samples="style" :manuscript="manuscript"
-            :stage-summary="stageSummary" :video-id="current"
+            :stage-summary="stageSummary" :video-id="current" :audio-meta="audioMeta"
+            :picked-idx="chatRefs.map(r => r.idx)"
             @confirm-style="async () => { if (current) { await api.confirmStyle(current); refresh() } }"
-            @seg="segRef"
+            @seg="addRef"
           />
         </main>
         <ChatPanel
-          :project-id="current" :msgs="msgs" :busy="agentBusy" v-model:draft="chatDraft"
-          @sent="markBusy"
+          :project-id="current" :msgs="msgs" :busy="agentBusy" v-model:draft="chatDraft" :refs="chatRefs"
+          @sent="markBusy" @remove-ref="removeRef" @clear-refs="chatRefs = []"
         />
       </div>
       <NewProjectModal v-model:show="showNew" @created="onCreated" />

@@ -2,11 +2,11 @@
 import { nextTick, ref, watch } from 'vue'
 import { NButton, NInput, NScrollbar, NSpin } from 'naive-ui'
 import { api } from '../api'
-import type { Msg } from '../types'
+import type { ChatRef, Msg } from '../types'
 
-const props = defineProps<{ projectId: string; msgs: Msg[]; busy: boolean }>()
+const props = defineProps<{ projectId: string; msgs: Msg[]; busy: boolean; refs: ChatRef[] }>()
 const draft = defineModel<string>('draft')
-const emit = defineEmits<{ sent: [] }>()
+const emit = defineEmits<{ sent: []; 'remove-ref': [idx: number]; 'clear-refs': [] }>()
 
 const inputRef = ref<InstanceType<typeof NInput> | null>(null)
 const listRef = ref<InstanceType<typeof NScrollbar> | null>(null)
@@ -14,15 +14,15 @@ const listRef = ref<InstanceType<typeof NScrollbar> | null>(null)
 async function send() {
   const text = (draft.value ?? '').trim()
   if (!text || !props.projectId) return
+  // 引用列表随消息一并发给 Agent（每行一个 📎），发送后清空
+  const refLines = props.refs.map(r => `📎 段${r.idx}「${r.key}」`).join('\n')
   draft.value = ''
-  await api.chat(props.projectId, text).catch(() => {})
+  emit('clear-refs')
+  await api.chat(props.projectId, refLines ? `${text}\n${refLines}` : text).catch(() => {})
   emit('sent')
 }
 
 watch(() => props.msgs.length, () => nextTick(() => listRef.value?.scrollTo({ top: 1e9, behavior: 'smooth' })))
-watch(draft, v => { // 📎 引用插入后聚焦
-  if (v?.includes('📎')) inputRef.value?.focus()
-})
 
 const fmtTime = (iso: string) => (iso ? iso.slice(11, 16) : '')
 </script>
@@ -53,10 +53,20 @@ const fmtTime = (iso: string) => (iso ? iso.slice(11, 16) : '')
       </div>
       <div v-if="busy && !msgs.length" class="none"><NSpin :size="14" /></div>
     </NScrollbar>
+    <!-- 引用列表：时间轴/分镜点选加入，可单删；随下一条消息发出 -->
+    <div v-if="refs.length" class="refs">
+      <span class="refs-label">引用 {{ refs.length }}</span>
+      <div class="ref-chips">
+        <span v-for="r in refs" :key="r.idx" class="ref-chip">
+          📎 段{{ r.idx }}「{{ r.key }}」
+          <button class="rm" title="移除" @click="emit('remove-ref', r.idx)">×</button>
+        </span>
+      </div>
+    </div>
     <div class="input">
       <NInput
         ref="inputRef" v-model:value="draft" type="textarea" :rows="3" :maxlength="4000"
-        placeholder="对话或下指令（Enter 发送）｜时间轴点段可插入 📎 引用"
+        placeholder="对话或下指令（Enter 发送）｜点时间轴可加引用"
         @keydown.enter.exact.prevent="send"
       />
       <NButton type="primary" :disabled="!draft?.trim() || !projectId" @click="send">发送</NButton>
@@ -92,5 +102,24 @@ const fmtTime = (iso: string) => (iso ? iso.slice(11, 16) : '')
   font-size: 11px; color: #8a8a96; background: #17171d; border: 1px dashed #2b2b33;
   border-radius: 999px; padding: 3px 12px;
 }
+.refs { flex: none; display: flex; gap: 8px; padding: 8px 10px 0; align-items: flex-start; }
+.refs-label { flex: none; font-size: 11px; color: #f0c674; padding-top: 5px; }
+/* 最多露出 5 行，超出滚轮滚动 */
+.ref-chips {
+  flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 5px; align-content: flex-start;
+  max-height: 145px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #3a3a45 transparent;
+}
+.ref-chips::-webkit-scrollbar { width: 5px; }
+.ref-chips::-webkit-scrollbar-thumb { background: #3a3a45; border-radius: 3px; }
+.ref-chip {
+  display: inline-flex; align-items: center; gap: 4px; max-width: 100%;
+  font-size: 12px; color: #f0c674; background: #241f14; border: 1px solid rgba(240, 198, 116, .35);
+  border-radius: 999px; padding: 3px 6px 3px 10px;
+}
+.rm {
+  border: 0; background: transparent; color: #8a7a4d; cursor: pointer; font-size: 13px;
+  width: 16px; height: 16px; line-height: 1; border-radius: 50%; padding: 0;
+}
+.rm:hover { color: #fff; background: rgba(240, 198, 116, .3); }
 .input { flex: none; display: flex; gap: 8px; padding: 10px; border-top: 1px solid #1d1d24; align-items: flex-end; }
 </style>

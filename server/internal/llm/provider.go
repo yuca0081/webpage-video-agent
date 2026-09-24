@@ -1,4 +1,4 @@
-// Package llm：LLM 作业的 API 实现（OpenAI 兼容协议，DeepSeek/GLM/Qwen 通吃）。
+// Package llm：LLM 作业的 API 实现（OpenAI 兼容协议：GLM 编码套餐 / DeepSeek / Qwen 通吃）。
 // 产物一律过 schema 校验（contract 包），不信任模型输出。
 package llm
 
@@ -22,7 +22,7 @@ const (
 	RoleVisual   Role = "visual"   // 合成物生成（最强）
 )
 
-// Provider 一个 OpenAI 兼容供应商。M0 主选 DeepSeek；GLM/Qwen 换 BaseURL+Key+Model 即可。
+// Provider 一个 OpenAI 兼容供应商。默认 GLM 编码套餐；换 DeepSeek/按量计费平台改 BaseURL+Key+Model 即可。
 type Provider struct {
 	Name    string
 	BaseURL string
@@ -30,23 +30,30 @@ type Provider struct {
 	Model   string
 }
 
-// FromEnv 按环境变量构造供应商。缺 key 返回错误（调用方转 ErrAwaitLLM 降级会话模式）。
+// FromEnv 按环境变量构造供应商：LLM_API_KEY / LLM_BASE_URL / LLM_MODEL（旧名 DEEPSEEK_* 仍兼容）。
+// 默认 GLM 编码套餐端点 + glm-5.3-flash。缺 key 返回错误（调用方转 ErrAwaitLLM 降级会话模式）。
 func FromEnv(role Role) (*Provider, error) {
-	base := os.Getenv("DEEPSEEK_BASE_URL")
-	if base == "" {
-		base = "https://api.deepseek.com/v1"
+	get := func(newName, oldName string) string {
+		if v := os.Getenv(newName); v != "" {
+			return v
+		}
+		return os.Getenv(oldName)
 	}
 	switch role {
 	case RolePlan, RoleDialogue, RoleVisual: // M0 单模型起步：bake-off 后按档分模型
-		key := os.Getenv("DEEPSEEK_API_KEY")
+		key := get("LLM_API_KEY", "DEEPSEEK_API_KEY")
 		if key == "" {
-			return nil, errors.New("DEEPSEEK_API_KEY 未配置")
+			return nil, errors.New("LLM_API_KEY 未配置（旧名 DEEPSEEK_API_KEY 亦未配置）")
 		}
-		model := os.Getenv("DEEPSEEK_MODEL")
+		base := get("LLM_BASE_URL", "DEEPSEEK_BASE_URL")
+		if base == "" {
+			base = "https://open.bigmodel.cn/api/coding/paas/v4"
+		}
+		model := get("LLM_MODEL", "DEEPSEEK_MODEL")
 		if model == "" {
-			model = "deepseek-chat"
+			model = "glm-5.3-flash"
 		}
-		return &Provider{Name: "deepseek", BaseURL: base, APIKey: key, Model: model}, nil
+		return &Provider{Name: "llm", BaseURL: base, APIKey: key, Model: model}, nil
 	}
 	return nil, fmt.Errorf("未知角色 %s", role)
 }

@@ -250,3 +250,46 @@ def polyline(frame, id, points, w=1920, h=560, top=170, stroke=INK, nodes=None):
 
 def title_chars(text):
     return ''.join(f'<span data-c>{c}</span>' for c in text)
+
+
+# ── 引擎特征（render_spec 风格适配读取；扁平引擎各有自己的值）──
+FONT = 'KaiTi,STKaiti,serif'
+ARROW = INK
+BIG = '#B45309'
+IMG_ROT = 1.8   # 照片默认交替 ±IMG_ROT 旋转（拍立得感）
+FLAT = False
+
+
+def _pal(name, default=None):
+    m = {'butter': BUTTER, 'mint': MINT, 'sky': SKY, 'coral': CORAL, 'peach': PEACH,
+         'pink': PINK, 'turq': TURQ, 'white': '#FFFFFF', 'ink': INK}
+    return m.get(name or '', default)
+
+
+def chip(frame, id, x, y, text, bg=SKY, fs=40):
+    """胶囊标签（手绘版 = 无影小圆角标签，与便签区分）。"""
+    f = _norm(frame, id)
+    c = _pal(bg, SKY)
+    return (f'<div class="{f}-el" id="{id}" data-hf-name="标签：{text[:12]}" '
+            f'style="top:{y}px;left:{x}px;background:{c};border:3px solid {INK};border-radius:999px;'
+            f'padding:{int(fs * 0.28)}px {int(fs * 0.8)}px;font-size:{fs}px;font-weight:700;'
+            f'white-space:nowrap;color:{INK};">{text}</div>')
+
+
+def panel(frame, id, x, y, w, h, title='', text='', bg=None, fs=36):
+    """卡片面板（手绘版 = 纸白卡 + 便签色标题条 + 墨线阴影）。"""
+    f = _norm(frame, id)
+    accent = _pal(bg, BUTTER)
+    name = title or (text or '卡片')[:12]
+    inner = ''
+    if title:
+        inner += (f'<div style="background:{accent};color:{INK};font-weight:700;'
+                  f'font-size:{fs + 6}px;padding:{int(fs * 0.4)}px {int(fs * 0.8)}px;'
+                  f'border-bottom:3px solid {INK};">{title}</div>')
+    if text:
+        inner += (f'<div style="padding:{int(fs * 0.55)}px {int(fs * 0.8)}px;font-size:{fs}px;'
+                  f'font-weight:700;line-height:1.6;color:{INK};white-space:pre-wrap;">{text}</div>')
+    return (f'<div class="{f}-el" id="{id}" data-hf-name="卡片：{name}" '
+            f'style="top:{y}px;left:{x}px;width:{w}px;height:{h}px;background:#FFFDF6;'
+            f'border:4px solid {INK};border-radius:10px;overflow:hidden;'
+            f'box-shadow:7px 7px 0 {INK};">{inner}</div>')

@@ -15,12 +15,36 @@ import sys
 
 SHARED = pathlib.Path(__file__).resolve().parent.parent / 'data' / 'projects' / '_shared'
 sys.path.insert(0, str(SHARED))
-import stylepack as sp  # noqa: E402
+import stylepack as sp  # noqa: E402  默认引擎（手绘叙事）；main 按项目风格方向分发
 
-COLORS = {'butter': sp.BUTTER, 'mint': sp.MINT, 'sky': sp.SKY, 'coral': sp.CORAL,
-          'peach': sp.PEACH, 'pink': sp.PINK, 'turq': sp.TURQ, 'ink': sp.INK, 'white': '#FFFFFF'}
-CHART_FILLS = [sp.MINT, sp.SKY, sp.BUTTER, sp.CORAL, sp.PEACH, sp.PINK]
+COLORS = {}
+CHART_FILLS = []
 PREFIX = 's'
+
+
+def init_engine(proj):
+    """按项目 style_samples.json 的 direction 选风格引擎，重建色表。
+
+    direction 含「扁平」→ stylepack_flat（厚描边·色块）；否则手绘叙事。
+    """
+    global sp, COLORS, CHART_FILLS
+    d = ''
+    try:
+        with open(proj / 'style' / 'style_samples.json', encoding='utf-8') as fh:
+            d = (json.load(fh) or {}).get('direction', '')
+    except Exception:
+        d = ''
+    if '扁平' in d:
+        import stylepack_flat
+        sp = stylepack_flat
+    else:
+        import stylepack
+        sp = stylepack
+    COLORS = {'butter': sp.BUTTER, 'mint': sp.MINT, 'sky': sp.SKY, 'coral': sp.CORAL,
+              'peach': sp.PEACH, 'pink': sp.PINK, 'turq': sp.TURQ, 'ink': sp.INK,
+              'white': '#FFFFFF', 'navy': getattr(sp, 'NAVY', sp.INK),
+              'green': getattr(sp, 'GREEN', sp.TURQ)}
+    CHART_FILLS = [sp.MINT, sp.SKY, sp.BUTTER, sp.CORAL, sp.PEACH, sp.PINK]
 
 
 def col(name, default):
@@ -59,7 +83,7 @@ def render_element(f, sid, e, i, words, W=1920):
         return html, sp.fade(f'#{eid}', t)
     if kind == 'big':
         fs = e.get('fs', 110)
-        color = col(e.get('color'), '#B45309')
+        color = col(e.get('color'), getattr(sp, 'BIG', '#B45309'))
         html = sp.big(f, eid, e['x'], e['y'], text, fs=fs, color=color)
         return html, sp.pop(f'#{eid}', t)
     if kind == 'beam':
@@ -80,6 +104,22 @@ def render_element(f, sid, e, i, words, W=1920):
         return render_icon(f, sid, e, i, t)
     if kind == 'image':
         return render_image(f, sid, e, i, t)
+    if kind == 'panel':
+        return render_panel(f, sid, e, i, t)
+    if kind == 'chip':
+        return render_chip(f, sid, e, i, t)
+    if kind == 'zone':
+        return render_zone(f, sid, e, i, t)
+    if kind == 'timeline':
+        return render_timeline(f, sid, e, i, t)
+    if kind == 'bracket':
+        return render_bracket(f, sid, e, i, t)
+    if kind == 'strip':
+        return render_strip(f, sid, e, i, t)
+    if kind == 'barrow':
+        return render_barrow(f, sid, e, i, t)
+    if kind == 'table':
+        return render_table(f, sid, e, i, t)
     if kind == 'emoji':
         return render_emoji(f, sid, e, i, t)
     if kind == 'chart_bar':
@@ -92,7 +132,7 @@ def render_element(f, sid, e, i, words, W=1920):
         x1, y1, x2, y2 = e['x1'], e['y1'], e['x2'], e['y2']
         ln, ang = math.hypot(x2 - x1, y2 - y1), math.degrees(math.atan2(y2 - y1, x2 - x1))
         hw, hw2 = e.get('w', 10) / 2, 34
-        c = col(e.get('color'), sp.INK)
+        c = col(e.get('color'), getattr(sp, 'ARROW', sp.INK))
         name = text[:12] if text else '箭头'
         # id + 命名挂在箭头线段上（注册表可寻址）；箭头头部为无名伴随元素，同组揭示
         line = (f'<div class="{f}-el" id="{eid}" data-hf-name="箭头：{name}" '
@@ -127,13 +167,171 @@ def render_image(f, sid, e, i, t):
     if not src:
         note_html = sp.note(f, eid, e['x'], e['y'], q, bg=sp.SKY, rot=-1.5, fs=38)
         return note_html, sp.rise(f'#{eid}', t)
-    rot = e.get('rot', -1.8 if i % 2 else 1.8)
+    rot = e.get('rot')
+    if rot is None:
+        rot = 0 if getattr(sp, 'FLAT', False) else (-1.8 if i % 2 else 1.8)
     html = (f'<div class="{f}-el" id="{eid}" data-hf-name="图片：{q}" '
             f'style="top:{e["y"]}px;left:{e["x"]}px;width:{w}px;height:{h}px;'
             f'background:#FFF;border:3px solid {sp.INK};padding:12px 12px 18px;'
             f'box-shadow:7px 7px 0 {sp.INK};transform:rotate({rot}deg);">'
             f'<img src="{src}" style="width:100%;height:100%;object-fit:cover;display:block;" /></div>')
     return html, sp.pop(f'#{eid}', t, scale=.85)
+
+
+def render_panel(f, sid, e, i, t):
+    """卡片面板：白底 + 强调色描边/标题栏（手绘/扁平引擎各有质感）。"""
+    eid = f"{sid}-panel{i}"
+    html = sp.panel(f, eid, e['x'], e['y'], e.get('w', 560), e.get('h', 320),
+                    title=str(e.get('title', '')).strip(), text=str(e.get('text', '')).strip(),
+                    bg=col(e.get('bg'), None), fs=e.get('fs', 36))
+    return html, sp.rise(f'#{eid}', t)
+
+
+def render_chip(f, sid, e, i, t):
+    """胶囊标签：短词强调（扁平=纯色块白粗字，手绘=圆角标签）。"""
+    eid = f"{sid}-chip{i}"
+    html = sp.chip(f, eid, e['x'], e['y'], str(e.get('text', '')).strip(),
+                   bg=col(e.get('bg'), None), fs=e.get('fs', 40))
+    return html, sp.pop(f'#{eid}', t, scale=.7)
+
+
+# ── 图解结构积木（zone/timeline/bracket/strip/barrow/table）──────
+
+def render_zone(f, sid, e, i, t):
+    """淡色高亮区：垫底圈住一组元素（DOM 顺序即 z 序，spec 里放最先）。"""
+    eid = f"{sid}-zone{i}"
+    bg = col(e.get('bg'), sp.MINT)
+    dashed = f'border:3px dashed {bg};' if e.get('dashed') else ''
+    html = (f'<div class="{f}-el" id="{eid}" data-hf-name="高亮区" '
+            f'style="top:{e["y"]}px;left:{e["x"]}px;width:{e["w"]}px;height:{e["h"]}px;'
+            f'background:{bg}26;border-radius:26px;{dashed}"></div>')
+    return html, sp.fade(f'#{eid}', t, dur=.5)
+
+
+def render_timeline(f, sid, e, i, t):
+    """垂直时间线：粗竖线 + 彩色圆点 + 粗体文字（步骤/流程）。"""
+    eid = f"{sid}-tl{i}"
+    x, y = e['x'], e['y']
+    gap = e.get('gap', 110)
+    nodes = e.get('nodes') or ['步骤']
+    c = col(e.get('color'), getattr(sp, 'GREEN', sp.MINT))
+    fs = e.get('fs', 40)
+    r = 22
+    h = (len(nodes) - 1) * gap + 2 * r
+    width = 60 + max((len(str(n)) for n in nodes), default=4) * fs * 1.1
+    line = (f'<div data-{eid}-line style="position:absolute;top:0;left:{r + 8 - 5}px;width:10px;'
+            f'height:{h}px;background:{c};border-radius:5px;"></div>')
+    parts = [line]
+    for k, txt in enumerate(nodes):
+        cy = r + k * gap
+        border = '' if getattr(sp, 'FLAT', False) else f'border:4px solid {sp.INK};'
+        parts.append(f'<div data-{eid}-dot="{k}" style="position:absolute;top:{cy - r}px;'
+                     f'left:{8}px;width:{2 * r}px;height:{2 * r}px;border-radius:50%;'
+                     f'background:{c};{border}"></div>')
+        parts.append(f'<div data-{eid}-lbl="{k}" style="position:absolute;top:{cy - fs * 0.72}px;'
+                     f'left:{2 * r + 34}px;font-size:{fs}px;font-weight:900;'
+                     f'color:{sp.INK};white-space:nowrap;">{txt}</div>')
+    html = (f'<div class="{f}-el" id="{eid}" data-hf-name="时间线" '
+            f'style="top:{y - r - 8}px;left:{x - r - 8}px;width:{width:.0f}px;height:{h + 16:.0f}px;">'
+            + ''.join(parts) + '</div>')
+    js = (f"gsap.set('#{eid} [data-{eid}-dot],#{eid} [data-{eid}-lbl]',{{opacity:0,x:-16}});\n      "
+          f"tl.to('#{eid} [data-{eid}-dot],#{eid} [data-{eid}-lbl]',{{opacity:1,x:0,duration:.35,stagger:.3,ease:'power2.out'}},{t:.2f});")
+    return html, js
+
+
+def render_bracket(f, sid, e, i, t):
+    """大括号 + 竖排标注（圈住一组步骤，如「多次重复执行」）。"""
+    eid = f"{sid}-brk{i}"
+    x, y, h = e['x'], e['y'], e.get('h', 300)
+    c = col(e.get('color'), getattr(sp, 'GREEN', sp.MINT))
+    txt = str(e.get('text', '')).strip()
+    fs = e.get('fs', 44)
+    brace_char = '}'
+    brace = (f'<div style="position:absolute;top:{-h * 0.08:.0f}px;left:0;height:{h}px;'
+             f'line-height:{h}px;font-size:{h * 1.05:.0f}px;font-weight:900;color:{c};">{brace_char}</div>')
+    lbl = ''
+    if txt:
+        lbl = (f'<div style="position:absolute;top:0;left:{h * 0.5:.0f}px;height:{h}px;'
+               f'writing-mode:vertical-rl;text-align:center;font-size:{fs}px;font-weight:900;'
+               f'color:{c};letter-spacing:8px;">{txt}</div>')
+    w = h * 0.5 + fs * 1.3 + 20
+    html = (f'<div class="{f}-el" id="{eid}" data-hf-name="括注：{txt[:8]}" '
+            f'style="top:{y}px;left:{x}px;width:{w:.0f}px;height:{h}px;">{brace}{lbl}</div>')
+    return html, sp.fade(f'#{eid}', t, dur=.5)
+
+
+def render_strip(f, sid, e, i, t):
+    """小方块序列 + 省略号 + 说明（向量/维度示意，如「512维」）。"""
+    eid = f"{sid}-strip{i}"
+    x, y = e['x'], e['y']
+    n = int(e.get('n', 5))
+    size = e.get('size', 44)
+    gap = 14
+    c = col(e.get('color'), sp.SKY)
+    txt = str(e.get('text', '')).strip()
+    w = n * (size + gap) + 40
+    if txt:
+        w += len(txt) * 36 + 50
+    parts = []
+    for k in range(n):
+        parts.append(f'<div data-{eid}-sq="{k}" style="position:absolute;top:0;'
+                     f'left:{k * (size + gap)}px;width:{size}px;height:{size}px;'
+                     f'border-radius:10px;background:{c};border:3px solid {sp.INK};"></div>')
+    cx = n * (size + gap)
+    if e.get('ellipsis', True):
+        parts.append(f'<div style="position:absolute;top:{-size * 0.28:.0f}px;left:{cx}px;'
+                     f'font-size:{size}px;font-weight:900;color:{sp.INK};">…</div>')
+        cx += size * 0.8
+    if txt:
+        parts.append(f'<div style="position:absolute;top:{size * 0.12:.0f}px;left:{cx + 14}px;'
+                     f'font-size:{e.get("fs", 36)}px;font-weight:900;color:{sp.INK};">{txt}</div>')
+    html = (f'<div class="{f}-el" id="{eid}" data-hf-name="方块序列：{txt or n}" '
+            f'style="top:{y}px;left:{x}px;width:{w:.0f}px;height:{size}px;">' + ''.join(parts) + '</div>')
+    js = (f"gsap.set('#{eid} [data-{eid}-sq]',{{opacity:0,scale:.3,transformOrigin:'50% 50%'}});\n      "
+          f"tl.to('#{eid} [data-{eid}-sq]',{{opacity:1,scale:1,duration:.3,stagger:.14,ease:'back.out(1.8)'}},{t:.2f});")
+    return html, js
+
+
+def render_barrow(f, sid, e, i, t):
+    """粗块箭头（实心大箭头，流程指向）。"""
+    eid = f"{sid}-barrow{i}"
+    w_ = e.get('w', 260)
+    h_ = e.get('h', 90)
+    rot = e.get('rot', 0)
+    c = col(e.get('color'), getattr(sp, 'ARROW', sp.INK))
+    html = (f'<div class="{f}-el" id="{eid}" data-hf-name="块箭头" '
+            f'style="top:{e["y"]}px;left:{e["x"]}px;width:{w_}px;height:{h_}px;background:{c};'
+            f'clip-path:polygon(0 32%,60% 32%,60% 0,100% 50%,60% 100%,60% 68%,0 68%);'
+            f'transform:rotate({rot}deg);"></div>')
+    js = sp.draw_x(f'#{eid}', t, dur=.5) if abs(rot) < 10 else sp.pop(f'#{eid}', t, scale=.6)
+    return html, js
+
+
+def render_table(f, sid, e, i, t):
+    """格子表格（数字/短文本行列，白底描边圆角格）。"""
+    eid = f"{sid}-tbl{i}"
+    rows = e.get('rows') or [['?']]
+    w_ = e.get('w', 520)
+    cell_h = e.get('cell_h', 76)
+    fs = e.get('fs', 30)
+    nrow = len(rows)
+    ncol = max(len(r) for r in rows)
+    cw = (w_ - (ncol - 1) * 10) / ncol
+    parts = []
+    for ri, row in enumerate(rows):
+        for ci in range(ncol):
+            val = row[ci] if ci < len(row) else ''
+            parts.append(f'<div data-{eid}-c="{ri}-{ci}" style="position:absolute;'
+                         f'top:{ri * (cell_h + 10)}px;left:{ci * (cw + 10):.0f}px;'
+                         f'width:{cw:.0f}px;height:{cell_h}px;background:#FFFFFF;'
+                         f'border:3px solid {sp.INK};border-radius:10px;display:flex;'
+                         f'align-items:center;justify-content:center;font-size:{fs}px;'
+                         f'font-weight:700;color:{sp.INK};">{val}</div>')
+    h_ = nrow * cell_h + (nrow - 1) * 10
+    html = (f'<div class="{f}-el" id="{eid}" data-hf-name="表格" '
+            f'style="top:{e["y"]}px;left:{e["x"]}px;width:{w_}px;height:{h_}px;">' + ''.join(parts) + '</div>')
+    js = sp.stagger_pop(f'#{eid} [data-{eid}-c]', t, step=.12)
+    return html, js
 
 
 def render_emoji(f, sid, e, i, t):
@@ -199,11 +397,11 @@ def render_chart_bar(f, sid, e, i, t):
             f'fill="{fill}" stroke="{sp.INK}" stroke-width="4"/></g>')
         if labels[j]:
             parts.append(f'<text x="{bx + bw/2:.0f}" y="{h - 18}" text-anchor="middle" '
-                         f'font-size="{label_fs}" fill="{sp.INK}" font-family="KaiTi,STKaiti,serif">{labels[j]}</text>')
+                         f'font-size="{label_fs}" fill="{sp.INK}" font-family="{sp.FONT}">{labels[j]}</text>')
         vy = max(pad_t + area_h - bh - 10, label_fs + 4)      # 数值标签夹在 SVG 内
         parts.append(f'<text x="{bx + bw/2:.0f}" y="{vy:.0f}" text-anchor="middle" '
                      f'font-size="{label_fs + 2}" font-weight="700" fill="{sp.INK}" '
-                     f'font-family="KaiTi,STKaiti,serif">{_fmt_num(v)}</text>')
+                     f'font-family="{sp.FONT}">{_fmt_num(v)}</text>')
     html = (f'<div class="{f}-el" id="{eid}" data-hf-name="柱状图" '
             f'style="top:{y}px;left:{x}px;width:{w}px;height:{h}px;">'
             f'<svg viewBox="0 0 {w} {h}" width="{w}" height="{h}">{"".join(parts)}</svg></div>')
@@ -232,7 +430,7 @@ def render_chart_line(f, sid, e, i, t):
     labels = e.get('labels') or []
     lbl = ''.join(
         f'<text x="{px:.0f}" y="{h - 18}" text-anchor="middle" font-size="26" fill="{sp.INK}" '
-        f'font-family="KaiTi,STKaiti,serif">{labels[j]}</text>'
+        f'font-family="{sp.FONT}">{labels[j]}</text>'
         for j, (px, py) in enumerate(pts) if j < len(labels) and labels[j])
     length = (w - 56) * 1.15 + area_h  # 折线长度近似（dash 动画用，宁多勿少）
     html = (f'<div class="{f}-el" id="{eid}" data-hf-name="折线图" '
@@ -271,7 +469,7 @@ def render_chart_pie(f, sid, e, i, t):
         anchor = 'middle' if abs(math.cos(mid)) < .35 else ('start' if math.cos(mid) > 0 else 'end')
         parts.append(f'<text data-wlbl="{j}" x="{lx:.0f}" y="{ly:.0f}" text-anchor="{anchor}" '
                      f'dominant-baseline="middle" font-size="27" fill="{sp.INK}" '
-                     f'font-family="KaiTi,STKaiti,serif">{labels[j]} {_fmt_num(v)}</text>')
+                     f'font-family="{sp.FONT}">{labels[j]} {_fmt_num(v)}</text>')
         angle = a1
     html = (f'<div class="{f}-el" id="{eid}" data-hf-name="饼图" '
             f'style="top:{y}px;left:{x}px;width:{w}px;height:{h}px;">'
@@ -284,6 +482,7 @@ def render_chart_pie(f, sid, e, i, t):
 def main(proj_dir: str) -> int:
     proj = pathlib.Path(proj_dir)
     sb = json.load(open(proj / 'storyboards' / 'storyboard.json', encoding='utf-8'))
+    init_engine(proj)  # 按项目风格方向选引擎（手绘/扁平）
     meta = sp.load(proj)
     # 画幅随项目（project.json aspect，缺省 16:9 与既有项目一致）
     W, H = (1080, 1920) if _aspect(proj) == '9:16' else (1920, 1080)
@@ -297,7 +496,14 @@ def main(proj_dir: str) -> int:
         words = meta['words'][sid]
         htmls, jss = [], []
         for i, e in enumerate(spec.get('elements', [])):
-            h, j = render_element(PREFIX, sid, e, i + 1, words, W)
+            if not e.get('kind'):
+                print(f"{sid}: 元素{i + 1} 缺 kind，跳过")
+                continue
+            try:
+                h, j = render_element(PREFIX, sid, e, i + 1, words, W)
+            except ValueError as ex:  # 未知 kind：跳过不炸整段
+                print(f'{sid}: {ex}，跳过')
+                continue
             htmls.append(h)
             jss.append(j)
         full = sp.wrap(proj, PREFIX, sid, '\n    '.join(htmls), '\n      '.join(jss), W, H)

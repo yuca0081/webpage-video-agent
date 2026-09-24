@@ -2,6 +2,7 @@ package contract
 
 import (
 	"fmt"
+	"math"
 	"unicode/utf8"
 )
 
@@ -51,11 +52,17 @@ type SpecElement struct {
 	W    float64 `json:"w,omitempty"`  // 宽（beam/chart_*/image）
 	H    float64 `json:"h,omitempty"`
 	Text string  `json:"text,omitempty"`
+	Title string `json:"title,omitempty"` // panel 标题栏（可选）
 	Name string  `json:"name,omitempty"`  // icon 名（lucide kebab，本地库）
 	Query string `json:"query,omitempty"` // image 搜索词（制作期下载本地化）
 	Size float64 `json:"size,omitempty"` // icon 边长
 	Values []float64 `json:"values,omitempty"` // 图表数值
 	Labels []string  `json:"labels,omitempty"` // 图表标签
+	Nodes  []string   `json:"nodes,omitempty"` // timeline 节点文字（2–6 条）
+	Rows   [][]string `json:"rows,omitempty"`  // table 行（2–7 行 × 1–4 列）
+	N      int        `json:"n,omitempty"`     // strip 方块数（2–8）
+	Gap    float64    `json:"gap,omitempty"`   // timeline 节点间距
+	CellH  float64    `json:"cell_h,omitempty"` // table 行高
 	Bg   string `json:"bg,omitempty"`   // butter|mint|sky|coral|peach|pink|turq|white|ink
 	Color string `json:"color,omitempty"`
 	Fill string `json:"fill,omitempty"`
@@ -68,7 +75,9 @@ var specKinds = map[string]bool{
 	"title": true, "note": true, "label": true, "big": true,
 	"beam": true, "disc": true, "circle": true, "arrow": true,
 	"icon": true, "chart_bar": true, "chart_line": true, "chart_pie": true,
-	"image": true, "emoji": true,
+	"image": true, "emoji": true, "panel": true, "chip": true,
+	"zone": true, "timeline": true, "bracket": true, "strip": true,
+	"barrow": true, "table": true,
 }
 
 // bbox 保守估计元素占位（供边界与重叠检查）。
@@ -91,6 +100,20 @@ func (e *SpecElement) bbox(cv Canvas) (x0, y0, w, h float64, ok bool) {
 		}
 		// 保守估计：楷体全角+边框内衬+阴影；宁可误报重叠也不放进 check 门禁
 		return e.X, e.Y, float64(runeLen)*fs*1.15 + 96, fs + 52, true
+	case "chip":
+		if fs == 0 {
+			fs = 40
+		}
+		return e.X, e.Y, float64(runeLen)*fs*1.12 + 70, fs*1.6, true
+	case "panel":
+		if e.W == 0 {
+			e.W = 560
+		}
+		if e.H == 0 {
+			e.H = 320
+		}
+		// 平移浅影余量
+		return e.X, e.Y, e.W + 12, e.H + 12, true
 	case "label":
 		if fs == 0 {
 			fs = 38
@@ -143,6 +166,81 @@ func (e *SpecElement) bbox(cv Canvas) (x0, y0, w, h float64, ok bool) {
 		return e.X, e.Y, e.W, e.H, true
 	case "disc", "circle":
 		return e.Cx - e.R, e.Cy - e.R, 2 * e.R, 2 * e.R, true
+	case "zone":
+		if e.W == 0 {
+			e.W = 800
+		}
+		if e.H == 0 {
+			e.H = 400
+		}
+		return e.X, e.Y, e.W, e.H, true
+	case "timeline":
+		if e.Gap == 0 {
+			e.Gap = 110
+		}
+		if e.Fs == 0 {
+			e.Fs = 40
+		}
+		maxLen := 0
+		for _, s := range e.Nodes {
+			if l := utf8.RuneCountInString(s); l > maxLen {
+				maxLen = l
+			}
+		}
+		r := 22.0
+		w := 60 + float64(maxLen)*e.Fs*1.1
+		h := float64(len(e.Nodes)-1)*e.Gap + 2*r
+		return e.X - r - 8, e.Y - 8, w, h + 16, true
+	case "bracket":
+		if e.H == 0 {
+			e.H = 300
+		}
+		fs := e.Fs
+		if fs == 0 {
+			fs = 44
+		}
+		// 竖排文字单列宽 ≈ fs*1.3；括号字形宽 ≈ h*0.5
+		return e.X, e.Y, e.H*0.5+fs*1.3+20, e.H, true
+	case "strip":
+		n := e.N
+		if n == 0 {
+			n = 5
+		}
+		size := e.Size
+		if size == 0 {
+			size = 44
+		}
+		w := float64(n)*(size+14) + 40
+		if e.Text != "" {
+			w += float64(utf8.RuneCountInString(e.Text))*36 + 50
+		}
+		return e.X, e.Y, w, size + 6, true
+	case "barrow":
+		w := e.W
+		if w == 0 {
+			w = 260
+		}
+		h := e.H
+		if h == 0 {
+			h = 90
+		}
+		rad := e.Rot * math.Pi / 180
+		wr := math.Abs(w*math.Cos(rad)) + math.Abs(h*math.Sin(rad))
+		hr := math.Abs(w*math.Sin(rad)) + math.Abs(h*math.Cos(rad))
+		return e.X + w/2 - wr/2, e.Y + h/2 - hr/2, wr, hr, true
+	case "table":
+		if e.W == 0 {
+			e.W = 520
+		}
+		cellH := e.CellH
+		if cellH == 0 {
+			cellH = 76
+		}
+		n := len(e.Rows)
+		if n == 0 {
+			n = 2
+		}
+		return e.X, e.Y, e.W, float64(n)*cellH + float64(n-1)*10, true
 	case "arrow":
 		x, y := e.X1, e.Y1
 		if e.X2 < x {
@@ -176,8 +274,8 @@ func abs(f float64) float64 {
 // 箭头不参与重叠判定（它的职责就是连接/跨越其他元素）。
 func ValidateSpec(s *CompSpec, wordCount int, cv Canvas) []string {
 	var errs []string
-	if n := len(s.Elements); n < 3 || n > 10 {
-		errs = append(errs, fmt.Sprintf("元素数 %d 不在 3–10 范围（尽量 4–7）", n))
+	if n := len(s.Elements); n < 3 || n > 12 {
+		errs = append(errs, fmt.Sprintf("元素数 %d 不在 3–12 范围（尽量 4–8）", n))
 	}
 	type box struct {
 		i int
@@ -194,13 +292,30 @@ func ValidateSpec(s *CompSpec, wordCount int, cv Canvas) []string {
 		if e.Reveal < 0 || (wordCount > 0 && e.Reveal >= wordCount) {
 			errs = append(errs, fmt.Sprintf("%s: reveal=%d 超出词数 %d", tag, e.Reveal, wordCount))
 		}
-		needText := e.Kind == "title" || e.Kind == "note" || e.Kind == "label" || e.Kind == "big"
+		needText := e.Kind == "title" || e.Kind == "note" || e.Kind == "label" || e.Kind == "big" || e.Kind == "chip"
 		if needText && e.Text == "" {
 			errs = append(errs, tag+": 缺 text")
 		}
-		lim := map[string]int{"title": 14, "note": 14, "label": 16, "big": 9}
+		lim := map[string]int{"title": 14, "note": 14, "label": 16, "big": 9, "chip": 12}
 		if lim[e.Kind] > 0 && utf8.RuneCountInString(e.Text) > lim[e.Kind] {
 			errs = append(errs, fmt.Sprintf("%s: 文案「%s」超长（≤%d 字）", tag, e.Text, lim[e.Kind]))
+		}
+		if e.Kind == "panel" {
+			if e.Text == "" && e.Title == "" {
+				errs = append(errs, tag+": 缺 title/text（至少给一个）")
+			}
+			if n := utf8.RuneCountInString(e.Title); n > 12 {
+				errs = append(errs, fmt.Sprintf("%s: title「%s」超长（≤12 字）", tag, e.Title))
+			}
+			if n := utf8.RuneCountInString(e.Text); n > 60 {
+				errs = append(errs, fmt.Sprintf("%s: text 超长（≤60 字，当前 %d）", tag, n))
+			}
+			if e.W != 0 && (e.W < 240 || e.W > 1400) {
+				errs = append(errs, fmt.Sprintf("%s: w %v 超范围 240–1400", tag, e.W))
+			}
+			if e.H != 0 && (e.H < 160 || e.H > 900) {
+				errs = append(errs, fmt.Sprintf("%s: h %v 超范围 160–900", tag, e.H))
+			}
 		}
 		if e.Kind == "disc" || e.Kind == "circle" {
 			if e.R < 18 || e.R > 220 {
@@ -260,6 +375,70 @@ func ValidateSpec(s *CompSpec, wordCount int, cv Canvas) []string {
 				}
 			}
 		}
+		if e.Kind == "timeline" {
+			if n := len(e.Nodes); n < 2 || n > 6 {
+				errs = append(errs, fmt.Sprintf("%s: nodes %d 条不在 2–6 范围", tag, n))
+			}
+			for j, s := range e.Nodes {
+				if l := utf8.RuneCountInString(s); l > 12 {
+					errs = append(errs, fmt.Sprintf("%s: nodes[%d]「%s」超长（≤12 字）", tag, j, s))
+				}
+			}
+		}
+		if e.Kind == "bracket" {
+			if l := utf8.RuneCountInString(e.Text); l > 8 {
+				errs = append(errs, fmt.Sprintf("%s: text 超长（≤8 字）", tag))
+			}
+			if e.H != 0 && (e.H < 160 || e.H > 800) {
+				errs = append(errs, fmt.Sprintf("%s: h %v 超范围 160–800", tag, e.H))
+			}
+		}
+		if e.Kind == "strip" {
+			if e.N != 0 && (e.N < 2 || e.N > 8) {
+				errs = append(errs, fmt.Sprintf("%s: n %d 不在 2–8 范围", tag, e.N))
+			}
+			if l := utf8.RuneCountInString(e.Text); l > 10 {
+				errs = append(errs, fmt.Sprintf("%s: text 超长（≤10 字）", tag))
+			}
+		}
+		if e.Kind == "barrow" {
+			if e.W != 0 && (e.W < 120 || e.W > 700) {
+				errs = append(errs, fmt.Sprintf("%s: w %v 超范围 120–700", tag, e.W))
+			}
+			if e.H != 0 && (e.H < 60 || e.H > 240) {
+				errs = append(errs, fmt.Sprintf("%s: h %v 超范围 60–240", tag, e.H))
+			}
+		}
+		if e.Kind == "table" {
+			if n := len(e.Rows); n < 2 || n > 7 {
+				errs = append(errs, fmt.Sprintf("%s: rows %d 行不在 2–7 范围", tag, n))
+			}
+			cols := 0
+			for j, row := range e.Rows {
+				if j == 0 {
+					cols = len(row)
+				}
+				if len(row) != cols {
+					errs = append(errs, fmt.Sprintf("%s: 各行列数须一致（第 %d 行 %d 列 vs 首行 %d 列）", tag, j+1, len(row), cols))
+				}
+				if len(row) > 4 {
+					errs = append(errs, fmt.Sprintf("%s: 每行 ≤4 列", tag))
+				}
+				for _, c := range row {
+					if utf8.RuneCountInString(c) > 8 {
+						errs = append(errs, fmt.Sprintf("%s: 单元格「%s」超长（≤8 字）", tag, c))
+					}
+				}
+			}
+		}
+		if e.Kind == "zone" {
+			if e.W != 0 && (e.W < 240 || e.W > 1700) {
+				errs = append(errs, fmt.Sprintf("%s: w %v 超范围 240–1700", tag, e.W))
+			}
+			if e.H != 0 && (e.H < 200 || e.H > 1500) {
+				errs = append(errs, fmt.Sprintf("%s: h %v 超范围 200–1500", tag, e.H))
+			}
+		}
 		x0, y0, w, h, ok := e.bbox(cv)
 		if !ok {
 			continue
@@ -272,13 +451,15 @@ func ValidateSpec(s *CompSpec, wordCount int, cv Canvas) []string {
 		boxes = append(boxes, box{i: i, b: specBox{x0, y0, x1, y1}})
 	}
 	// 重叠：交叠面积超过较小方块的 25% 判违规。豁免：
-	//   箭头（职责就是连接元素）；形状全包含嵌套（disc/circle 同心构图，如主体+内核）
+	//   箭头（职责就是连接/跨越其他元素）；zone（垫底高亮区，天生要圈住元素）；
+	//   形状全包含嵌套（disc/circle 同心构图，如主体+内核）
+	isFree := func(k string) bool { return k == "arrow" || k == "zone" }
 	for a := 0; a < len(boxes); a++ {
-		if s.Elements[boxes[a].i].Kind == "arrow" {
+		if isFree(s.Elements[boxes[a].i].Kind) {
 			continue
 		}
 		for b := a + 1; b < len(boxes); b++ {
-			if s.Elements[boxes[b].i].Kind == "arrow" {
+			if isFree(s.Elements[boxes[b].i].Kind) {
 				continue
 			}
 			A, B := boxes[a], boxes[b]
@@ -319,9 +500,17 @@ func nestedShapes(a *SpecElement, A specBox, b *SpecElement, B specBox) bool {
 	return in(A, B) || in(B, A)
 }
 
-// SanitizeSpec 保底清洗：越界坐标夹进安全区，仍冲突的元素成对删后进者。
+// SanitizeSpec 保底清洗：先删未知/缺失 kind 的元素（模型偶发漏填 kind，
+// 带病落盘会在渲染层炸掉整条任务），越界坐标夹进安全区，仍冲突的元素成对删后进者。
 // 用于模型多轮修复仍不过校验时——确定性降级优于任务失败。
 func SanitizeSpec(s *CompSpec, wordCount int, cv Canvas) []string {
+	kept := s.Elements[:0]
+	for _, e := range s.Elements {
+		if specKinds[e.Kind] {
+			kept = append(kept, e)
+		}
+	}
+	s.Elements = kept
 	for i := range s.Elements {
 		e := &s.Elements[i]
 		if e.Reveal < 0 {
@@ -333,9 +522,22 @@ func SanitizeSpec(s *CompSpec, wordCount int, cv Canvas) []string {
 		// 文本/条状类夹进安全区上半段；圆类圆心留出半径余量
 		if e.Kind == "note" || e.Kind == "label" || e.Kind == "big" || e.Kind == "beam" ||
 			e.Kind == "icon" || e.Kind == "chart_bar" || e.Kind == "chart_line" || e.Kind == "chart_pie" ||
-			e.Kind == "image" || e.Kind == "emoji" {
+			e.Kind == "image" || e.Kind == "emoji" || e.Kind == "chip" || e.Kind == "panel" ||
+			e.Kind == "timeline" || e.Kind == "bracket" || e.Kind == "strip" || e.Kind == "barrow" ||
+			e.Kind == "table" || e.Kind == "zone" {
 			e.X = clamp(e.X, cv.X0+100, cv.X1-260)
 			e.Y = clamp(e.Y, cv.Y0+60, cv.Y1-120)
+		}
+		if e.Kind == "panel" {
+			e.W = clamp(e.W, 240, cv.W-2*cv.X0-40)
+			e.H = clamp(e.H, 160, cv.Y1-cv.Y0-200)
+		}
+		if e.Kind == "table" {
+			e.W = clamp(e.W, 260, cv.W-2*cv.X0)
+		}
+		if e.Kind == "zone" {
+			e.W = clamp(e.W, 240, cv.W-2*cv.X0)
+			e.H = clamp(e.H, 200, cv.Y1-cv.Y0-60)
 		}
 		if e.Kind == "chart_bar" || e.Kind == "chart_line" || e.Kind == "chart_pie" {
 			e.W = clamp(e.W, 240, cv.W-2*cv.X0)
@@ -354,7 +556,7 @@ func SanitizeSpec(s *CompSpec, wordCount int, cv Canvas) []string {
 	for len(s.Elements) > 3 {
 		victim := -1
 		for a := 0; a < len(s.Elements) && victim < 0; a++ {
-			if s.Elements[a].Kind == "arrow" {
+			if k := s.Elements[a].Kind; k == "arrow" || k == "zone" {
 				continue
 			}
 			A, okA := boxOf(&s.Elements[a], cv)
@@ -362,7 +564,7 @@ func SanitizeSpec(s *CompSpec, wordCount int, cv Canvas) []string {
 				continue
 			}
 			for b := a + 1; b < len(s.Elements); b++ {
-				if s.Elements[b].Kind == "arrow" {
+				if k := s.Elements[b].Kind; k == "arrow" || k == "zone" {
 					continue
 				}
 				B, okB := boxOf(&s.Elements[b], cv)

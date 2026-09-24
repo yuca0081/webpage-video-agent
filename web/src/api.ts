@@ -1,4 +1,4 @@
-import type { Msg, ProjectRow, ProjectView, Storyboard, StylePack, StyleSamples } from './types'
+import type { AudioMeta, Msg, ProjectRow, ProjectView, Storyboard, StylePack, StyleSamples } from './types'
 
 async function j<T>(res: Response): Promise<T> {
   if (!res.ok) throw new Error((await res.json().catch(() => ({} as any))).error ?? res.statusText)
@@ -19,6 +19,8 @@ export const api = {
 
   storyboard: (id: string) => fetch(`/api/projects/${id}/storyboard`).then(r => j<Storyboard>(r)),
 
+  audioMeta: (id: string) => fetch(`/api/projects/${id}/audio_meta`).then(r => j<AudioMeta>(r)),
+
   manuscript: (id: string) =>
     fetch(`/api/projects/${id}/manuscript`).then(r => j<{ content: string; word_count: number }>(r)),
 
@@ -33,6 +35,13 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content }),
     }).then(r => j<{ ok: boolean }>(r)),
+
+  draftManuscript: (topic: string, minutes = 1) =>
+    fetch('/api/draft/manuscript', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic, minutes }),
+    }).then(r => j<{ content: string }>(r)),
 
   messages: (id: string, after = 0) =>
     fetch(`/api/projects/${id}/messages?after=${after}`).then(r => j<Msg[]>(r)),

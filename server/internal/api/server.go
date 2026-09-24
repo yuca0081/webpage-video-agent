@@ -2,6 +2,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,6 +18,7 @@ import (
 	"webpage-video-agent/server/internal/agent"
 	"webpage-video-agent/server/internal/contract"
 	"webpage-video-agent/server/internal/events"
+	"webpage-video-agent/server/internal/llm"
 	"webpage-video-agent/server/internal/methodlib"
 	"webpage-video-agent/server/internal/pipeline"
 	"webpage-video-agent/server/internal/produce"
@@ -45,10 +47,12 @@ func (s *Server) Router() *gin.Engine {
 	r.GET("/api/projects/:id/style", s.style)
 	r.POST("/api/projects/:id/style/confirm", s.confirmStyle)
 	r.POST("/api/projects/:id/chat", s.chat)
+	r.POST("/api/draft/manuscript", s.draftManuscript)
 	r.GET("/api/projects/:id/messages", s.messages)
 	r.GET("/api/projects/:id/events", s.sse)
 	r.POST("/api/projects/:id/produce", s.startProduce)
 	r.GET("/api/projects/:id/video/main.mp4", s.video)
+	r.GET("/api/projects/:id/audio_meta", s.audioMeta)
 	r.GET("/api/library", s.listLibrary)
 	r.POST("/api/library/:id/publish", s.publishPack)
 
@@ -260,6 +264,52 @@ func (s *Server) confirmStyle(c *gin.Context) {
 
 // ── 聊天 ─────────────────────────────────────────────────────
 
+// draftManuscript 主题 → 口播文稿草稿（创建前 AI 辅助起草）。
+// 文稿硬门不变：草稿仍进文稿框，用户可改可删，创建时照常校验非空。
+func (s *Server) draftManuscript(c *gin.Context) {
+	var in struct {
+		Topic   string  `json:"topic"`
+		Minutes float64 `json:"minutes"`
+	}
+	if err := c.ShouldBindJSON(&in); err != nil || strings.TrimSpace(in.Topic) == "" {
+		c.JSON(400, gin.H{"error": "主题不能为空"})
+		return
+	}
+	if in.Minutes <= 0 {
+		in.Minutes = 1
+	}
+	if in.Minutes > 5 {
+		in.Minutes = 5
+	}
+	p, err := llm.FromEnv(llm.RoleDialogue)
+	if err != nil {
+		c.JSON(503, gin.H{"error": "LLM 未配置（LLM_API_KEY），请直接粘贴文稿"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 120*time.Second)
+	defer cancel()
+	words := int(in.Minutes * 60 * 4.2) // 口播语速 ≈ 4.2 字/秒
+	var out struct {
+		Content string `json:"content"`
+	}
+	system := "你是「帧述」的口播科普撰稿人，为短视频写口播文稿。硬性要求：" +
+		"1) 第一句就是钩子（提问/反常识/画面感），不写标题和开场白；" +
+		"2) 2~4 个递进的知识点，口语化短句，像讲给朋友听，少形容词堆砌；" +
+		"3) 结尾一句收束或抛一个问题；" +
+		"4) 只输出正文：不带标题、小节序号、markdown、emoji、舞台指示；" +
+		"5) 数字和事实宁缺毋滥，不确定的不编。输出 JSON：{\"content\": \"文稿全文\"}。"
+	user := fmt.Sprintf("主题：%s\n目标时长：约 %.0f 分钟（正文约 %d 字，±20%%）。", strings.TrimSpace(in.Topic), in.Minutes, words)
+	if _, err := p.GenerateJSON(ctx, system, user, &out); err != nil {
+		c.JSON(500, gin.H{"error": "起草失败：" + err.Error()})
+		return
+	}
+	if strings.TrimSpace(out.Content) == "" {
+		c.JSON(500, gin.H{"error": "起草结果为空，请重试或直接粘贴文稿"})
+		return
+	}
+	c.JSON(200, gin.H{"content": strings.TrimSpace(out.Content)})
+}
+
 func (s *Server) chat(c *gin.Context) {
 	id := c.Param("id")
 	var in struct {
@@ -307,6 +357,17 @@ func (s *Server) startProduce(c *gin.Context) {
 	}
 	s.updateStatus(id, "producing")
 	c.JSON(202, gin.H{"ok": true, "started": ok})
+}
+
+// audioMeta 时间轴数据源：每段配音时长 + 字级时间戳（TTS 对齐产物），供前端画字幕/音频轨。
+func (s *Server) audioMeta(c *gin.Context) {
+	p := pipeline.NewProject(s.DataDir, c.Param("id"))
+	b, err := os.ReadFile(p.Artifact("audio_meta.json"))
+	if err != nil {
+		c.JSON(404, gin.H{"error": "音频对齐数据不存在（未出配音）"})
+		return
+	}
+	c.Data(200, "application/json", b)
 }
 
 func (s *Server) video(c *gin.Context) {

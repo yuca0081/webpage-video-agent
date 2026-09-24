@@ -498,7 +498,7 @@ func (a *Agent) Run(projectID, userText string) {
 	p := pipeline.NewProject(a.DataDir, projectID)
 	prov, err := llm.FromEnv(llm.RoleDialogue)
 	if err != nil {
-		a.finish(projectID, "当前未配置 LLM API（DEEPSEEK_API_KEY），我只能看不能想。配好 .env 再聊。", "error")
+		a.finish(projectID, "当前未配置 LLM API（LLM_API_KEY），我只能看不能想。配好 .env 再聊。", "error")
 		return
 	}
 	msgs := []openai.ChatCompletionMessage{{Role: openai.ChatMessageRoleSystem, Content: a.systemPrompt(projectID, a.State(projectID))}}

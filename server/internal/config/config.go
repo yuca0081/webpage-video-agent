@@ -12,9 +12,9 @@ import (
 // PG/MinIO/Redis 的值先就位（原服务器 47.94.247.12），M1 接入。
 type Config struct {
 	DataDir string
-	LLMMode string // manual（会话模式·文件契约，M0 默认）| api（DeepSeek 等，管线稳定后切换）
+	LLMMode string // manual（会话模式·文件契约，M0 默认）| api（OpenAI 兼容 LLM：GLM 编码套餐/DeepSeek 等）
 
-	DeepSeekKey string
+	LLMKey string
 
 	PGDSN          string
 	MinIOEndpoint  string
@@ -26,10 +26,12 @@ type Config struct {
 
 func Load() (*Config, error) {
 	// .env 可选存在：当前目录逐级向上找（在 server/ 里跑也能读到仓库根的 .env）
+	var envDir string
 	for _, dir := range []string{".", "..", "../.."} {
 		p := filepath.Join(dir, ".env")
 		if _, err := os.Stat(p); err == nil {
 			_ = godotenv.Load(p)
+			envDir = dir
 			break
 		}
 	}
@@ -44,13 +46,18 @@ func Load() (*Config, error) {
 	c := &Config{
 		DataDir:        get("DATA_DIR", "data"),
 		LLMMode:        get("LLM_MODE", "manual"),
-		DeepSeekKey:    os.Getenv("DEEPSEEK_API_KEY"),
+		LLMKey:         get("LLM_API_KEY", os.Getenv("DEEPSEEK_API_KEY")),
 		PGDSN:          os.Getenv("PG_DSN"),
 		MinIOEndpoint:  get("MINIO_ENDPOINT", "47.94.247.12:9000"),
 		MinIOAccessKey: os.Getenv("MINIO_ACCESS_KEY"),
 		MinIOSecretKey: os.Getenv("MINIO_SECRET_KEY"),
 		MinIOBucket:    get("MINIO_BUCKET", "zhenshu"),
 		RedisAddr:      get("REDIS_ADDR", "47.94.247.12:6379"),
+	}
+
+	// 相对 DATA_DIR 相对 .env 所在目录解析，启动目录无关（envDir 为空=未找到 .env，退回 CWD）
+	if !filepath.IsAbs(c.DataDir) {
+		c.DataDir = filepath.Join(envDir, c.DataDir)
 	}
 
 	abs, err := filepath.Abs(c.DataDir)

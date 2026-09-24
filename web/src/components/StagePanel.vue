@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { NButton, NScrollbar, NSpin, NTag } from 'naive-ui'
-import type { ProjectView, Storyboard, StyleSamples } from '../types'
+import type { AudioMeta, ProjectView, Storyboard, StyleSamples } from '../types'
 import { videoURL } from '../api'
+import Timeline from './Timeline.vue'
 
 const props = defineProps<{
   view: ProjectView | null
@@ -10,12 +12,24 @@ const props = defineProps<{
   manuscript: { content: string; word_count: number } | null
   stageSummary: { key: string; state: string }[] | null
   videoId: string
+  audioMeta: AudioMeta | null
+  pickedIdx: number[]
 }>()
 const emit = defineEmits<{ 'confirm-style': []; seg: [idx: number, key: string] }>()
 
 const stageName: Record<string, string> = {
   tts: '配音', compositions: '画面', assemble: '组装', check: '检查', render: '渲染',
 }
+
+// 视频播放 ↔ 时间轴播放头同步
+const videoEl = ref<HTMLVideoElement | null>(null)
+const cur = ref(0)
+const dur = ref(0)
+function onSeek(t: number) {
+  cur.value = t
+  if (videoEl.value) videoEl.value.currentTime = t
+}
+function pickSeg(idx: number, key: string) { emit('seg', idx, key) }
 </script>
 
 <template>
@@ -50,7 +64,7 @@ const stageName: Record<string, string> = {
               </tr>
             </tbody>
           </table>
-          <div class="hint">点任意段可把 📎 引用带进聊天</div>
+          <div class="hint">点任意段加入聊天引用列表（可删），随下一条消息发给 Agent</div>
         </NScrollbar>
       </div>
 
@@ -86,26 +100,24 @@ const stageName: Record<string, string> = {
       <div v-else-if="view.has_video" class="pane video-pane" :class="{ vertical: view.aspect === '9:16' }">
         <!-- 段级重做中：细进度条（其余段的画面/音频不动） -->
         <div v-if="stageSummary" class="rework-strip">
-          <div v-for="st in stageSummary" :key="st.key" class="stage" :data-state="st.state">
+          <div v-for="st in stageSummary" :key="st.key" class="pstage" :data-state="st.state">
             <span class="dot" />{{ stageName[st.key] ?? st.key }}
           </div>
           <span class="rework-hint">段级重做中</span>
         </div>
         <div class="player">
-          <video :src="videoURL(videoId)" controls preload="metadata" />
+          <video
+            ref="videoEl" :src="videoURL(videoId)" controls preload="metadata"
+            @timeupdate="cur = videoEl!.currentTime" @loadedmetadata="dur = videoEl!.duration || 0"
+          />
         </div>
-        <div v-if="storyboard" class="segbar">
-          <div
-            v-for="s in storyboard.segments" :key="s.id" class="seg"
-            :style="{ flexGrow: s.duration_hint }"
-            @click="emit('seg', s.idx, s.key)"
-          >
-            <span class="seg-idx">{{ s.idx }}</span>
-            <span class="seg-key">{{ s.key }}</span>
-          </div>
-        </div>
+        <Timeline
+          v-if="storyboard"
+          :storyboard="storyboard" :audio-meta="audioMeta" :current-time="cur" :duration="dur"
+          :picked-idx="pickedIdx" @seek="onSeek" @pick="pickSeg"
+        />
         <div class="foot-row">
-          <span class="video-hint">点段插入 📎 引用，聊天里说要改什么——只重做那一段</span>
+          <span class="video-hint">点分镜/字幕/配音块加 📎 引用，拖播放头定位，聊天里说要改什么——只重做那一段</span>
           <a class="dl" :href="videoURL(videoId)" :download="`${view.name}.mp4`">下载成片 · {{ view.aspect === '9:16' ? '1080×1920' : '1080p' }}</a>
         </div>
       </div>
@@ -115,7 +127,7 @@ const stageName: Record<string, string> = {
         <NSpin size="large" />
         <div class="prod-title">{{ view.producing || stageSummary ? '制作管线运行中' : '准备中…' }}</div>
         <div v-if="stageSummary" class="stages">
-          <div v-for="st in stageSummary" :key="st.key" class="stage" :data-state="st.state">
+          <div v-for="st in stageSummary" :key="st.key" class="pstage" :data-state="st.state">
             <span class="dot" />{{ stageName[st.key] ?? st.key }}
           </div>
         </div>
@@ -163,41 +175,33 @@ figcaption span { font-size: 12px; color: #8a8a96; }
 .confirm-bar p { color: #8a8a96; font-size: 13px; max-width: 560px; }
 
 /* 成片 */
-.video-pane { align-items: center; justify-content: center; gap: 14px; padding: 20px; }
+.video-pane { align-items: center; justify-content: center; gap: 12px; padding: 16px 20px; }
 .player { width: min(100%, 1080px); }
 .player video { width: 100%; border-radius: 8px; background: #000; display: block; }
-.video-pane.vertical .player { width: auto; height: 100%; max-height: calc(100vh - 300px); }
-.video-pane.vertical .player video { width: auto; height: 100%; max-width: 100%; }
+.video-pane.vertical .player { width: auto; flex: 1 1 0; min-height: 0; display: flex; justify-content: center; }
+.video-pane.vertical .player video { width: auto; height: auto; max-width: 100%; max-height: 100%; }
 .rework-strip { display: flex; align-items: center; gap: 10px; }
 .rework-hint { font-size: 12px; color: #f0c674; }
-.segbar { width: min(100%, 1080px); display: flex; gap: 3px; }
 .foot-row { width: min(100%, 1080px); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .video-hint { color: #55555f; font-size: 12px; }
-.seg {
-  min-width: 0; cursor: pointer; border-radius: 6px; padding: 6px 8px;
-  background: #1c1c23; border: 1px solid #2b2b33; display: flex; flex-direction: column; gap: 2px;
-}
-.seg:hover { border-color: #f0c674; }
-.seg-idx { font-size: 10px; color: #7c7c88; }
-.seg-key { font-size: 11px; color: #c3c3cd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dl { color: #8fc7ff; font-size: 13px; text-decoration: none; border: 1px solid #2b4a66; padding: 6px 14px; border-radius: 999px; }
+.dl { color: #8fc7ff; font-size: 13px; text-decoration: none; border: 1px solid #2b4a66; padding: 6px 14px; border-radius: 999px; flex: none; }
 .dl:hover { background: #121b24; }
 
-/* 制作中 */
+/* 制作中（pstage = 进度胶囊；不能叫 .stage，会和外层舞台 section 撞类名导致 align/padding 污染） */
 .producing { align-items: center; justify-content: center; gap: 18px; }
 .prod-title { color: #c3c3cd; font-size: 15px; }
 .stages { display: flex; gap: 10px; }
-.stage {
+.pstage {
   display: flex; align-items: center; gap: 6px; font-size: 13px; color: #7c7c88;
   border: 1px solid #2b2b33; border-radius: 999px; padding: 5px 14px;
 }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: #3a3a45; }
-.stage[data-state="running"] { color: #8fc7ff; border-color: #2b4a66; }
-.stage[data-state="running"] .dot { background: #8fc7ff; animation: pulse 1.2s infinite; }
-.stage[data-state="done"] { color: #7ee2a8; border-color: #2c5c40; }
-.stage[data-state="done"] .dot { background: #7ee2a8; }
-.stage[data-state="error"] { color: #ff9d9d; border-color: #66302b; }
-.stage[data-state="error"] .dot { background: #ff9d9d; }
+.pstage[data-state="running"] { color: #8fc7ff; border-color: #2b4a66; }
+.pstage[data-state="running"] .dot { background: #8fc7ff; animation: pulse 1.2s infinite; }
+.pstage[data-state="done"] { color: #7ee2a8; border-color: #2c5c40; }
+.pstage[data-state="done"] .dot { background: #7ee2a8; }
+.pstage[data-state="error"] { color: #ff9d9d; border-color: #66302b; }
+.pstage[data-state="error"] .dot { background: #ff9d9d; }
 @keyframes pulse { 50% { opacity: .35; } }
 .empty { align-items: center; justify-content: center; }
 .none { color: #55555f; }

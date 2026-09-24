@@ -73,3 +73,29 @@ export interface StylePack {
   published: boolean
   created_at: string
 }
+
+// 音频对齐产物（audio/audio_meta.json）：时间轴字幕/音频轨的数据源
+export interface AlignWord {
+  text: string
+  start: number
+  end: number
+}
+
+export interface AudioVoice {
+  id: string
+  path: string
+  duration_s: number
+  words: AlignWord[]
+}
+
+export interface AudioMeta {
+  tts_provider: string
+  voice_id: string
+  voices: AudioVoice[]
+}
+
+// 聊天输入框上方的引用项（时间轴/分镜点击加入，随消息发给 Agent）
+export interface ChatRef {
+  idx: number
+  key: string
+}

@@ -339,7 +339,7 @@ func (r *Runner) genSpecs(p *pipeline.Project, feedback, only string) error {
 	}
 	prov, perr := llm.FromEnv(llm.RoleVisual)
 	if perr != nil {
-		return fmt.Errorf("spec 生成需要 API 模式（DEEPSEEK_API_KEY）: %w", perr)
+		return fmt.Errorf("spec 生成需要 API 模式（LLM_API_KEY）: %w", perr)
 	}
 	cv := ProjectCanvas(p)
 	system := specSystemFor(p)
@@ -382,9 +382,35 @@ func (r *Runner) genSpecs(p *pipeline.Project, feedback, only string) error {
 			errs = contract.ValidateSpec(&spec, len(v.Words), cv)
 			errs = append(errs, iconErrors(&spec, icons)...)
 		}
-		if len(errs) > 0 { // 保底：确定性清洗（删冲突/夹越界），不让整条任务死掉
+		if len(errs) > 0 { // 保底：确定性清洗（删未知 kind/删冲突/夹越界），不让整条任务死掉
 			remain := contract.SanitizeSpec(&spec, len(v.Words), cv)
-			p.Manifest("spec.sanitized", fmt.Sprintf("%s: 清洗后剩余 %d 元素；遗留问题: %s", seg.ID, len(spec.Elements), strings.Join(remain, "; ")))
+			// 清洗后元素所剩无几 = 该段画面已不成立（如模型整段漏填 kind）：
+			// 带着明确要求整段重出一次，仍不行才报错——空白段比失败更隐蔽。
+			if len(spec.Elements) < 3 {
+				r.emit(p.ID, "progress", "compositions", fmt.Sprintf("%s 清洗后仅 %d 元素，整段重出", seg.ID, len(spec.Elements)))
+				var retry contract.CompSpec
+				u2, err2 := prov.GenerateJSON(context.Background(), system,
+					specUserPrompt(seg, v, instruction,
+						"上一版几乎每个元素的 kind 都是空的或不认识的。kind 必须从可用元素菜单里逐字选取（title/note/panel/chip/zone/timeline/bracket/strip/barrow/table/image/icon/emoji/chart_bar/chart_line/chart_pie/label/big/beam/disc/circle/arrow），每个元素都必须有 kind。",
+						cv), &retry)
+				if err2 == nil {
+					errs2 := contract.ValidateSpec(&retry, len(v.Words), cv)
+					errs2 = append(errs2, iconErrors(&retry, icons)...)
+					if len(errs2) > 0 {
+						contract.SanitizeSpec(&retry, len(v.Words), cv)
+					}
+					if len(retry.Elements) >= 3 {
+						u1, spec = u2, retry
+						errs = nil
+					}
+				}
+			}
+			if len(errs) > 0 {
+				p.Manifest("spec.sanitized", fmt.Sprintf("%s: 清洗后剩余 %d 元素；遗留问题: %s", seg.ID, len(spec.Elements), strings.Join(remain, "; ")))
+			}
+		}
+		if len(spec.Elements) < 3 {
+			return fmt.Errorf("%s spec 元素不足 3 个（模型输出异常，重试后仍失败）", seg.ID)
 		}
 		b, _ := json.MarshalIndent(spec, "", "  ")
 		if err := os.WriteFile(specPath, b, 0o644); err != nil {
@@ -484,7 +510,15 @@ func specUserPrompt(seg contract.Segment, v voiceMeta, instruction, feedback str
 
 ## 可用元素（kind 与参数；坐标基于 %d×%d 画布%s）
 - title：大标题（整行居中，只给 y）。y, text(≤12字), fs(默认84), reveal
-- note：马克笔便签（给左上角坐标）。x, y, text(≤12字), bg(butter/mint/sky/coral/peach/pink), rot(±3), fs(默认40), reveal
+- note：便签/色块标签（给左上角坐标）。x, y, text(≤12字), bg(butter/mint/sky/coral/peach/pink), rot(±3), fs(默认40), reveal
+- panel：卡片面板（白底厚描边+彩色标题栏，放 2–4 行说明/对比/清单）。x, y, w(默认560), h(默认320), title(≤12字,可选), text(≤60字,可选), bg(navy/green/mint/sky/coral/butter=强调色), fs(默认36), reveal
+- chip：胶囊标签（短词/短语强调）。x, y, text(≤12字), bg(navy/green/mint/sky/coral/butter/white), fs(默认40), reveal
+- zone：淡色高亮区（垫底圈住一组元素，分组/强调区域；必须放在 elements 最前面）。x, y, w, h, bg(mint/sky/butter/coral), dashed(1=虚线边框), reveal
+- timeline：垂直时间线（粗竖线+彩色圆点+粗体文字，步骤/流程/层次）。x(线x), y(顶), nodes(2–6条,每条≤12字), gap(节点间距,默认110), color, fs(默认40), reveal
+- bracket：大括号+竖排标注（圈住时间线/一组步骤，如"多次重复执行"）。x, y, h(160–800), text(≤8字), color, reveal
+- strip：小方块序列+省略号（向量/维度/批量示意）。x, y, n(2–8), size(默认44), color, text(≤10字,如"512维"), reveal
+- barrow：粗块箭头（流程指向，实心大箭头，可配 rot 转向）。x, y, w(默认260), h(默认90), rot(角度), color, reveal
+- table：格子表格（数字/短文本行列对比）。x, y, w(默认520), rows(2–7行×最多4列,每格≤8字), cell_h(默认76), fs(默认30), reveal
 - label：文字标注。x, y, text(≤14字), fs(默认38), reveal
 - big：大数字/短语强调。x, y, text(≤8字), fs(默认110), reveal
 - image：真实照片（制作时按 query 自动搜图下载本地化，拍立得白框呈现）——有实体名词（动物/地标/物品/场景）时的主视觉首选。x, y, w(默认520), h(默认360), query(中文搜索词2–12字，如"蓝鲸 海面"), rot(±3), reveal
@@ -515,8 +549,8 @@ scale ruler clipboard lightbulb-off zap-off anchor truck bike train bus ship sen
 ## 布局硬规则（校验器会拒收）
 %s
 - reveal 按讲解顺序递增、铺满词序（别堆在开头；最大词号 %d）
-- 语义呼应画面提示：主体物→image（实体名词首选）或 icon（抽象概念）；数据对比→chart_bar；趋势→chart_line；占比→chart_pie；对比→双色便签左右分置；流程→箭头串联；数字→big；一屏最多一个图表（图表占主视觉位）
-- 画面丰富度（重要）：每屏至少一个视觉锚点（image / 大 icon / 图表 / big 之一），大小拉开层次（主体 300px+、次级 120–200px），禁止全屏小元素平铺
+- 语义呼应画面提示：主体物→image（实体名词首选）或 icon（抽象概念）；数据对比→chart_bar；趋势→chart_line；占比→chart_pie；对比→双色便签左右分置或 table；流程/步骤→timeline 或箭头串联；指向→barrow；向量/维度/批量→strip；分组圈注→zone(+bracket)；数字→big；一屏最多一个图表（图表占主视觉位）
+- 画面丰富度（重要）：每屏至少一个视觉锚点（image / 大 icon / 图表 / big / panel 之一），大小拉开层次（主体 300px+、次级 120–200px），禁止全屏小元素平铺
 %s
 
 ## 输出（只输出 JSON，无围栏）
