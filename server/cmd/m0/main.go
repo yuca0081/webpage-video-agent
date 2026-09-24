@@ -33,6 +33,7 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
+	pipeline.EnsureFFmpeg()
 	switch os.Args[1] {
 	case "new":
 		if len(os.Args) < 3 {

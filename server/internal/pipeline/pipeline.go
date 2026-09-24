@@ -410,19 +410,119 @@ func stageCheck(p *Project) error {
 	return nil
 }
 
-// stageRender 渲染。v1：整条渲染 renders/main.mp4（段级并行+FFmpeg 拼接为 M0 后续验证项，
-// 转场重叠区算法见 tech-stack §7-6；v1 段间硬切无重叠）。
+// stageRender 按段渲染（增量）+ 无损拼接。
+// 每段一个单段工程 .hf-seg/segNN.html（assemble 生成，含该段画面与配音），
+// 渲出 renders/segs/segNN.mp4；段片缺失或旧于 段帧/音频/段工程 任一来源则重渲，
+// 其余段跳过——rework 只重渲改动段，耗时与段长成正比而非片长。
+// main.mp4 = 全部段片 concat -c copy（段间硬切；转场重叠区算法见 tech-stack §7-6）。
 func stageRender(p *Project) error {
-	if exists(p.Artifact("renders/main.mp4")) {
-		p.Manifest("render.cached", "renders/main.mp4")
-		return nil
-	}
-	out, err := runCLI(p, "npx", "--yes", "hyperframes@0.8.55", "render", "-o", "renders/main.mp4")
+	sb, err := p.LoadStoryboard()
 	if err != nil {
-		return fmt.Errorf("渲染失败:\n%s", tailLines(out, 30))
+		return err
+	}
+	segsDir := p.Artifact("renders/segs")
+	if err := os.MkdirAll(segsDir, 0o755); err != nil {
+		return err
+	}
+	live := map[string]bool{}
+	for _, seg := range sb.Segments {
+		live[seg.ID] = true
+		out := filepath.Join(segsDir, seg.ID+".mp4")
+		if !segStale(p, seg.ID, out) {
+			p.Manifest("render.seg.cached", seg.ID)
+			continue
+		}
+		fmt.Printf("  · %s 渲染中\n", seg.ID)
+		outLog, err := runCLI(p, "npx", "hyperframes@0.8.55", "render", ".",
+			"-c", ".hf-seg/"+seg.ID+".html", "-o", "renders/segs/"+seg.ID+".mp4")
+		if err != nil {
+			return fmt.Errorf("%s 渲染失败:\n%s", seg.ID, tailLines(outLog, 30))
+		}
+		p.Manifest("render.seg", seg.ID)
+	}
+	entries, _ := os.ReadDir(segsDir)
+	for _, e := range entries { // 清理清单外残留段片（段增删后旧文件不进 concat，也不留垃圾）
+		if strings.HasSuffix(e.Name(), ".mp4") && !live[strings.TrimSuffix(e.Name(), ".mp4")] {
+			_ = os.Remove(filepath.Join(segsDir, e.Name()))
+		}
+	}
+	if err := concatSegs(p, sb, segsDir); err != nil {
+		return err
 	}
 	p.Manifest("render.done", "renders/main.mp4")
 	return nil
+}
+
+// segStale 段片是否需要重渲：缺失，或旧于该段的 帧html/音频/单段工程 任一来源。
+func segStale(p *Project, segID, out string) bool {
+	fi, err := os.Stat(out)
+	if err != nil {
+		return true
+	}
+	for _, src := range []string{
+		p.Artifact("compositions/frames/" + segID + ".html"),
+		p.Artifact("audio/" + segID + ".wav"),
+		p.Artifact(".hf-seg/" + segID + ".html"),
+	} {
+		if sfi, err := os.Stat(src); err == nil && sfi.ModTime().After(fi.ModTime()) {
+			return true
+		}
+	}
+	return false
+}
+
+// concatSegs 全部段片 concat -c copy 拼成 main.mp4（同源输出参数一致，免重编码）。
+func concatSegs(p *Project, sb *contract.Storyboard, segsDir string) error {
+	ff, err := ffmpegPath()
+	if err != nil {
+		return err
+	}
+	list := filepath.Join(segsDir, "list.txt")
+	var b strings.Builder
+	for _, seg := range sb.Segments {
+		b.WriteString("file '" + seg.ID + ".mp4'\n")
+	}
+	if err := os.WriteFile(list, []byte(b.String()), 0o644); err != nil {
+		return err
+	}
+	ctx := p.Ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	cmd := exec.CommandContext(ctx, ff, "-y", "-v", "error",
+		"-f", "concat", "-safe", "0", "-i", "list.txt", "-c", "copy", "../main.mp4")
+	cmd.Dir = segsDir
+	cmd.Env = cmdEnv()
+	var buf bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &buf, &buf
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("段片拼接失败: %w\n%s", err, tailLines(buf.String(), 20))
+	}
+	return nil
+}
+
+// ffmpegPath PATH 优先，回退 extraPATH（与 runCLI 的 Env 注入同一来源）。
+func ffmpegPath() (string, error) {
+	if p, err := exec.LookPath("ffmpeg"); err == nil {
+		return p, nil
+	}
+	if extraPATH != "" {
+		for _, cand := range []string{"ffmpeg.exe", "ffmpeg"} {
+			p := filepath.Join(extraPATH, cand)
+			if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
+				return p, nil
+			}
+		}
+	}
+	return "", errors.New("ffmpeg 不在 PATH（ensureFFmpeg 未生效？）")
+}
+
+// cmdEnv runCLI 与 ffmpeg 共用的进程环境（extraPATH 注入）。
+func cmdEnv() []string {
+	if extraPATH == "" {
+		return nil
+	}
+	return append(os.Environ(), "PATH="+extraPATH+string(os.PathListSeparator)+os.Getenv("PATH"))
 }
 
 // stageStitch v1 占位：整条渲染即成片；段级并行产物拼接待后续。
@@ -440,6 +540,23 @@ var extraPATH string
 // SetExtraPATH 注入额外可执行搜索路径（check/render 需要 ffmpeg）。
 func SetExtraPATH(dir string) { extraPATH = dir }
 
+// EnsureFFmpeg hyperframes check/render 与段片拼接需要 ffmpeg。
+// PATH 里没有就找 winget 安装目录并入 PATH（开发机场景；容器内 PATH 自带）。
+func EnsureFFmpeg() {
+	if _, err := exec.LookPath("ffmpeg"); err == nil {
+		return
+	}
+	const winget = `C:\Users\86151\AppData\Local\Microsoft\WinGet\Packages`
+	matches, _ := filepath.Glob(filepath.Join(winget, "Gyan.FFmpeg*", "ffmpeg-*", "bin"))
+	if len(matches) > 0 {
+		os.Setenv("PATH", matches[0]+string(os.PathListSeparator)+os.Getenv("PATH"))
+		SetExtraPATH(matches[0])
+		fmt.Printf("[ffmpeg] 注入 PATH: %s\n", matches[0])
+		return
+	}
+	fmt.Println("[ffmpeg] 警告：PATH 中找不到 ffmpeg，check/render 将失败（winget install Gyan.FFmpeg）")
+}
+
 // runCLI 在项目目录执行外部命令（hyperframes CLI 等），返回合并输出。
 // npx 一律 --offline：hyperframes 锁版本已在本地缓存，渲染管线不依赖 registry 网络。
 func runCLI(p *Project, name string, args ...string) (string, error) {
@@ -450,9 +567,7 @@ func runCLI(p *Project, name string, args ...string) (string, error) {
 	}
 	cmd := exec.CommandContext(ctx, name, full...)
 	cmd.Dir = p.Dir
-	if extraPATH != "" {
-		cmd.Env = append(os.Environ(), "PATH="+extraPATH+string(os.PathListSeparator)+os.Getenv("PATH"))
-	}
+	cmd.Env = cmdEnv()
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf

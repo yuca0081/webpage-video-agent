@@ -191,9 +191,9 @@ func (r *Runner) runRework(ctx context.Context, p *pipeline.Project, seg contrac
 		return err
 	}
 
-	// 3. 整片重渲（重渲单元=段；v1 渲染仍整条，段级并行是后续项）
+	// 3. 段级局部重渲：只删/重渲该段段片，其余段复用，再 concat 出成片
 	r.emit(id, "stage", "render", "running")
-	if err := os.Remove(p.Artifact("renders/main.mp4")); err != nil && !os.IsNotExist(err) {
+	if err := os.Remove(p.Artifact("renders/segs/" + seg.ID + ".mp4")); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	if err := pipeline.Run(ctx, p, "render"); err != nil {
@@ -252,11 +252,8 @@ func (r *Runner) run(ctx context.Context, p *pipeline.Project) error {
 		return err
 	}
 
-	// ── 5. 渲染成片 ─────────────────────────────────────────
+	// ── 5. 渲染成片（按段增量渲 + concat，段片复用见 stageRender）──
 	r.emit(id, "stage", "render", "running")
-	if err := os.Remove(p.Artifact("renders/main.mp4")); err != nil && !os.IsNotExist(err) {
-		return err
-	}
 	if err := pipeline.Run(ctx, p, "render"); err != nil {
 		return fmt.Errorf("渲染失败: %w", err)
 	}
