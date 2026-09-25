@@ -8,12 +8,15 @@ import StagePanel from './components/StagePanel.vue'
 import ChatPanel from './components/ChatPanel.vue'
 import NewProjectModal from './components/NewProjectModal.vue'
 import MaterialCenter from './components/MaterialCenter.vue'
+import HomeView from './components/HomeView.vue'
 import { api, videoURL } from './api'
 import type { AudioMeta, ChatRef, Msg, ProjectRow, ProjectView, Storyboard, StylePack, StyleSamples } from './types'
 import { segAt, segTable } from './segtime'
 
 const projects = ref<ProjectRow[]>([])
 const current = ref<string>('')
+// 三页导航：首页（落地+快速开始）/ 工作区（项目三栏）/ 素材区（风格+元素库）
+const page = ref<'home' | 'workspace' | 'materials'>('home')
 const view = ref<ProjectView | null>(null)
 const storyboard = ref<Storyboard | null>(null)
 const style = ref<StyleSamples | null>(null)
@@ -65,21 +68,10 @@ async function loadMsgs() {
 
 function selectProject(id: string) {
   current.value = id
+  page.value = 'workspace'
   inspect.value = false
   msgs.value = []
   chatRefs.value = []
-  stageState.value = {}
-}
-
-// 回首页（素材中心）：清干净舞台态，避免旧项目标题/成片按钮残留
-function goHome() {
-  current.value = ''
-  inspect.value = false
-  view.value = null
-  storyboard.value = null
-  style.value = null
-  manuscript.value = null
-  audioMeta.value = null
   stageState.value = {}
 }
 
@@ -145,15 +137,12 @@ function openSSE(id: string) {
 
 watch(current, id => {
   if (id) { openSSE(id); refresh() }
-  else { es?.close(); es = null } // 回首页（素材中心）：断开项目订阅
 })
 
 onBeforeUnmount(() => es?.close())
 
-// 初始：加载列表，选中最近项目
-loadProjects().then(() => {
-  if (projects.value.length) selectProject(projects.value[0].id)
-})
+// 初始：加载列表，落首页（最近项目在首页展示，点了再进工作区）
+loadProjects()
 loadLibrary()
 
 const showNew = ref(false)
@@ -184,42 +173,71 @@ const themeOverrides = {
 <template>
   <n-config-provider :theme="darkTheme" :theme-overrides="themeOverrides">
     <n-message-provider>
-      <div class="shell">
-        <HistoryRail :projects="projects" :current="current" @select="selectProject" @new="showNew = true" @home="goHome" />
-        <main class="center">
-          <header class="topbar">
-            <div class="title">
-              <span class="brand">帧述</span>
-              <span class="name">{{ view?.name ?? '未选择项目' }}</span>
-            </div>
-            <!-- 成片态操作（状态 chips 在对话栏顶部） -->
-            <div v-if="view?.has_video" class="ops">
-              <button
-                class="op-btn" :class="{ on: inspect }"
-                :disabled="!!stageSummary || view.producing"
-                @click="inspect = !inspect"
-              >{{ inspect ? '退出检视' : '🔍 检视' }}</button>
-              <a class="op-btn" :href="videoURL(current)" :download="`${view.name}.mp4`">⬇ 下载成片</a>
-            </div>
-          </header>
-          <!-- 首页（未选项目）：素材中心（风格库=方法库飞轮入口；元素库=样张矩阵） -->
-          <MaterialCenter v-if="!current" :packs="library" @publish="publishPack" />
-          <StagePanel
-            v-else
-            :view="view" :storyboard="storyboard" :style-samples="style" :manuscript="manuscript"
-            :stage-summary="stageSummary" :video-id="current" :audio-meta="audioMeta"
-            :picked-idx="chatRefs.map(r => r.idx)" :inspect="inspect" @inspect-off="inspect = false"
-            @confirm-style="async () => { if (current) { await api.confirmStyle(current); refresh() } }"
-            @seg="addRef"
-            @seg-element="addElementRef"
-            @pick-time="addTimeRef"
-            @cancel="async () => { if (current) { await api.cancel(current).catch(() => {}); refresh() } }"
-          />
-        </main>
-        <ChatPanel
-          :project-id="current" :msgs="msgs" :busy="agentBusy" v-model:draft="chatDraft" :refs="chatRefs" :view="view"
-          @sent="markBusy" @remove-ref="removeRef" @clear-refs="chatRefs = []"
+      <div class="app">
+        <nav class="navbar">
+          <div class="nb-brand">
+            <span class="nb-logo">帧</span>
+            <b>帧述</b>
+          </div>
+          <div class="nb-tabs">
+            <button
+              v-for="t in [{ id: 'home', label: '首页' }, { id: 'workspace', label: '工作区' }, { id: 'materials', label: '素材区' }]"
+              :key="t.id" class="nb-tab" :class="{ on: page === t.id }" @click="page = t.id as any"
+            >{{ t.label }}</button>
+          </div>
+          <button class="nb-new" @click="showNew = true">＋ 新建</button>
+        </nav>
+
+        <!-- 首页：落地 + 快速开始 -->
+        <HomeView
+          v-if="page === 'home'" :projects="projects"
+          @new="showNew = true" @open="selectProject" @materials="page = 'materials'"
         />
+
+        <!-- 素材区：风格库 + 元素库 -->
+        <MaterialCenter
+          v-else-if="page === 'materials'" :packs="library" @publish="publishPack"
+        />
+
+        <!-- 工作区：项目三栏 -->
+        <div v-else class="shell">
+          <HistoryRail :projects="projects" :current="current" @select="selectProject" />
+          <main class="center">
+            <header class="topbar">
+              <div class="title">
+                <span class="name">{{ view?.name ?? '未选择项目' }}</span>
+              </div>
+              <!-- 成片态操作（状态 chips 在对话栏顶部） -->
+              <div v-if="view?.has_video" class="ops">
+                <button
+                  class="op-btn" :class="{ on: inspect }"
+                  :disabled="!!stageSummary || view.producing"
+                  @click="inspect = !inspect"
+                >{{ inspect ? '退出检视' : '🔍 检视' }}</button>
+                <a class="op-btn" :href="videoURL(current)" :download="`${view.name}.mp4`">⬇ 下载成片</a>
+              </div>
+            </header>
+            <StagePanel
+              v-if="current"
+              :view="view" :storyboard="storyboard" :style-samples="style" :manuscript="manuscript"
+              :stage-summary="stageSummary" :video-id="current" :audio-meta="audioMeta"
+              :picked-idx="chatRefs.map(r => r.idx)" :inspect="inspect" @inspect-off="inspect = false"
+              @confirm-style="async () => { if (current) { await api.confirmStyle(current); refresh() } }"
+              @seg="addRef"
+              @seg-element="addElementRef"
+              @pick-time="addTimeRef"
+              @cancel="async () => { if (current) { await api.cancel(current).catch(() => {}); refresh() } }"
+            />
+            <div v-else class="empty-ws">
+              从左侧选择一个项目，或
+              <button class="link" @click="showNew = true">新建一个</button>
+            </div>
+          </main>
+          <ChatPanel
+            :project-id="current" :msgs="msgs" :busy="agentBusy" v-model:draft="chatDraft" :refs="chatRefs" :view="view"
+            @sent="markBusy" @remove-ref="removeRef" @clear-refs="chatRefs = []"
+          />
+        </div>
       </div>
       <NewProjectModal v-model:show="showNew" @created="onCreated" />
     </n-message-provider>
@@ -235,15 +253,42 @@ body {
   font-family: 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif;
   font-size: 14px; overflow: hidden;
 }
-.shell { display: flex; height: 100vh; }
+.app { height: 100vh; display: flex; flex-direction: column; }
+
+/* ── 全局导航栏 ─────────────────────────────── */
+.navbar {
+  height: 48px; flex: none; display: flex; align-items: center; gap: 22px;
+  padding: 0 18px; border-bottom: 1px solid #232329; background: #121217;
+}
+.nb-brand { display: flex; align-items: center; gap: 9px; }
+.nb-logo {
+  width: 27px; height: 27px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #f0c674, #c89b4b); color: #14140f; font-weight: 700; font-size: 14px;
+  box-shadow: 0 2px 8px rgba(240, 198, 116, .25);
+}
+.nb-brand b { letter-spacing: 2px; color: #f0c674; font-size: 14.5px; }
+.nb-tabs { display: flex; gap: 6px; flex: 1; }
+.nb-tab {
+  border: 0; background: transparent; color: #9a9aa6; font-size: 13.5px;
+  padding: 6px 16px; border-radius: 999px; cursor: pointer;
+}
+.nb-tab:hover { color: #e6e6ea; background: #1b1b22; }
+.nb-tab.on { background: #f0c674; color: #14140f; font-weight: 600; }
+.nb-new {
+  border: 0; background: linear-gradient(135deg, #f0c674, #d9ae5b); color: #14140f;
+  font-size: 13px; font-weight: 700; padding: 6px 18px; border-radius: 999px; cursor: pointer;
+}
+.nb-new:hover { filter: brightness(1.06); }
+
+/* ── 工作区三栏 ─────────────────────────────── */
+.shell { flex: 1; min-height: 0; display: flex; }
 .center { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .topbar {
-  height: 52px; flex: none; display: flex; align-items: center; justify-content: space-between;
+  height: 46px; flex: none; display: flex; align-items: center; justify-content: space-between;
   padding: 0 20px; border-bottom: 1px solid #232329; background: #121217;
 }
 .title { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
-.brand { font-weight: 700; letter-spacing: 3px; color: #f0c674; }
-.name { font-size: 15px; color: #c9c9d1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.name { font-size: 15px; font-weight: 600; color: #c9c9d1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ops { display: flex; gap: 8px; }
 .op-btn {
   border: 1px solid #5c4d24; background: #211d12; color: #f0c674;
@@ -253,4 +298,7 @@ body {
 .op-btn:hover { background: #2a2416; }
 .op-btn.on { background: #f0c674; color: #14140f; font-weight: 600; }
 .op-btn:disabled { opacity: .4; cursor: not-allowed; }
+.empty-ws { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; color: #55555f; }
+.link { border: 0; background: transparent; color: #8fc7ff; cursor: pointer; font-size: 14px; }
+.link:hover { text-decoration: underline; }
 </style>

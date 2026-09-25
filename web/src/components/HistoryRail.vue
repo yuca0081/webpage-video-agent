@@ -4,7 +4,7 @@ import { NPopover, NScrollbar } from 'naive-ui'
 import type { ProjectRow } from '../types'
 
 defineProps<{ projects: ProjectRow[]; current: string }>()
-const emit = defineEmits<{ select: [id: string]; new: []; home: [] }>()
+const emit = defineEmits<{ select: [id: string] }>()
 
 // 折叠状态本地记忆：展开 = 宽栏（全名+状态），收起 = 56px 图标栏
 const collapsed = ref(localStorage.getItem('rail-collapsed') === '1')
@@ -28,23 +28,12 @@ const dateOf = (iso: string) => iso.slice(5, 10).replace('-', '/')
 <template>
   <aside class="rail" :class="{ mini: collapsed }">
     <div class="head">
-      <div class="logo" title="素材中心（风格与元素库）" role="button" tabindex="0" @click="emit('home')" @keydown.enter="emit('home')">帧</div>
-      <transition name="fade">
-        <div v-if="!collapsed" class="brand">
-          <b role="button" tabindex="0" title="素材中心（风格与元素库）" @click="emit('home')" @keydown.enter="emit('home')">帧述</b>
-          <button class="fold" title="收起栏" @click="toggle">
-            <svg viewBox="0 0 24 24" width="14" height="14"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-        </div>
-      </transition>
+      <span v-if="!collapsed" class="head-title">项目 · {{ projects.length }}</span>
+      <button class="fold" :title="collapsed ? '展开栏' : '收起栏'" @click="toggle">
+        <svg v-if="!collapsed" viewBox="0 0 24 24" width="14" height="14"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg v-else viewBox="0 0 24 24" width="14" height="14"><path d="M9 18l6-6-6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
     </div>
-
-    <button class="new" title="新建视频" @click="emit('new')">
-      <span class="plus">＋</span>
-      <span v-if="!collapsed">新建视频</span>
-    </button>
-
-    <div v-if="!collapsed" class="sec">项目 · {{ projects.length }}</div>
 
     <NScrollbar class="list">
       <template v-if="!projects.length">
@@ -69,12 +58,6 @@ const dateOf = (iso: string) => iso.slice(5, 10).replace('-', '/')
         </div>
       </NPopover>
     </NScrollbar>
-
-    <div v-if="collapsed" class="foot">
-      <button class="fold-v" title="展开栏" @click="toggle">
-        <svg viewBox="0 0 24 24" width="14" height="14"><path d="M9 18l6-6-6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-    </div>
   </aside>
 </template>
 
@@ -86,24 +69,14 @@ const dateOf = (iso: string) => iso.slice(5, 10).replace('-', '/')
 }
 .rail.mini { width: 56px; align-items: center; }
 
-.head { flex: none; display: flex; align-items: center; gap: 10px; padding: 14px 14px 10px; min-height: 56px; }
+.head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 14px 10px; min-height: 50px; }
 .mini .head { padding: 14px 0 10px; justify-content: center; }
-.logo {
-  width: 34px; height: 34px; flex: none; border-radius: 10px; display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(135deg, #f0c674, #c89b4b); color: #14140f; font-weight: 700; font-size: 17px;
-  box-shadow: 0 2px 10px rgba(240, 198, 116, .25); cursor: pointer;
-}
-.logo:hover { filter: brightness(1.08); }
-.brand { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; }
-.brand b { font-size: 15px; letter-spacing: 2px; color: #e6e6ea; cursor: pointer; }
-.brand b:hover { color: #f0c674; }
+.head-title { font-size: 11px; color: #55555f; letter-spacing: 1px; }
 .fold {
   border: 0; background: transparent; color: #55555f; cursor: pointer; padding: 4px; border-radius: 6px;
   display: flex; align-items: center;
 }
 .fold:hover { color: #c9c9d1; background: #1a1a21; }
-
-.sec { flex: none; padding: 6px 16px 4px; font-size: 11px; color: #55555f; letter-spacing: 1px; }
 
 .list { flex: 1; width: 100%; }
 .empty { color: #55555f; font-size: 11px; text-align: center; padding-top: 20px; }
@@ -131,23 +104,6 @@ const dateOf = (iso: string) => iso.slice(5, 10).replace('-', '/')
 .st.s-run { background: #f0c674; animation: blink 1.2s infinite; }
 .st.s-done { background: #7ee2a8; }
 @keyframes blink { 50% { opacity: .3; } }
-
-.foot { flex: none; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
-.mini .foot { padding: 10px 0; align-items: center; }
-.new {
-  flex: none; margin: 2px 10px 6px; height: 36px; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 600;
-  display: flex; align-items: center; justify-content: center; gap: 6px;
-  border: 1px solid rgba(240, 198, 116, .45); background: #241f14; color: #f0c674;
-  transition: background .15s, border-color .15s;
-}
-.new:hover { background: #2e2717; border-color: #f0c674; }
-.mini .new { margin: 0 auto 6px; width: 36px; height: 36px; padding: 0; }
-.plus { font-size: 16px; line-height: 1; }
-.fold-v {
-  border: 0; background: transparent; color: #55555f; cursor: pointer; padding: 6px; border-radius: 6px;
-  display: flex; align-items: center; justify-content: center;
-}
-.fold-v:hover { color: #c9c9d1; background: #1a1a21; }
 
 .pop { max-width: 220px; }
 .pop-name { font-size: 13px; font-weight: 600; }
