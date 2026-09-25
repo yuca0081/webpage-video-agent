@@ -16,6 +16,12 @@ const dateOf = (iso: string) => (iso ?? '').slice(5, 10).replace('-', '/')
 
 <template>
   <section class="home">
+    <!-- 背景层：细网格 + 三色光斑缓慢漂移（纯 CSS，transform 合成不卡） -->
+    <div class="bg" aria-hidden="true">
+      <div class="blob b-gold" />
+      <div class="blob b-cyan" />
+      <div class="blob b-violet" />
+    </div>
     <div class="hero">
       <h1>帧述</h1>
       <p class="slogan">聊天即创作 —— 粘贴一篇文章，还你一部带配音、字幕、动画的成片</p>
@@ -46,10 +52,40 @@ const dateOf = (iso: string) => (iso ?? '').slice(5, 10).replace('-', '/')
 </template>
 
 <style scoped>
-.home { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; align-items: center; }
+.home { position: relative; flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; align-items: center; }
+.hero, .recent { position: relative; z-index: 1; }
+
+/* ── 背景动效：网格 + 光斑 ─────────────────── */
+.bg {
+  position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0;
+  background-image:
+    linear-gradient(rgba(230, 230, 234, .035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(230, 230, 234, .035) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(1200px 640px at 50% 36%, #000 30%, transparent 78%);
+}
+.blob { position: absolute; border-radius: 50%; filter: blur(90px); will-change: transform; }
+.b-gold {
+  width: 560px; height: 560px; left: 8%; top: -12%;
+  background: radial-gradient(circle, rgba(240, 198, 116, .16), transparent 65%);
+  animation: drift-a 34s ease-in-out infinite alternate;
+}
+.b-cyan {
+  width: 640px; height: 640px; right: -6%; top: 6%;
+  background: radial-gradient(circle, rgba(77, 157, 224, .13), transparent 65%);
+  animation: drift-b 42s ease-in-out infinite alternate;
+}
+.b-violet {
+  width: 480px; height: 480px; left: 34%; bottom: -16%;
+  background: radial-gradient(circle, rgba(179, 136, 235, .11), transparent 65%);
+  animation: drift-c 38s ease-in-out infinite alternate;
+}
+@keyframes drift-a { from { transform: translate(0, 0) scale(1); } to { transform: translate(160px, 90px) scale(1.18); } }
+@keyframes drift-b { from { transform: translate(0, 0) scale(1.1); } to { transform: translate(-140px, 120px) scale(.94); } }
+@keyframes drift-c { from { transform: translate(0, 0) scale(.95); } to { transform: translate(-110px, -80px) scale(1.15); } }
+
 .hero {
   margin-top: 9vh; text-align: center; padding: 0 24px;
-  background: radial-gradient(600px 240px at 50% 0%, rgba(240, 198, 116, .07), transparent 70%);
 }
 .hero h1 { font-size: 44px; letter-spacing: 10px; color: #f0c674; text-indent: 10px; }
 .slogan { margin-top: 14px; color: #9a9aa6; font-size: 15px; }

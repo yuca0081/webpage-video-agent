@@ -81,28 +81,31 @@ const empty = computed(() => !Object.keys(gallery.value).length)
 </template>
 
 <style scoped>
-.mc { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 14px 28px 0; }
-.tabs { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.tabs :deep(.n-tabs-pane) { flex: 1; min-height: 0; overflow: auto; }
+.mc { flex: 1; min-height: 0; padding: 14px 28px 14px; }
+/* 高度链打通到 tab pane，滚动条才出得来（naive-ui 实际类名是单数 n-tab-pane） */
+.mc :deep(.n-tabs) { height: 100%; display: flex; flex-direction: column; }
+.mc :deep(.n-tabs-nav) { flex: none; }
+.mc :deep(.n-tabs-content) { flex: 1; min-height: 0; }
+.mc :deep(.n-tab-pane) { height: 100%; overflow: auto; }
 .none { color: #55555f; font-size: 13px; padding: 40px 0; }
 .none code { background: #1b1b22; padding: 2px 8px; border-radius: 6px; font-size: 12px; }
-.wrap { display: flex; gap: 16px; min-height: 100%; }
-.cols { flex: none; width: 132px; display: flex; flex-direction: column; gap: 8px; }
+.wrap { display: flex; gap: 16px; align-items: flex-start; }
+.cols { flex: none; width: 132px; display: flex; flex-direction: column; gap: 8px; position: sticky; top: 0; }
 .col {
   display: flex; flex-direction: column; gap: 3px; text-align: left; cursor: pointer;
   background: #14141a; border: 1px solid #232329; border-radius: 10px; padding: 6px;
   color: #c9c9d1; overflow: hidden;
 }
-.col img { width: 100%; aspect-ratio: 16/9; object-fit: cover; border-radius: 6px; }
+.col img { width: 100%; height: auto; display: block; border-radius: 6px; }
 .col b { font-size: 12px; letter-spacing: .5px; }
 .col span {
   font-size: 10.5px; color: #6f6f7c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .col.on { border-color: #f0c674; }
 .col.on b { color: #f0c674; }
-.grid { flex: 1; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; align-content: start; }
+.grid { flex: 1; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; align-content: start; }
 .card { background: #14141a; border: 1px solid #232329; border-radius: 10px; overflow: hidden; }
-.card img { width: 100%; aspect-ratio: 16/9; display: block; object-fit: cover; background: #0a0a10; }
+.card img { width: 100%; height: auto; display: block; background: #0a0a10; }
 figcaption { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 3px; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .row b { font-size: 12.5px; }
