@@ -165,8 +165,9 @@ func (r *Runner) runRework(ctx context.Context, p *pipeline.Project, seg contrac
 
 	// 1. 该段画面重生成（删旧 spec 强制重出；其余段产物原样复用）
 	r.emit(id, "stage", "compositions", "running")
-	feedback := "用户对这一段画面的修改要求（必须落实）：\n" + instruction
-	if err := r.genSpecs(ctx, p, feedback, seg.ID); err != nil {
+	// 用户改画要求走 instruction 位（最高优先级），修复轮（check/画面审查）也必须带上
+	instr := "用户对这一段画面的修改要求（必须落实）：\n" + instruction
+	if err := r.genSpecs(ctx, p, instr, "", seg.ID); err != nil {
 		return err
 	}
 	if err := r.fetchImages(ctx, p); err != nil {
@@ -187,7 +188,7 @@ func (r *Runner) runRework(ctx context.Context, p *pipeline.Project, seg contrac
 		return fmt.Errorf("组装失败: %w", err)
 	}
 	r.emit(id, "stage", "assemble", "done")
-	if err := r.checkWithRepair(ctx, p, seg.ID); err != nil {
+	if err := r.checkWithRepair(ctx, p, instr, seg.ID); err != nil {
 		return err
 	}
 
@@ -203,6 +204,11 @@ func (r *Runner) runRework(ctx context.Context, p *pipeline.Project, seg contrac
 		return err
 	}
 	r.emit(id, "stage", "render", "done")
+
+	// 4. 画面审查：只审重做段，不过带要求重出（用户要求经 instr 一路带到修复轮）
+	if err := r.frameQA(ctx, p, instr, seg.ID); err != nil {
+		return err
+	}
 	r.emit(id, "done", "", "renders/main.mp4")
 	r.Manifest(p, "rework.done", seg.ID)
 	if r.OnDone != nil {
@@ -248,7 +254,7 @@ func (r *Runner) run(ctx context.Context, p *pipeline.Project) error {
 	r.emit(id, "stage", "assemble", "done")
 
 	// ── 4. check 门禁（自修复：报错回喂重生成 spec）────────────
-	if err := r.checkWithRepair(ctx, p, ""); err != nil {
+	if err := r.checkWithRepair(ctx, p, "", ""); err != nil {
 		return err
 	}
 
@@ -261,6 +267,11 @@ func (r *Runner) run(ctx context.Context, p *pipeline.Project) error {
 		return err
 	}
 	r.emit(id, "stage", "render", "done")
+
+	// ── 6. 画面审查（抽帧+视觉模型，自修复见 frameQA）────────────
+	if err := r.frameQA(ctx, p, "", ""); err != nil {
+		return err
+	}
 	r.emit(id, "done", "", "renders/main.mp4")
 	r.Manifest(p, "produce.done", "renders/main.mp4")
 	if r.OnDone != nil {
@@ -272,7 +283,7 @@ func (r *Runner) run(ctx context.Context, p *pipeline.Project) error {
 // compositions 生成/复用 spec → 搜图本地化 → 渲染 HTML → 清旧帧 → 管线落盘。
 func (r *Runner) compositions(ctx context.Context, p *pipeline.Project) error {
 	r.emit(p.ID, "stage", "compositions", "running")
-	if err := r.genSpecs(ctx, p, "", ""); err != nil {
+	if err := r.genSpecs(ctx, p, "", "", ""); err != nil {
 		return err
 	}
 	if err := r.fetchImages(ctx, p); err != nil {
@@ -290,8 +301,9 @@ func (r *Runner) compositions(ctx context.Context, p *pipeline.Project) error {
 }
 
 // checkWithRepair check 失败 → 报错回喂 → 重生成 spec → 重渲染 → 重查（最多 3 轮，plan §4.5）。
+// instruction 原样传给 genSpecs 的用户要求位（rework 时不能丢）。
 // only 非空 = 修复范围限定该段（rework），空 = 全片（首次制作）。
-func (r *Runner) checkWithRepair(ctx context.Context, p *pipeline.Project, only string) error {
+func (r *Runner) checkWithRepair(ctx context.Context, p *pipeline.Project, instruction, only string) error {
 	for attempt := 1; attempt <= 3; attempt++ {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -314,7 +326,7 @@ func (r *Runner) checkWithRepair(ctx context.Context, p *pipeline.Project, only 
 			"\n常见原因：元素重叠/越界。请整体重排：拉开间距、避开底部字幕带（禁放区见布局规则）、必要时减少元素。"
 		r.emit(p.ID, "stage", "check", "repair：带着报错重生成画面")
 		r.Manifest(p, "check.repair", tail(err.Error(), 10))
-		if err := r.genSpecs(ctx, p, feedback, only); err != nil {
+		if err := r.genSpecs(ctx, p, instruction, feedback, only); err != nil {
 			return err
 		}
 		if err := r.fetchImages(ctx, p); err != nil {
@@ -367,8 +379,9 @@ func loadAudioMeta(p *pipeline.Project) (map[string]voiceMeta, error) {
 }
 
 // genSpecs 每段一份语义 spec（llm/comp-segNN.spec.json）。
-// feedback 非空 = 带要求重生成；only 非空 = 只处理该段（rework），空 = 全片。
-func (r *Runner) genSpecs(ctx context.Context, p *pipeline.Project, feedback, only string) error {
+// instruction = 用户改画要求（最高优先级位，修复轮必须带上否则会丢）；
+// feedback = 校验/审查报错回喂（必须修正位）。only 非空 = 只处理该段（rework），空 = 全片。
+func (r *Runner) genSpecs(ctx context.Context, p *pipeline.Project, instruction, feedback, only string) error {
 	sb, err := p.LoadStoryboard()
 	if err != nil {
 		return fmt.Errorf("先完成 storyboard: %w", err)
@@ -393,12 +406,6 @@ func (r *Runner) genSpecs(ctx context.Context, p *pipeline.Project, feedback, on
 		for _, seg := range sb.Segments {
 			_ = os.Remove(p.Artifact("llm/comp-" + seg.ID + ".spec.json"))
 		}
-	}
-	// rework：feedback 是用户的画面修改要求，置顶为最高优先级；
-	// 校验报错的回喂仍走 feedback 位（追加在其后）。
-	instruction := ""
-	if only != "" && feedback != "" {
-		instruction, feedback = feedback, ""
 	}
 	for _, seg := range sb.Segments {
 		if only != "" && seg.ID != only {
@@ -437,7 +444,7 @@ func (r *Runner) genSpecs(ctx context.Context, p *pipeline.Project, feedback, on
 			if len(spec.Elements) < 3 {
 				r.emit(p.ID, "progress", "compositions", fmt.Sprintf("%s 清洗后仅 %d 元素，整段重出", seg.ID, len(spec.Elements)))
 				var retry contract.CompSpec
-					u2, err2 := prov.GenerateJSON(ctx, system,
+				u2, err2 := prov.GenerateJSON(ctx, system,
 					specUserPrompt(seg, v, instruction,
 						fmt.Sprintf("上一版几乎每个元素的 kind 都是空的或不认识的。kind 必须从可用元素菜单里逐字选取（%s），每个元素都必须有 kind。", kinds),
 						cv, style, menu), &retry)

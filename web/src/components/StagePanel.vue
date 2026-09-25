@@ -21,7 +21,7 @@ const props = defineProps<{
 const emit = defineEmits<{ 'confirm-style': []; seg: [idx: number, key: string]; 'seg-element': [ref: ChatRef]; cancel: []; 'pick-time': [t: number]; 'inspect-off': [] }>()
 
 const stageName: Record<string, string> = {
-  tts: '配音', compositions: '画面', assemble: '组装', check: '检查', render: '渲染',
+  tts: '配音', compositions: '画面', assemble: '组装', check: '检查', render: '渲染', frameqa: '画面审查',
 }
 
 // 视频播放 ↔ 时间轴播放头同步

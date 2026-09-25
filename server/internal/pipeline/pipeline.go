@@ -517,6 +517,9 @@ func ffmpegPath() (string, error) {
 	return "", errors.New("ffmpeg 不在 PATH（ensureFFmpeg 未生效？）")
 }
 
+// FFmpegPath 供外部包（produce 抽帧审查）定位 ffmpeg。
+func FFmpegPath() (string, error) { return ffmpegPath() }
+
 // cmdEnv runCLI 与 ffmpeg 共用的进程环境（extraPATH 注入）。
 func cmdEnv() []string {
 	if extraPATH == "" {

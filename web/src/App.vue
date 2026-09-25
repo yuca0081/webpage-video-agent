@@ -34,7 +34,7 @@ const inspect = ref(false) // 检视模式（标题行按钮触发，StagePanel 
 let es: EventSource | null = null
 let busyTimer: number | null = null
 
-const stageOrder = ['tts', 'compositions', 'assemble', 'check', 'render']
+const stageOrder = ['tts', 'compositions', 'assemble', 'check', 'render', 'frameqa']
 
 async function loadProjects() {
   projects.value = await api.listProjects()

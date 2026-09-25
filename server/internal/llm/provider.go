@@ -61,6 +61,25 @@ func FromEnv(role Role) (*Provider, error) {
 // GenerateJSON 一次 JSON 作业：system+user → 模型 → 剥掉 markdown 围栏 → json.Unmarshal 到 out。
 // 返回本次 token 用量（成本记账）；重试时的用量取最后一次成功调用。
 func (p *Provider) GenerateJSON(ctx context.Context, system, user string, out any) (openai.Usage, error) {
+	return p.generate(ctx, system,
+		[]openai.ChatMessagePart{{Type: openai.ChatMessagePartTypeText, Text: user}}, out, 0.7)
+}
+
+// GenerateJSONVision 多模态 JSON 作业：user 文本 + 若干图片（data URL）→ 模型，解析同 GenerateJSON。
+// 评审类作业用低温：要的是稳定判断不是发散。
+func (p *Provider) GenerateJSONVision(ctx context.Context, system, user string, imageURLs []string, out any) (openai.Usage, error) {
+	parts := make([]openai.ChatMessagePart, 0, len(imageURLs)+1)
+	for _, u := range imageURLs {
+		parts = append(parts, openai.ChatMessagePart{
+			Type:     openai.ChatMessagePartTypeImageURL,
+			ImageURL: &openai.ChatMessageImageURL{URL: u},
+		})
+	}
+	parts = append(parts, openai.ChatMessagePart{Type: openai.ChatMessagePartTypeText, Text: user})
+	return p.generate(ctx, system, parts, out, 0.2)
+}
+
+func (p *Provider) generate(ctx context.Context, system string, userParts []openai.ChatMessagePart, out any, temperature float32) (openai.Usage, error) {
 	cli := openai.NewClientWithConfig(cfg(p))
 	var lastErr error
 	var usage openai.Usage
@@ -72,10 +91,10 @@ func (p *Provider) GenerateJSON(ctx context.Context, system, user string, out an
 			Model: p.Model,
 			Messages: []openai.ChatCompletionMessage{
 				{Role: openai.ChatMessageRoleSystem, Content: system},
-				{Role: openai.ChatMessageRoleUser, Content: user},
+				{Role: openai.ChatMessageRoleUser, MultiContent: userParts},
 			},
 			ResponseFormat: &openai.ChatCompletionResponseFormat{Type: openai.ChatCompletionResponseFormatTypeJSONObject},
-			Temperature:    0.7,
+			Temperature:    temperature,
 		})
 		if err != nil {
 			lastErr = err
