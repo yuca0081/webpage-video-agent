@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { NButton, NInput, NModal, NRadioButton, NRadioGroup, NSelect } from 'naive-ui'
 import { api } from '../api'
+import SampleFrame from './SampleFrame.vue'
 import type { StylePack } from '../types'
 
 const show = defineModel<boolean>('show')
@@ -129,7 +130,7 @@ async function create() {
             class="style-card" :class="{ on: stylepack === c.id }"
             type="button" @click="stylepack = c.id"
           >
-            <iframe v-if="c.html" :srcdoc="c.html" sandbox="" tabindex="-1" />
+            <SampleFrame v-if="c.html" :html="c.html" />
             <div v-else class="auto-card">✨</div>
             <div class="meta">
               <b>{{ c.name }}</b>
@@ -184,11 +185,8 @@ async function create() {
 }
 .style-card:hover { border-color: #3a3a45; }
 .style-card.on { border-color: #f0c674; box-shadow: 0 0 0 1px #f0c674; }
-.style-card iframe, .auto-card {
-  width: 100%; aspect-ratio: 16/9; display: block; border: 0; background: #FDF6E3; pointer-events: none;
-}
 .auto-card {
-  background: #17171f; color: #f0c674; font-size: 26px;
+  width: 100%; aspect-ratio: 16/9; background: #17171f; color: #f0c674; font-size: 26px;
   display: flex; align-items: center; justify-content: center;
 }
 .meta { padding: 7px 9px 9px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }

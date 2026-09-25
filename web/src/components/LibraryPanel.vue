@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { NButton, NTag } from 'naive-ui'
+import SampleFrame from './SampleFrame.vue'
 import type { StylePack } from '../types'
 
 defineProps<{ packs: StylePack[] }>()
@@ -17,7 +18,7 @@ const emit = defineEmits<{ publish: [id: string] }>()
     </div>
     <div v-else class="grid">
       <figure v-for="p in packs" :key="p.id" class="card" :class="{ draft: !p.published }">
-        <iframe :srcdoc="p.sample_html" sandbox="" class="sample" />
+        <SampleFrame :html="p.sample_html" />
         <figcaption>
           <div class="row1">
             <b>{{ p.name }}</b>
@@ -48,7 +49,6 @@ const emit = defineEmits<{ publish: [id: string] }>()
   background: #14141a; border: 1px solid #232329; border-radius: 12px; overflow: hidden;
 }
 .card.draft { border-color: #5c4d24; }
-.sample { width: 100%; aspect-ratio: 16/9; display: block; border: 0; background: #FDF6E3; }
 figcaption { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 6px; }
 .row1 { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .row1 b { font-size: 13px; }
