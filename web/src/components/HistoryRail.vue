@@ -4,7 +4,7 @@ import { NPopover, NScrollbar } from 'naive-ui'
 import type { ProjectRow } from '../types'
 
 defineProps<{ projects: ProjectRow[]; current: string }>()
-const emit = defineEmits<{ select: [id: string]; new: [] }>()
+const emit = defineEmits<{ select: [id: string]; new: []; home: [] }>()
 
 // 折叠状态本地记忆：展开 = 宽栏（全名+状态），收起 = 56px 图标栏
 const collapsed = ref(localStorage.getItem('rail-collapsed') === '1')
@@ -28,10 +28,10 @@ const dateOf = (iso: string) => iso.slice(5, 10).replace('-', '/')
 <template>
   <aside class="rail" :class="{ mini: collapsed }">
     <div class="head">
-      <div class="logo">帧</div>
+      <div class="logo" title="素材中心（风格与元素库）" role="button" tabindex="0" @click="emit('home')" @keydown.enter="emit('home')">帧</div>
       <transition name="fade">
         <div v-if="!collapsed" class="brand">
-          <b>帧述</b>
+          <b role="button" tabindex="0" title="素材中心（风格与元素库）" @click="emit('home')" @keydown.enter="emit('home')">帧述</b>
           <button class="fold" title="收起栏" @click="toggle">
             <svg viewBox="0 0 24 24" width="14" height="14"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
@@ -91,10 +91,12 @@ const dateOf = (iso: string) => iso.slice(5, 10).replace('-', '/')
 .logo {
   width: 34px; height: 34px; flex: none; border-radius: 10px; display: flex; align-items: center; justify-content: center;
   background: linear-gradient(135deg, #f0c674, #c89b4b); color: #14140f; font-weight: 700; font-size: 17px;
-  box-shadow: 0 2px 10px rgba(240, 198, 116, .25);
+  box-shadow: 0 2px 10px rgba(240, 198, 116, .25); cursor: pointer;
 }
+.logo:hover { filter: brightness(1.08); }
 .brand { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; }
-.brand b { font-size: 15px; letter-spacing: 2px; color: #e6e6ea; }
+.brand b { font-size: 15px; letter-spacing: 2px; color: #e6e6ea; cursor: pointer; }
+.brand b:hover { color: #f0c674; }
 .fold {
   border: 0; background: transparent; color: #55555f; cursor: pointer; padding: 4px; border-radius: 6px;
   display: flex; align-items: center;

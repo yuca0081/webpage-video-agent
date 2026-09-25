@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { NButton, NInput, NModal, NRadioButton, NRadioGroup, NSelect } from 'naive-ui'
 import { api } from '../api'
 import type { StylePack } from '../types'
@@ -19,6 +19,12 @@ const topic = ref('')
 const minutes = ref(1)
 const drafting = ref(false)
 
+// 风格卡片：自动 + 已入库风格包（样张 iframe 所见即所选）
+const styleCards = computed(() => [
+  { id: '', name: 'AI 按文稿气质现定', desc: '冷启动，出样张后你再确认', html: '' },
+  ...packs.value.filter(p => p.published).map(p => ({ id: p.id, name: p.name, desc: p.direction, html: p.sample_html })),
+])
+
 watch(show, async v => {
   if (v) {
     mode.value = 'paste'
@@ -26,11 +32,6 @@ watch(show, async v => {
     packs.value = await api.listLibrary().catch(() => [])
   }
 })
-
-const packOptions = () => [
-  { label: 'AI 按文稿气质现定（冷启动）', value: '' },
-  ...packs.value.filter(p => p.published).map(p => ({ label: p.name, value: p.id })),
-]
 
 async function draft() {
   if (!topic.value.trim() || drafting.value) return
@@ -118,9 +119,23 @@ async function create() {
             <NRadioButton value="16:9" title="横屏，PC/大屏">16:9 横屏</NRadioButton>
           </NRadioGroup>
         </div>
-        <div class="opt grow">
-          <span class="label">风格</span>
-          <NSelect v-model:value="stylepack" size="small" :options="packOptions()" style="flex: 1; min-width: 0" />
+      </div>
+
+      <div class="field">
+        <span class="label">风格 <em>先看效果再选；选中的风格包决定整片氛围，画面布局仍按文稿现排</em></span>
+        <div class="style-cards">
+          <button
+            v-for="c in styleCards" :key="c.id || 'auto'"
+            class="style-card" :class="{ on: stylepack === c.id }"
+            type="button" @click="stylepack = c.id"
+          >
+            <iframe v-if="c.html" :srcdoc="c.html" sandbox="" tabindex="-1" />
+            <div v-else class="auto-card">✨</div>
+            <div class="meta">
+              <b>{{ c.name }}</b>
+              <span>{{ c.desc }}</span>
+            </div>
+          </button>
         </div>
       </div>
       <div v-if="error" class="err">{{ error }}</div>
@@ -135,7 +150,7 @@ async function create() {
 <!-- modal 挂在 body 下，样式需全局作用域 -->
 <style>
 .np-modal {
-  width: 620px; background: #14141a; border: 1px solid #26262e; border-radius: 14px;
+  width: 720px; background: #14141a; border: 1px solid #26262e; border-radius: 14px;
   --n-padding-left: 22px; --n-padding-right: 22px; --n-padding-top: 20px; --n-padding-bottom: 20px;
 }
 .np-modal .n-card-header { padding: 18px 22px 0; }
@@ -159,7 +174,29 @@ async function create() {
 .link:hover { text-decoration: underline; }
 .opts { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
 .opt { display: flex; align-items: center; gap: 10px; }
-.opt.grow { flex: 1; min-width: 260px; }
+.style-cards {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: 10px;
+  max-height: 264px; overflow: auto; padding: 2px;
+}
+.style-card {
+  display: flex; flex-direction: column; text-align: left; cursor: pointer; padding: 0;
+  background: #101016; border: 1px solid #232329; border-radius: 10px; overflow: hidden; color: #c9c9d1;
+}
+.style-card:hover { border-color: #3a3a45; }
+.style-card.on { border-color: #f0c674; box-shadow: 0 0 0 1px #f0c674; }
+.style-card iframe, .auto-card {
+  width: 100%; aspect-ratio: 16/9; display: block; border: 0; background: #FDF6E3; pointer-events: none;
+}
+.auto-card {
+  background: #17171f; color: #f0c674; font-size: 26px;
+  display: flex; align-items: center; justify-content: center;
+}
+.meta { padding: 7px 9px 9px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.meta b { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta span {
+  font-size: 10.5px; color: #6f6f7c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.style-card.on .meta b { color: #f0c674; }
 .draft-hint { font-size: 11px; color: #55555f; }
 .err { color: #ff9d9d; font-size: 13px; }
 .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 2px; }

@@ -104,3 +104,21 @@ export interface ChatRef {
   elementId?: string   // 元素 DOM id（如 seg03-arrow2）
   elementName?: string // 人话名（如 箭头：蓝光弹开）
 }
+
+// 素材中心：元素注册表条目（ai/registry/elements.json）
+export interface ElementInfo {
+  kind: string
+  name: string
+  category: string
+  scene: string
+  menu: string // LLM prompt 菜单行（kind 与参数约束的权威文本）
+}
+
+// 素材中心：风格注册表条目（ai/registry/styles.json 剥 tokens 后的元信息）
+export interface StyleInfo {
+  id: string
+  direction: string
+  genre: string
+  keywords: string[]
+  photo: string
+}

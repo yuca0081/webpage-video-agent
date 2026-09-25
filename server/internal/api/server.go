@@ -59,6 +59,9 @@ func (s *Server) Router() *gin.Engine {
 	r.GET("/api/projects/:id/assets/*filepath", s.asset)
 	r.GET("/api/library", s.listLibrary)
 	r.POST("/api/library/:id/publish", s.publishPack)
+	r.GET("/api/registry", s.registry)
+	r.GET("/api/gallery", s.gallery)
+	r.GET("/api/gallery/:style/:file", s.galleryFile)
 
 	// 前端产物（web/dist）存在则托管
 	dist := filepath.Join(s.RootDir, "web", "dist")
@@ -496,6 +499,93 @@ func (s *Server) publishPack(c *gin.Context) {
 		return
 	}
 	c.JSON(200, pack)
+}
+
+// ── 素材中心（元素注册表 / 风格注册表 / 样张矩阵）────────────
+
+// registry 元素 + 风格注册表（styles 剥掉 tokens 只给元信息；elements 原样透传）。
+func (s *Server) registry(c *gin.Context) {
+	eb, err := os.ReadFile(filepath.Join(s.RootDir, "ai", "registry", "elements.json"))
+	if err != nil {
+		c.JSON(500, gin.H{"error": "元素注册表缺失：" + err.Error()})
+		return
+	}
+	sb, err := os.ReadFile(filepath.Join(s.RootDir, "ai", "registry", "styles.json"))
+	if err != nil {
+		c.JSON(500, gin.H{"error": "风格注册表缺失：" + err.Error()})
+		return
+	}
+	var styles []struct {
+		ID        string   `json:"id"`
+		Direction string   `json:"direction"`
+		Genre     string   `json:"genre"`
+		Keywords  []string `json:"keywords"`
+		Photo     string   `json:"photo"`
+	}
+	if err := json.Unmarshal(sb, &styles); err != nil {
+		c.JSON(500, gin.H{"error": "styles.json 损坏：" + err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"elements": json.RawMessage(eb), "styles": styles})
+}
+
+// gallery 样张矩阵清单：{styleId: [kind...]}（_overview 也计入，前端作风格封面）。
+func (s *Server) gallery(c *gin.Context) {
+	dir := filepath.Join(s.DataDir, "gallery")
+	out := map[string][]string{}
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		var kinds []string
+		files, _ := os.ReadDir(filepath.Join(dir, e.Name()))
+		for _, f := range files {
+			if name := strings.TrimSuffix(f.Name(), ".png"); name != f.Name() && name != "" {
+				kinds = append(kinds, name)
+			}
+		}
+		if len(kinds) > 0 {
+			out[e.Name()] = kinds
+		}
+	}
+	c.JSON(200, out)
+}
+
+// galleryFile 样张 PNG（重生成即换内容，短缓存即可）。
+func (s *Server) galleryFile(c *gin.Context) {
+	style, file := c.Param("style"), c.Param("file")
+	if !isSlug(style) || !isPngName(file) {
+		c.JSON(400, gin.H{"error": "非法路径"})
+		return
+	}
+	f, err := os.Open(filepath.Join(s.DataDir, "gallery", style, file))
+	if err != nil {
+		c.JSON(404, gin.H{"error": "样张不存在"})
+		return
+	}
+	defer f.Close()
+	c.Header("Cache-Control", "max-age=60")
+	http.ServeContent(c.Writer, c.Request, file, time.Now(), f)
+}
+
+func isSlug(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' || r == '_') {
+			return false
+		}
+	}
+	return true
+}
+
+func isPngName(s string) bool {
+	if !strings.HasSuffix(s, ".png") || len(s) <= 4 {
+		return false
+	}
+	return isSlug(strings.TrimSuffix(s, ".png"))
 }
 
 // ── SSE ──────────────────────────────────────────────────────

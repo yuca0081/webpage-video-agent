@@ -385,6 +385,10 @@ func (r *Runner) genSpecs(ctx context.Context, p *pipeline.Project, feedback, on
 	system := specSystemFor(p)
 	style := styleNoteFor(p, r.RootDir)
 	icons := scanIcons(r.RootDir)
+	menu, kinds, err := elementRegistry(r.RootDir)
+	if err != nil {
+		return err
+	}
 	if feedback != "" && only == "" { // 全片重生成：先清旧 spec
 		for _, seg := range sb.Segments {
 			_ = os.Remove(p.Artifact("llm/comp-" + seg.ID + ".spec.json"))
@@ -409,7 +413,7 @@ func (r *Runner) genSpecs(ctx context.Context, p *pipeline.Project, feedback, on
 		}
 		v := voices[seg.ID]
 		var spec contract.CompSpec
-		u1, err := prov.GenerateJSON(ctx, system, specUserPrompt(seg, v, instruction, feedback, cv, style), &spec)
+		u1, err := prov.GenerateJSON(ctx, system, specUserPrompt(seg, v, instruction, feedback, cv, style, menu), &spec)
 		if err != nil {
 			return fmt.Errorf("%s spec 生成失败: %w", seg.ID, err)
 		}
@@ -418,7 +422,7 @@ func (r *Runner) genSpecs(ctx context.Context, p *pipeline.Project, feedback, on
 		for repair := 0; repair < 2 && len(errs) > 0; repair++ { // 修复：违规项回喂，最多 2 轮
 			fb := instruction + feedback + "\n上一版 spec 被契约校验拒绝，必须逐条修正：\n- " + strings.Join(errs, "\n- ")
 			var fixed contract.CompSpec
-			u2, err2 := prov.GenerateJSON(ctx, system, specUserPrompt(seg, v, "", fb, cv, style), &fixed)
+			u2, err2 := prov.GenerateJSON(ctx, system, specUserPrompt(seg, v, "", fb, cv, style, menu), &fixed)
 			if err2 != nil {
 				return fmt.Errorf("%s spec 修复失败: %w", seg.ID, err2)
 			}
@@ -435,8 +439,8 @@ func (r *Runner) genSpecs(ctx context.Context, p *pipeline.Project, feedback, on
 				var retry contract.CompSpec
 					u2, err2 := prov.GenerateJSON(ctx, system,
 					specUserPrompt(seg, v, instruction,
-						"上一版几乎每个元素的 kind 都是空的或不认识的。kind 必须从可用元素菜单里逐字选取（title/note/panel/chip/zone/timeline/bracket/strip/barrow/table/image/icon/emoji/chart_bar/chart_line/chart_pie/chart_donut/quote/checklist/stat/label/big/beam/disc/circle/arrow），每个元素都必须有 kind。",
-						cv, style), &retry)
+						fmt.Sprintf("上一版几乎每个元素的 kind 都是空的或不认识的。kind 必须从可用元素菜单里逐字选取（%s），每个元素都必须有 kind。", kinds),
+						cv, style, menu), &retry)
 				if err2 == nil {
 					errs2 := contract.ValidateSpec(&retry, len(v.Words), cv)
 					errs2 = append(errs2, iconErrors(&retry, icons)...)
@@ -523,7 +527,7 @@ func iconErrors(s *contract.CompSpec, icons map[string]bool) []string {
 	return errs
 }
 
-func specUserPrompt(seg contract.Segment, v voiceMeta, instruction, feedback string, cv contract.Canvas, style string) string {
+func specUserPrompt(seg contract.Segment, v voiceMeta, instruction, feedback string, cv contract.Canvas, style, menu string) string {
 	var wb strings.Builder
 	for i, w := range v.Words {
 		if i > 0 && i%10 == 0 {
@@ -553,32 +557,7 @@ func specUserPrompt(seg contract.Segment, v voiceMeta, instruction, feedback str
 - %s：%s
 %s
 ## 可用元素（kind 与参数；坐标基于 %d×%d 画布%s）
-- title：大标题（整行居中，只给 y）。y, text(≤12字), fs(默认84), reveal
-- note：便签/色块标签（给左上角坐标）。x, y, text(≤12字), bg(butter/mint/sky/coral/peach/pink), rot(±3), fs(默认40), reveal
-- panel：卡片面板（白底厚描边+彩色标题栏，放 2–4 行说明/对比/清单）。x, y, w(默认560), h(默认320), title(≤12字,可选), text(≤60字,可选), bg(navy/green/mint/sky/coral/butter=强调色), fs(默认36), reveal
-- chip：胶囊标签（短词/短语强调）。x, y, text(≤12字), bg(navy/green/mint/sky/coral/butter/white), fs(默认40), reveal
-- zone：淡色高亮区（垫底圈住一组元素，分组/强调区域；必须放在 elements 最前面）。x, y, w, h, bg(mint/sky/butter/coral), dashed(1=虚线边框), reveal
-- timeline：垂直时间线（粗竖线+彩色圆点+粗体文字，步骤/流程/层次）。x(线x), y(顶), nodes(2–6条,每条≤12字), gap(节点间距,默认110), color, fs(默认40), reveal
-- bracket：大括号+竖排标注（圈住时间线/一组步骤，如"多次重复执行"）。x, y, h(160–800), text(≤8字), color, reveal
-- strip：小方块序列+省略号（向量/维度/批量示意）。x, y, n(2–8), size(默认44), color, text(≤10字,如"512维"), reveal
-- barrow：粗块箭头（流程指向，实心大箭头，可配 rot 转向）。x, y, w(默认260), h(默认90), rot(角度), color, reveal
-- table：格子表格（数字/短文本行列对比）。x, y, w(默认520), rows(2–7行×最多4列,每格≤8字), cell_h(默认76), fs(默认30), reveal
-- quote：金句/引用（大引号+重磅大字+署名）。x, y, w(默认1240), text(≤22字=金句本体), name(≤10字,可选=出处/署名), reveal
-- checklist：对勾清单（卖点/论据/要点，逐条打勾）。x, y, nodes(2–5条,每条≤14字), gap(默认96), color, fs(默认40), reveal
-- stat：指标卡（大数字+小标签，关键参数/数据）。x, y, w(默认420), text(≤8字=数值如"13年"/"48%%"), title(≤12字=标签), reveal
-- label：文字标注。x, y, text(≤14字), fs(默认38), reveal
-- big：大数字/短语强调。x, y, text(≤8字), fs(默认110), reveal
-- image：真实照片（制作时按 query 自动搜图下载本地化，拍立得白框呈现）——有实体名词（动物/地标/物品/场景）时的主视觉首选。x, y, w(默认520), h(默认360), query(中文搜索词2–12字，如"蓝鲸 海面"), rot(±3), reveal
-- icon：手绘线稿图标（抽象概念/动作的视觉锚点）。x, y, size(48–400，主体物 120–260), name, rot(±6), reveal
-- emoji：大号彩色 emoji 点缀/角色（本地系统字体）。x, y, text(1–2 个 emoji 字符), fs(默认140), reveal。一屏 ≤2 个
-- chart_bar：手绘柱状图（数据对比）。x, y, w(默认560), h(默认360), values(2–6个数), labels(每柱≤6字), reveal
-- chart_line：手绘折线图（趋势变化）。x, y, w, h, values(3–8个数=折线点), labels(可选), reveal
-- chart_pie：手绘饼图（占比）。x, y, w, h(短边=直径), values(2–5), labels, reveal
-- chart_donut：环形图（占比，现代感；中心可放标题）。x, y, w(默认460), h(默认360), values(2–5), labels(每项≤6字), title(≤6字,可选=中心文字), reveal
-- disc：实心圆盘（抽象主体/备用）。cx, cy, r(60–180), bg(mint/sky/butter/coral), reveal
-- circle：小圆点（小物体/角色）。cx, cy, r(20–60), fill(white/mint/sky/butter), reveal
-- beam：粗条（条状物/光束，给左上角）。x, y, w, h, rot, bg, reveal
-- arrow：箭头（给起终点）。x1, y1, x2, y2, text(可选), reveal
+%s
 
 ## 可用图标名（节选，语义匹配优先；必须是列表或其近似的名字）
 rocket cat dog sun moon star atom brain heart zap cloud flame droplet eye bone dna
@@ -605,7 +584,38 @@ scale ruler clipboard lightbulb-off zap-off anchor truck bike train bus ship sen
 {"note":"布局思路一句话","elements":[…]}
 `, instrBlock, seg.Key, len(v.Words), v.DurationS, seg.Narration, briefLabel, seg.VisualBrief, style,
 		int(cv.W), int(cv.H), map[bool]string{true: " 竖屏 9:16", false: ""}[cv.Aspect == "9:16"],
+		menu,
 		wb.String(), rules, len(v.Words)-1, feedbackBlock(feedback))
+}
+
+// elementRegistry 元素菜单与 kind 清单（ai/registry/elements.json，元素库单一事实源；
+// spec.go 的 specKinds 由漂移测试 registry_test.go 强制对齐）。
+// 菜单行拼进 spec prompt；kind 清单用于「整段 kind 全空重出」的修复提示。
+func elementRegistry(rootDir string) (menu, kinds string, err error) {
+	b, err := os.ReadFile(filepath.Join(rootDir, "ai", "registry", "elements.json"))
+	if err != nil {
+		return "", "", fmt.Errorf("元素注册表缺失（ai/registry/elements.json）: %w", err)
+	}
+	var els []struct {
+		Kind string `json:"kind"`
+		Menu string `json:"menu"`
+	}
+	if err := json.Unmarshal(b, &els); err != nil {
+		return "", "", fmt.Errorf("elements.json 损坏: %w", err)
+	}
+	if len(els) == 0 {
+		return "", "", fmt.Errorf("elements.json 为空")
+	}
+	lines := make([]string, 0, len(els))
+	ks := make([]string, 0, len(els))
+	for _, e := range els {
+		if e.Kind == "" || e.Menu == "" {
+			return "", "", fmt.Errorf("elements.json 存在空 kind/menu 条目")
+		}
+		lines = append(lines, "- "+e.Kind+"："+e.Menu)
+		ks = append(ks, e.Kind)
+	}
+	return strings.Join(lines, "\n"), strings.Join(ks, "/"), nil
 }
 
 // styleNoteFor 项目风格方向 → spec 提示里的风格说明（题材 + 配图调性）。

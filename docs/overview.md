@@ -161,7 +161,8 @@
 - 画幅：项目级 `aspect`（**默认 9:16**，可切 16:9），spec 校验/prompt/渲染/组装全链路跟随
 - 方法库 v1：`data/library/stylepacks.json`，成片提炼（Agent 起草）→ 用户确认入库 → 新建项目复用
 - 风格积木扩充（2026-09-24）：内置 **风格注册表** `ai/registry/styles.json`（13 个风格方向：深空渐变/数学线框/地缘档案/高能说明书/发布会深色/轻快多彩/渐变玻璃/财经图表/公益数据/清洁医疗/自然环保/深色等距科技/黑板粉笔，均带色板 hex/背景画法/字幕条/配图调性），由 **通用 token 引擎** `ai/engines/stylepack_generic.py` 按方向关键词渲染；手绘/扁平两套手写引擎保留。新元素 4 种：`quote`（金句）/`checklist`（对勾清单）/`stat`（指标卡）/`chart_donut`（环形图）。对比度门禁：`colorutil.py` 自动把色块文字/图形拉到 ≥3.5:1。方法库里 13 个风格已播种为可直接选用的样张条目
-- 待办：10 篇真实文章 MVP 验收、`cancel_production`、帧/元素级寻址（M2）
+- 素材中心（2026-09-25）：**元素注册表** `ai/registry/elements.json`（26 kind 的 name/category/scene/menu 单一事实源；produce 的 spec 菜单与 kind 清单由它生成，`contract/registry_test.go` 漂移门禁强制与 specKinds 对齐）；**样张矩阵** `ai/element_gallery.py`（每风格 × 每 kind 一张定妆 PNG 到 `data/gallery/<style>/<kind>.png`，ffprobe 总时长均分段取 75% 处，可重入）；API `GET /api/registry|/api/gallery/:style/:file`；前端首页为 **素材中心**（风格库=方法库卡片墙 / 元素库=风格列+元素卡网格，点品牌「帧述」回首页），新建项目的风格选择升级为**样张卡片**（所见即所选）
+- 待办：10 篇真实文章 MVP 验收、`cancel_production`、帧/元素级寻址（M2）、LLM 风格师（描述→tokens→样张门）、StylePack v2（tokens 入包）、版式模板 templates.json
 
 ## 7. 文档地图
 

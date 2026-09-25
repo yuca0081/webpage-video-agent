@@ -1,4 +1,4 @@
-import type { AudioMeta, ChatRef, Msg, ProjectRow, ProjectView, Storyboard, StylePack, StyleSamples } from './types'
+import type { AudioMeta, ChatRef, ElementInfo, Msg, ProjectRow, ProjectView, Storyboard, StyleInfo, StylePack, StyleSamples } from './types'
 
 async function j<T>(res: Response): Promise<T> {
   if (!res.ok) throw new Error((await res.json().catch(() => ({} as any))).error ?? res.statusText)
@@ -62,8 +62,14 @@ export const api = {
 
   publishPack: (id: string) =>
     fetch(`/api/library/${id}/publish`, { method: 'POST' }).then(r => j<StylePack>(r)),
+
+  registry: () => fetch('/api/registry').then(r => j<{ elements: ElementInfo[]; styles: StyleInfo[] }>(r)),
+
+  gallery: () => fetch('/api/gallery').then(r => j<Record<string, string[]>>(r)),
 }
 
 export const videoURL = (id: string) => `/api/projects/${id}/video/main.mp4`
 // 活合成物壳的确定性依赖：项目内本地 gsap（与渲染引擎同一份，无 CDN）
 export const assetURL = (id: string, p: string) => `/api/projects/${id}/assets/${p}`
+// 素材中心样张：data/gallery/<style>/<kind>.png
+export const galleryURL = (style: string, kind: string) => `/api/gallery/${style}/${kind}.png`

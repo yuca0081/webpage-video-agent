@@ -7,7 +7,7 @@ import HistoryRail from './components/HistoryRail.vue'
 import StagePanel from './components/StagePanel.vue'
 import ChatPanel from './components/ChatPanel.vue'
 import NewProjectModal from './components/NewProjectModal.vue'
-import LibraryPanel from './components/LibraryPanel.vue'
+import MaterialCenter from './components/MaterialCenter.vue'
 import { api, videoURL } from './api'
 import type { AudioMeta, ChatRef, Msg, ProjectRow, ProjectView, Storyboard, StylePack, StyleSamples } from './types'
 import { segAt, segTable } from './segtime'
@@ -68,6 +68,18 @@ function selectProject(id: string) {
   inspect.value = false
   msgs.value = []
   chatRefs.value = []
+  stageState.value = {}
+}
+
+// 回首页（素材中心）：清干净舞台态，避免旧项目标题/成片按钮残留
+function goHome() {
+  current.value = ''
+  inspect.value = false
+  view.value = null
+  storyboard.value = null
+  style.value = null
+  manuscript.value = null
+  audioMeta.value = null
   stageState.value = {}
 }
 
@@ -133,6 +145,7 @@ function openSSE(id: string) {
 
 watch(current, id => {
   if (id) { openSSE(id); refresh() }
+  else { es?.close(); es = null } // 回首页（素材中心）：断开项目订阅
 })
 
 onBeforeUnmount(() => es?.close())
@@ -172,7 +185,7 @@ const themeOverrides = {
   <n-config-provider :theme="darkTheme" :theme-overrides="themeOverrides">
     <n-message-provider>
       <div class="shell">
-        <HistoryRail :projects="projects" :current="current" @select="selectProject" @new="showNew = true" />
+        <HistoryRail :projects="projects" :current="current" @select="selectProject" @new="showNew = true" @home="goHome" />
         <main class="center">
           <header class="topbar">
             <div class="title">
@@ -189,8 +202,8 @@ const themeOverrides = {
               <a class="op-btn" :href="videoURL(current)" :download="`${view.name}.mp4`">⬇ 下载成片</a>
             </div>
           </header>
-          <!-- 首页（未选项目）：方法库（成片提炼 → 入库 → 复用的飞轮入口） -->
-          <LibraryPanel v-if="!current" :packs="library" @publish="publishPack" />
+          <!-- 首页（未选项目）：素材中心（风格库=方法库飞轮入口；元素库=样张矩阵） -->
+          <MaterialCenter v-if="!current" :packs="library" @publish="publishPack" />
           <StagePanel
             v-else
             :view="view" :storyboard="storyboard" :style-samples="style" :manuscript="manuscript"
