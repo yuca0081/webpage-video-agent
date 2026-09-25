@@ -12,7 +12,7 @@ import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-REGISTRY = ROOT / 'data' / 'projects' / '_shared' / 'styles.json'
+REGISTRY = ROOT / 'ai' / 'registry' / 'styles.json'
 sys.path.insert(0, str(ROOT / 'ai'))
 import seed_styles as _seed  # noqa: E402  复用样张生成器
 FFBIN = r"C:\Users\86151\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-9.0.2-full_build\bin"

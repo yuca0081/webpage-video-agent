@@ -4,13 +4,8 @@ npm-cache/
 node_modules/
 __pycache__/
 
-# 平台运行时产物（按项目落盘）；_shared 是渲染引擎源码，例外入库
-data/**
-!data/projects/
-data/projects/*
-!data/projects/_shared/
-!data/projects/_shared/**
-data/projects/_shared/__pycache__/
+# 平台运行时数据（项目产物/方法库/样张），整目录不入库；渲染引擎源码在 ai/
+data/
 
 # OS / 编辑器
 .DS_Store
@@ -23,6 +18,9 @@ Thumbs.db
 # 本地构建产物
 bin/
 web/dist/
+
+# 本地成片输出（可从项目 renders 再生）
+videos/
 
 # 3D 验证片渲染产物（不入库）
 demo/aegis3d/renders/

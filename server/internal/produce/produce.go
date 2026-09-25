@@ -383,8 +383,8 @@ func (r *Runner) genSpecs(ctx context.Context, p *pipeline.Project, feedback, on
 	}
 	cv := ProjectCanvas(p)
 	system := specSystemFor(p)
-	style := styleNoteFor(p, r.DataDir)
-	icons := scanIcons(r.DataDir)
+	style := styleNoteFor(p, r.RootDir)
+	icons := scanIcons(r.RootDir)
 	if feedback != "" && only == "" { // 全片重生成：先清旧 spec
 		for _, seg := range sb.Segments {
 			_ = os.Remove(p.Artifact("llm/comp-" + seg.ID + ".spec.json"))
@@ -493,10 +493,10 @@ func ProjectCanvas(p *pipeline.Project) contract.Canvas {
 	return contract.CanvasFor(meta.Aspect)
 }
 
-// scanIcons 本地图标库清单（_shared/assets/icons，lucide 全量）。
-func scanIcons(dataDir string) map[string]bool {
+// scanIcons 本地图标库清单（ai/assets/icons，lucide 全量）。
+func scanIcons(rootDir string) map[string]bool {
 	out := map[string]bool{}
-	entries, err := os.ReadDir(filepath.Join(dataDir, "projects", "_shared", "assets", "icons"))
+	entries, err := os.ReadDir(filepath.Join(rootDir, "ai", "assets", "icons"))
 	if err != nil {
 		return out
 	}
@@ -609,8 +609,8 @@ scale ruler clipboard lightbulb-off zap-off anchor truck bike train bus ship sen
 }
 
 // styleNoteFor 项目风格方向 → spec 提示里的风格说明（题材 + 配图调性）。
-// 方向在 _shared/styles.json 注册表命中时给出题材与配图 query 调性，未命中只给方向名。
-func styleNoteFor(p *pipeline.Project, dataDir string) string {
+// 方向在 ai/registry/styles.json 注册表命中时给出题材与配图 query 调性，未命中只给方向名。
+func styleNoteFor(p *pipeline.Project, rootDir string) string {
 	b, err := os.ReadFile(p.Artifact("style/style_samples.json"))
 	if err != nil {
 		return ""
@@ -622,7 +622,7 @@ func styleNoteFor(p *pipeline.Project, dataDir string) string {
 		return ""
 	}
 	note := "\n## 本片风格\n- 方向：" + ss.Direction
-	reg, err := os.ReadFile(filepath.Join(dataDir, "projects", "_shared", "styles.json"))
+	reg, err := os.ReadFile(filepath.Join(rootDir, "ai", "registry", "styles.json"))
 	if err != nil {
 		return note
 	}

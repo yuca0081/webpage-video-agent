@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""把 _shared/styles.json 注册风格播种进方法库（data/library/stylepacks.json）。
+"""把 ai/registry/styles.json 注册风格播种进方法库（data/library/stylepacks.json）。
 
 每个风格生成一张 960x540 静态样张（背景画法/色板/卡片质感与引擎一致），
 已存在同名 direction 则跳过（幂等）。用法：python ai/seed_styles.py
@@ -10,7 +10,7 @@ import pathlib
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-REGISTRY = ROOT / 'data' / 'projects' / '_shared' / 'styles.json'
+REGISTRY = ROOT / 'ai' / 'registry' / 'styles.json'
 LIB = ROOT / 'data' / 'library' / 'stylepacks.json'
 
 

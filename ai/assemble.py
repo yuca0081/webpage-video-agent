@@ -8,10 +8,10 @@ import shutil
 import subprocess
 import sys
 
-# gsap 资产固定来源：_shared/assets（首次部署时放一份）；旧项目路径仅作迁移期兜底。
-_SHARED = pathlib.Path(__file__).resolve().parent.parent / 'data' / 'projects' / '_shared'
+# gsap 资产固定来源：ai/assets（随仓库分发）；旧项目路径仅作迁移期兜底。
+AI_DIR = pathlib.Path(__file__).resolve().parent
 GSAP_CANDIDATES = [
-    _SHARED / 'assets' / 'gsap.min.js',
+    AI_DIR / 'assets' / 'gsap.min.js',
     pathlib.Path(r"E:\workspace\develop\webpage-video-agent\data\projects\p20260922-135417\assets\gsap.min.js"),
 ]
 GSAP_SRC = next((p for p in GSAP_CANDIDATES if p.exists()), GSAP_CANDIDATES[0])

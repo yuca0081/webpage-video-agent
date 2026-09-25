@@ -13,8 +13,8 @@ import pathlib
 import re
 import sys
 
-SHARED = pathlib.Path(__file__).resolve().parent.parent / 'data' / 'projects' / '_shared'
-sys.path.insert(0, str(SHARED))
+AI_DIR = pathlib.Path(__file__).resolve().parent
+sys.path.insert(0, str(AI_DIR / 'engines'))
 import stylepack as sp  # noqa: E402  默认引擎（手绘叙事）；main 按项目风格方向分发
 
 import colorutil as cu  # noqa: E402  WCAG 对比度工具
@@ -28,7 +28,7 @@ def init_engine(proj):
     """按项目 style_samples.json 的 direction 选风格引擎，重建色表。
 
     direction 含「扁平」→ stylepack_flat（厚描边·色块）；含「手绘」→ stylepack；
-    其余按 _shared/styles.json 注册表关键词匹配 → stylepack_generic（token 驱动，
+    其余按 ai/registry/styles.json 注册表关键词匹配 → stylepack_generic（token 驱动，
     13 个注册风格：深空渐变/数学线框/地缘档案/高能说明书/发布会深色/轻快多彩/
     渐变玻璃/财经图表/公益数据/清洁医疗/自然环保/深色等距科技/黑板粉笔）；
     未命中回退手绘叙事。
@@ -191,7 +191,7 @@ def extract_elements(html):
 
 # ── image / emoji / 图表（手绘风渲染层）─────────────────────
 
-ICON_DIR = SHARED / 'assets' / 'icons'
+ICON_DIR = AI_DIR / 'assets' / 'icons'
 
 
 def render_image(f, sid, e, i, t):

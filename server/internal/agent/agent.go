@@ -29,7 +29,7 @@ type Producer interface {
 
 type Agent struct {
 	DataDir  string
-	RootDir  string // 仓库根（读 _shared 默认样张）
+	RootDir  string // 仓库根（读 ai/registry 默认样张）
 	Store    store.Store
 	Lib      *methodlib.Library
 	Emit     func(projectID, typ, stage, detail string)
@@ -264,7 +264,7 @@ var tools = []tool{
 				}
 				return fmt.Sprintf("风格样张已出（复用方法库「%s」，origin=%s）。硬门——用户在舞台点头确认后才能开工", pack.Name, pack.OriginProject)
 			}
-			b, err := os.ReadFile(filepath.Join(a.RootDir, "data", "projects", "_shared", "style_samples_default.json"))
+			b, err := os.ReadFile(filepath.Join(a.RootDir, "ai", "registry", "style_samples_default.json"))
 			if err != nil {
 				return "默认风格包缺失：" + err.Error()
 			}

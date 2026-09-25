@@ -23,7 +23,6 @@ WORKDIR /app
 COPY app-linux /app/app
 COPY web/dist /app/web/dist
 COPY ai /app/ai
-COPY data/projects/_shared /app/data/projects/_shared
 COPY server/migrations /app/server/migrations
 
 # root = DATA_DIR 上一级（main.go 推断逻辑要求 root 下有 ai/），CWD 必须是 /app

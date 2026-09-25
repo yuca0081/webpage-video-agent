@@ -25,4 +25,4 @@ bash deploy/deploy.sh         # 日常发版
   （词级→字级均分）。模型首次运行时经 hf-mirror 下载（medium，约 1.5GB）。
 - **数据**：`/opt/zhenshu/data/projects` 宿主卷，项目产物跨发版保留；migrations 幂等，
   每次部署重跑（psql 容器内执行）。
-- **发版物**：开发机交叉编译 linux 静态二进制 + web/dist + ai/ + _shared → tar 流传输。
+- **发版物**：开发机交叉编译 linux 静态二进制 + web/dist + ai/（引擎+素材+注册表同在此包）→ tar 流传输。

@@ -20,7 +20,7 @@ echo "▶ 2/4 构建前端"
 echo "▶ 3/4 传输产物 → $HOST:$REMOTE"
 ssh "$HOST" "mkdir -p $REMOTE/data/projects $REMOTE/deploy"
 # 精确清单 = 运行时所需；不含 .env（敏感，--env 单独传）与 data/projects（宿主卷自有数据）
-tar -cf - ai data/projects/_shared web/dist server/migrations deploy/Dockerfile deploy/compose.yml |
+tar -cf - ai web/dist server/migrations deploy/Dockerfile deploy/compose.yml |
   ssh "$HOST" "tar -C $REMOTE -xf -"
 if [[ ${1:-} == "--env" ]]; then
   scp .env "$HOST:$REMOTE/.env"
