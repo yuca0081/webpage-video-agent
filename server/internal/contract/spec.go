@@ -59,7 +59,8 @@ type SpecElement struct {
 	Text string  `json:"text,omitempty"`
 	Title string `json:"title,omitempty"` // panel 标题栏（可选）
 	Name string  `json:"name,omitempty"`  // icon 名（lucide kebab，本地库）
-	Query string `json:"query,omitempty"` // image 搜索词（制作期下载本地化）
+	Query  string `json:"query,omitempty"`  // image 搜索词/生图画面描述（制作期下载本地化）
+	Source string `json:"source,omitempty"` // image 图源：gen=AI 生图（智谱 CogView）/ 空|search=网络搜图
 	Size float64 `json:"size,omitempty"` // icon 边长
 	Values []float64 `json:"values,omitempty"` // 图表数值
 	Labels []string  `json:"labels,omitempty"` // 图表标签
@@ -74,7 +75,7 @@ type SpecElement struct {
 	Rot  float64 `json:"rot,omitempty"`
 	Fs   float64 `json:"fs,omitempty"`
 	Reveal int   `json:"reveal,omitempty"` // 揭示词位（段内词序号，0 起）
-	// custom 自由元素（表达力逃生舱，每段 ≤2 个）：容器内直出 HTML/CSS/GSAP。
+	// custom 自由元素（表达力逃生舱，每段 ≤3 个）：容器内直出 HTML/CSS/GSAP。
 	Html string `json:"html,omitempty"` // 容器内 HTML（禁 script/外链/内联事件）
 	Css  string `json:"css,omitempty"`  // 自动 scope 到容器；@keyframes 自动改名
 	Js   string `json:"js,omitempty"`   // GSAP 片段：T=揭示秒、ID=容器选择器、tl=时间线
@@ -82,6 +83,12 @@ type SpecElement struct {
 	// exit 退场词位（0 = 不退场，讲完该词即退）。
 	Anim string `json:"anim,omitempty"`
 	Exit int    `json:"exit,omitempty"`
+	// role="bg" 全幅背景层（仅 image/custom）：满画幅垫底，豁免安全区/重叠检查；
+	// 渲染层稳定排序保证它在所有内容元素之下。
+	Role string `json:"role,omitempty"`
+	// image 背景的氛围参数：dim 压暗程度 0–1（默认 0.55，纸色渐变遮罩浓度）、blur 毛玻璃 0–12px。
+	Dim  float64 `json:"dim,omitempty"`
+	Blur float64 `json:"blur,omitempty"`
 }
 
 var specKinds = map[string]bool{
@@ -351,7 +358,7 @@ func ValidateSpec(s *CompSpec, wordCount int, cv Canvas) []string {
 	default:
 		errs = append(errs, fmt.Sprintf("camera %q 不在词表（zoom_in/zoom_out/pan_left/pan_right/drift）", s.Camera))
 	}
-	customCount := 0
+	customCount, imgBg, customBg := 0, 0, 0
 	type box struct {
 		i int
 		b specBox
@@ -363,6 +370,30 @@ func ValidateSpec(s *CompSpec, wordCount int, cv Canvas) []string {
 		if !specKinds[e.Kind] {
 			errs = append(errs, tag+": 未知 kind")
 			continue
+		}
+		// role=bg 全幅背景层：仅 image/custom，逐类最多 1 个；豁免安全区/重叠
+		isBg := false
+		switch e.Role {
+		case "":
+		case "bg":
+			if e.Kind != "image" && e.Kind != "custom" {
+				errs = append(errs, tag+": role=\"bg\" 仅 image/custom 支持（其余 kind 本身就是内容层）")
+			} else {
+				isBg = true
+				if e.Kind == "image" {
+					imgBg++
+					if imgBg > 1 {
+						errs = append(errs, "背景图元素最多 1 个（多张会互相盖住）")
+					}
+				} else {
+					customBg++
+					if customBg > 1 {
+						errs = append(errs, "custom 背景元素最多 1 个")
+					}
+				}
+			}
+		default:
+			errs = append(errs, fmt.Sprintf("%s: role %q 不在词表（只支持 bg=全幅背景垫底）", tag, e.Role))
 		}
 		if e.Kind == "custom" {
 			customCount++
@@ -436,15 +467,32 @@ func ValidateSpec(s *CompSpec, wordCount int, cv Canvas) []string {
 		if e.Kind == "image" {
 			if e.Query == "" {
 				errs = append(errs, tag+": 缺 query（图片搜索词）")
+			} else if e.Source == "gen" {
+				// 生图：query 是一句完整画面描述，允许更长
+				if n := utf8.RuneCountInString(e.Query); n > 60 {
+					errs = append(errs, fmt.Sprintf("%s: query「%s」超长（gen ≤60 字）", tag, e.Query))
+				}
+			} else if n := utf8.RuneCountInString(e.Query); n > 12 {
+				errs = append(errs, fmt.Sprintf("%s: query「%s」超长（≤12 字；AI 生图请加 source=\"gen\"）", tag, e.Query))
 			}
-			if n := utf8.RuneCountInString(e.Query); n > 12 {
-				errs = append(errs, fmt.Sprintf("%s: query「%s」超长（≤12 字）", tag, e.Query))
+			if e.Source != "" && e.Source != "gen" && e.Source != "search" {
+				errs = append(errs, fmt.Sprintf("%s: source 只能是 gen 或 search", tag))
 			}
-			if e.W != 0 && (e.W < 200 || e.W > 1000) {
-				errs = append(errs, fmt.Sprintf("%s: w %v 超范围 200–1000", tag, e.W))
-			}
-			if e.H != 0 && (e.H < 140 || e.H > 700) {
-				errs = append(errs, fmt.Sprintf("%s: h %v 超范围 140–700", tag, e.H))
+			if e.Role == "bg" {
+				// 背景层：满画幅由渲染层决定，w/h/dim/blur 只做范围检查
+				if e.Dim < 0 || e.Dim > 1 {
+					errs = append(errs, fmt.Sprintf("%s: dim %v 超范围 0–1（压暗程度）", tag, e.Dim))
+				}
+				if e.Blur < 0 || e.Blur > 12 {
+					errs = append(errs, fmt.Sprintf("%s: blur %v 超范围 0–12px", tag, e.Blur))
+				}
+			} else {
+				if e.W != 0 && (e.W < 200 || e.W > 1000) {
+					errs = append(errs, fmt.Sprintf("%s: w %v 超范围 200–1000", tag, e.W))
+				}
+				if e.H != 0 && (e.H < 140 || e.H > 700) {
+					errs = append(errs, fmt.Sprintf("%s: h %v 超范围 140–700", tag, e.H))
+				}
 			}
 		}
 		if e.Kind == "emoji" {
@@ -568,6 +616,9 @@ func ValidateSpec(s *CompSpec, wordCount int, cv Canvas) []string {
 				errs = append(errs, fmt.Sprintf("%s: h %v 超范围 200–1500", tag, e.H))
 			}
 		}
+		if isBg { // 背景层满画幅：不占安全区、不参与重叠判定
+			continue
+		}
 		x0, y0, w, h, ok := e.bbox(cv)
 		if !ok {
 			continue
@@ -579,12 +630,12 @@ func ValidateSpec(s *CompSpec, wordCount int, cv Canvas) []string {
 		}
 		boxes = append(boxes, box{i: i, b: specBox{x0, y0, x1, y1}})
 	}
-	if customCount > 2 {
-		errs = append(errs, fmt.Sprintf("custom 元素 %d 个超上限（每段 ≤2 个，其余视觉用注册 kind 组合）", customCount))
+	if customCount > 3 {
+		errs = append(errs, fmt.Sprintf("custom 元素 %d 个超上限（每段 ≤3 个，其余视觉用注册 kind 组合）", customCount))
 	}
 	// 重叠：交叠面积超过较小方块的 25% 判违规。豁免：
 	//   箭头（职责就是连接/跨越其他元素）；zone（垫底高亮区，天生要圈住元素）；
-	//   形状全包含嵌套（disc/circle 同心构图，如主体+内核）
+	//   role=bg 全幅背景层；形状全包含嵌套（disc/circle 同心构图，如主体+内核）
 	isFree := func(k string) bool { return k == "arrow" || k == "zone" }
 	for a := 0; a < len(boxes); a++ {
 		if isFree(s.Elements[boxes[a].i].Kind) {
@@ -657,6 +708,17 @@ func SanitizeSpec(s *CompSpec, wordCount int, cv Canvas) []string {
 		if e.Exit != 0 && wordCount > 0 && e.Exit >= wordCount {
 			e.Exit = wordCount - 1
 		}
+		if e.Role == "bg" { // 背景层无坐标可夹，只夹氛围参数
+			if e.Kind == "image" {
+				if e.Dim <= 0 || e.Dim > 1 {
+					e.Dim = 0.55
+				}
+				if e.Blur < 0 || e.Blur > 12 {
+					e.Blur = 0
+				}
+			}
+			continue
+		}
 		// 文本/条状类夹进安全区上半段；圆类圆心留出半径余量
 		if e.Kind == "note" || e.Kind == "label" || e.Kind == "big" || e.Kind == "beam" ||
 			e.Kind == "icon" || e.Kind == "chart_bar" || e.Kind == "chart_line" || e.Kind == "chart_pie" ||
@@ -692,6 +754,9 @@ func SanitizeSpec(s *CompSpec, wordCount int, cv Canvas) []string {
 			e.H = clamp(e.H, 200, cv.Y1-cv.Y0-200)
 		}
 		if e.Kind == "image" {
+			if e.Source != "gen" && e.Source != "search" {
+				e.Source = "" // 不认识的图源一律回落搜图
+			}
 			e.W = clamp(e.W, 240, cv.W-2*cv.X0-60)
 			e.H = clamp(e.H, 160, cv.Y1-cv.Y0-260)
 		}
@@ -704,7 +769,7 @@ func SanitizeSpec(s *CompSpec, wordCount int, cv Canvas) []string {
 	for len(s.Elements) > 3 {
 		victim := -1
 		for a := 0; a < len(s.Elements) && victim < 0; a++ {
-			if k := s.Elements[a].Kind; k == "arrow" || k == "zone" {
+			if k := s.Elements[a].Kind; k == "arrow" || k == "zone" || s.Elements[a].Role == "bg" {
 				continue
 			}
 			A, okA := boxOf(&s.Elements[a], cv)
@@ -712,7 +777,7 @@ func SanitizeSpec(s *CompSpec, wordCount int, cv Canvas) []string {
 				continue
 			}
 			for b := a + 1; b < len(s.Elements); b++ {
-				if k := s.Elements[b].Kind; k == "arrow" || k == "zone" {
+				if k := s.Elements[b].Kind; k == "arrow" || k == "zone" || s.Elements[b].Role == "bg" {
 					continue
 				}
 				B, okB := boxOf(&s.Elements[b], cv)
@@ -779,23 +844,25 @@ func validateCustom(e *SpecElement, tag string) []string {
 	if strings.TrimSpace(e.Html) == "" {
 		errs = append(errs, tag+": 缺 html（容器内 HTML）")
 	}
-	if n := utf8.RuneCountInString(e.Html); n > 2000 {
-		errs = append(errs, fmt.Sprintf("%s: html %d 字超长（≤2000）", tag, n))
+	if n := utf8.RuneCountInString(e.Html); n > 3200 {
+		errs = append(errs, fmt.Sprintf("%s: html %d 字超长（≤3200）", tag, n))
 	}
-	if n := utf8.RuneCountInString(e.Css); n > 1200 {
-		errs = append(errs, fmt.Sprintf("%s: css %d 字超长（≤1200）", tag, n))
+	if n := utf8.RuneCountInString(e.Css); n > 2000 {
+		errs = append(errs, fmt.Sprintf("%s: css %d 字超长（≤2000）", tag, n))
 	}
-	if n := utf8.RuneCountInString(e.Js); n > 1200 {
-		errs = append(errs, fmt.Sprintf("%s: js %d 字超长（≤1200）", tag, n))
+	if n := utf8.RuneCountInString(e.Js); n > 2000 {
+		errs = append(errs, fmt.Sprintf("%s: js %d 字超长（≤2000）", tag, n))
 	}
 	if n := utf8.RuneCountInString(e.Text); n > 12 {
 		errs = append(errs, fmt.Sprintf("%s: text「%s」超长（≤12 字，元素命名）", tag, e.Text))
 	}
-	if e.W != 0 && (e.W < 80 || e.W > 1800) {
-		errs = append(errs, fmt.Sprintf("%s: w %v 超范围 80–1800", tag, e.W))
-	}
-	if e.H != 0 && (e.H < 60 || e.H > 1000) {
-		errs = append(errs, fmt.Sprintf("%s: h %v 超范围 60–1000", tag, e.H))
+	if e.Role != "bg" { // 背景层满画幅尺寸由渲染层决定；防呆禁用清单照走
+		if e.W != 0 && (e.W < 80 || e.W > 1800) {
+			errs = append(errs, fmt.Sprintf("%s: w %v 超范围 80–1800", tag, e.W))
+		}
+		if e.H != 0 && (e.H < 60 || e.H > 1000) {
+			errs = append(errs, fmt.Sprintf("%s: h %v 超范围 60–1000", tag, e.H))
+		}
 	}
 	if e.Text == "" {
 		errs = append(errs, tag+": 缺 text（元素命名，素材区可读）")

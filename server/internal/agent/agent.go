@@ -327,7 +327,7 @@ var tools = []tool{
 				return "成片已就绪，无需重新制作（要改画面/重做某段用 rework；要下载地址用 export）"
 			}
 			if len(missing) > 0 {
-				return "前置未齐（缺 " + strings.Join(missing, "、") + "），先补齐"
+				return "前置未齐（缺 " + strings.Join(missing, "、") + "）。补齐路径，向用户说明：文稿——点对话栏上方的「文稿」标签粘贴保存，或直接把文稿发进对话；分镜——你调用 draft_storyboard 生成；风格——点「风格」标签选库内风格（即时生效）或描述方向出样张"
 			}
 			return ""
 		},
@@ -435,6 +435,52 @@ var tools = []tool{
 		},
 	},
 	{
+		def: toolDef("set_bgm", "背景音乐：不带参数=列出曲库；track=曲名 设置/更换；track=\"off\" 关闭。成片已就绪时立即重新混音（几秒钟，不重渲画面）", map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"track": map[string]any{"type": "string", "description": "曲名（先用空参查曲库）；off=关闭；留空=只列曲库"},
+			},
+		}),
+		gate: func(s State) string {
+			if s.Producing {
+				return "制作运行中，先等本条完成"
+			}
+			return ""
+		},
+		run: func(a *Agent, p *pipeline.Project, args string) string {
+			var in struct {
+				Track string `json:"track"`
+			}
+			_ = json.Unmarshal([]byte(args), &in)
+			lib := pipeline.ListBGM()
+			if strings.TrimSpace(in.Track) == "" {
+				if lib == "" {
+					return "曲库为空（ai/assets/music/tracks.json 缺失或为空）"
+				}
+				return "曲库：" + lib + "。用 track=曲名 设置，off 关闭"
+			}
+			if err := pipeline.SetBGM(p, in.Track); err != nil {
+				return "设置失败：" + err.Error()
+			}
+			if strings.EqualFold(strings.TrimSpace(in.Track), "off") {
+				if _, err := os.Stat(p.Artifact("renders/main_voice.mp4")); err == nil {
+					if err := pipeline.StitchNow(p); err != nil {
+						return "关闭失败（混音出错）：" + err.Error()
+					}
+					return "背景音乐已关闭，成片已重出（纯人声）"
+				}
+				return "背景音乐已关闭，下次制作生效"
+			}
+			if _, err := os.Stat(p.Artifact("renders/main_voice.mp4")); err == nil {
+				if err := pipeline.StitchNow(p); err != nil {
+					return "已设置但混音失败：" + err.Error()
+				}
+				return fmt.Sprintf("背景音乐「%s」已混入成片（人声闪避自动压低音乐，画面未动）", strings.ToLower(strings.TrimSpace(in.Track)))
+			}
+			return fmt.Sprintf("背景音乐「%s」已设置，下次制作/重渲自动混入", strings.ToLower(strings.TrimSpace(in.Track)))
+		},
+	},
+	{
 		def: toolDef("export", "导出成片（返回下载地址）", nil),
 		gate: func(s State) string {
 			if !s.HasVideo {
@@ -486,7 +532,7 @@ func (a *Agent) systemPrompt(id string, s State) string {
 
 工作准则：
 - 上面这份状态是唯一事实：状态说成片就绪就是已就绪，直接给下载地址 /api/projects/%s/video/main.mp4；不确定就先 read_project 核对，禁止按聊天历史想象状态。
-- 三前置硬门：文稿、分镜、风格样张（用户确认）——齐了才能 start_production，代码强制，别硬闯；成片就绪后不再 start_production。
+- 三前置硬门：文稿、分镜、风格样张（用户确认）——齐了才能 start_production，代码强制，别硬闯；缺哪项就引导用户点对话栏上方的同名标签补齐（文稿也可直接粘进对话），成片就绪后不再 start_production。
 - 成片就绪后：改某段画面用 rework（整段重生成画面、音频不动）；用户带 📎 段/元素引用的消息几乎都是 rework 意图。元素引用指名了改哪个元素，rework 的 instruction 里点名它（人话名，必要时带元素 id 与时刻）。出片后主动 extract_stylepack 沉淀风格（一次就够，已提炼过不必重复）。
 - 默认自主连贯：能做的直接做（出分镜→出样张→自检一路做下去），到用户门（风格确认）停下说清楚等什么。
 - 工具被拒就换路或向用户解释，不重复硬试；每轮最多 %d 步。

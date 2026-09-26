@@ -66,8 +66,8 @@ func (p *Provider) GenerateJSON(ctx context.Context, system, user string, out an
 }
 
 // GenerateJSONVision 多模态 JSON 作业：user 文本 + 若干图片（data URL）→ 模型，解析同 GenerateJSON。
-// 评审类作业用低温：要的是稳定判断不是发散。
-func (p *Provider) GenerateJSONVision(ctx context.Context, system, user string, imageURLs []string, out any) (openai.Usage, error) {
+// temperature 由调用方定：评审类低温（稳定判断），画面生成类高温（发散）。
+func (p *Provider) GenerateJSONVision(ctx context.Context, system, user string, imageURLs []string, temperature float32, out any) (openai.Usage, error) {
 	parts := make([]openai.ChatMessagePart, 0, len(imageURLs)+1)
 	for _, u := range imageURLs {
 		parts = append(parts, openai.ChatMessagePart{
@@ -76,7 +76,7 @@ func (p *Provider) GenerateJSONVision(ctx context.Context, system, user string, 
 		})
 	}
 	parts = append(parts, openai.ChatMessagePart{Type: openai.ChatMessagePartTypeText, Text: user})
-	return p.generate(ctx, system, parts, out, 0.2)
+	return p.generate(ctx, system, parts, out, temperature)
 }
 
 func (p *Provider) generate(ctx context.Context, system string, userParts []openai.ChatMessagePart, out any, temperature float32) (openai.Usage, error) {

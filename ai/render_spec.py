@@ -113,10 +113,10 @@ ANIM_CAMERA = {
 }
 
 
-def render_element(f, sid, e, i, words, W=1920):
+def render_element(f, sid, e, i, words, W=1920, H=1080):
     """spec 元素 → (html 片段, js 片段)：kind 分发 + 动效词表后处理（anim 入场覆盖 / exit 退场）。"""
     kind = e.get('kind')
-    html, js = _render_kind(f, sid, e, i, words, W)
+    html, js = _render_kind(f, sid, e, i, words, W, H)
     if not html:
         return html, js
     m = re.search(r'id="([^"]+)"', html)
@@ -142,7 +142,7 @@ def render_element(f, sid, e, i, words, W=1920):
     return html, js
 
 
-def _render_kind(f, sid, e, i, words, W=1920):
+def _render_kind(f, sid, e, i, words, W=1920, H=1080):
     """spec 元素 → (html 片段, js 片段)。id 规则 {sid}-{kind}{i}。"""
     kind = e.get('kind')
     eid = f"{sid}-{kind}{i}"
@@ -192,7 +192,7 @@ def _render_kind(f, sid, e, i, words, W=1920):
     if kind == 'icon':
         return render_icon(f, sid, e, i, t)
     if kind == 'image':
-        return render_image(f, sid, e, i, t)
+        return render_image(f, sid, e, i, t, W, H)
     if kind == 'panel':
         return render_panel(f, sid, e, i, t)
     if kind == 'chip':
@@ -241,7 +241,7 @@ def _render_kind(f, sid, e, i, words, W=1920):
                 f'transform-origin:100% 50%;clip-path:polygon(0 12%, 100% 50%, 0 88%);"></div>')
         return f'{line}\n    {head}', sp.fade(f'#{eid}, [data-{sid}-arr="{i}"]', t)
     if kind == 'custom':
-        return render_custom(f, sid, e, i, t)
+        return render_custom(f, sid, e, i, t, W, H)
     raise ValueError(f'未知元素 kind: {kind}')
 
 
@@ -263,11 +263,51 @@ def _char_spans(text):
 ICON_DIR = AI_DIR / 'assets' / 'icons'
 
 
-def render_image(f, sid, e, i, t):
+def _rgba(hex6, a):
+    """hex → rgba() 字符串（scrim 渐变用）；非 6 位 hex 回退中性灰。"""
+    h = str(hex6).lstrip('#')
+    if len(h) != 6:
+        return f'rgba(80,80,80,{a})'
+    return f'rgba({int(h[0:2], 16)},{int(h[2:4], 16)},{int(h[4:6], 16)},{a})'
+
+
+def render_bg_image(f, eid, e, t, W, H):
+    """全幅背景图（role=bg）：照片满画幅 + 纸色渐变 scrim（越靠字幕带越浓）+
+    可选毛玻璃。scrim 用风格纸色打底——深色风格压成暗调、纸面风格提成淡调，
+    任何风格下前景 ink 色文字都可读。src 空 = 无图：纸色渐变 + query 淡水印兜底。"""
+    q = str(e.get('query', '背景')).strip()[:10]
+    src = e.get('src')
+    dim = e.get('dim')
+    dim = 0.55 if dim is None else max(0.0, min(1.0, float(dim)))
+    blur = max(0.0, min(12.0, float(e.get('blur') or 0)))
+    paper = th('paper', None) or '#FDF6E3'
+    a_top, a_bot = round(0.28 + 0.38 * dim, 2), round(0.48 + 0.46 * dim, 2)
+    scrim = (f'background:linear-gradient(180deg,{_rgba(paper, a_top)} 0%,'
+             f'{_rgba(paper, a_bot)} 100%);')
+    if not src:
+        html = (f'<div class="{f}-el" id="{eid}" data-hf-name="背景：{q}" '
+                f'style="top:0;left:0;width:{W}px;height:{H}px;{scrim}'
+                f'display:flex;align-items:flex-end;padding:36px 60px;'
+                f'font-size:30px;font-weight:700;color:{_on_paper(sp.INK)};opacity:.55;">{q}</div>')
+        return html, sp.fade(f'#{eid}', t, dur=.6)
+    filt = f'filter:blur({blur:.0f}px) saturate(1.05);' if blur else ''
+    zoom = 1 + blur / 300 if blur else 1  # blur 边缘露底用放大补偿
+    html = (f'<div class="{f}-el" id="{eid}" data-hf-name="背景：{q}" '
+            f'style="top:0;left:0;width:{W}px;height:{H}px;overflow:hidden;">'
+            f'<img src="{src}" style="position:absolute;inset:0;width:100%;height:100%;'
+            f'object-fit:cover;transform:scale({zoom:.3f});{filt}" />'
+            f'<div style="position:absolute;inset:0;{scrim}"></div></div>')
+    return html, sp.fade(f'#{eid}', t, dur=.6)
+
+
+def render_image(f, sid, e, i, t, W=1920, H=1080):
     """真实照片：制作期已下载到本地（assets/img/）。相框质感随风格 THEME：
     polaroid（白框手绘感）/ clean（细描边圆角）/ glass（半透明玻璃）。
+    role=bg = 全幅背景层（满画幅 + 纸色 scrim，无相框）。
     src 空 = 搜图无源 → 便签兜底（管线不死）。"""
     eid = f"{sid}-img{i}"
+    if e.get('role') == 'bg':
+        return render_bg_image(f, eid, e, t, W, H)
     q = str(e.get('query', '配图')).strip()[:10]
     w, h = e.get('w', 520), e.get('h', 360)
     src = e.get('src')
@@ -828,11 +868,15 @@ def _js_ok(code):
         pathlib.Path(fh.name).unlink(missing_ok=True)
 
 
-def render_custom(f, sid, e, i, t):
+def render_custom(f, sid, e, i, t, W=1920, H=1080):
     """自由设计元素：容器 x/y/w/h（内容裁剪在内），LLM 直出 html（必填）/css（自动
     scope）/js（可选 GSAP 片段：T=揭示秒、ID=容器选择器、tl=时间线，入场自己负责）。
+    role=bg = 全幅背景特效层（容器扩到满画幅，坐标忽略）。
     默认无 js 时整容器淡入；js 坏/含禁用模式 → 语法降级或跳过，不炸整段。"""
     eid = f"{sid}-cx{i}"
+    full = e.get('role') == 'bg'
+    x, y = (0, 0) if full else (e['x'], e['y'])
+    w, h = (W, H) if full else (e.get('w', 560), e.get('h', 320))
     html_body = str(e.get('html', '') or '')
     css_raw = str(e.get('css', '') or '')
     js_raw = str(e.get('js', '') or '')
@@ -855,8 +899,8 @@ def render_custom(f, sid, e, i, t):
         else:
             print(f'{sid}: custom#{i} js 语法检查未过，降级静态淡入')
     html = (f'<div class="{f}-el" id="{eid}" data-hf-name="自定义：{label[:12]}" '
-            f'style="top:{e["y"]}px;left:{e["x"]}px;width:{e.get("w", 560)}px;'
-            f'height:{e.get("h", 320)}px;overflow:hidden;">{style}{html_body}</div>')
+            f'style="top:{y}px;left:{x}px;width:{w}px;'
+            f'height:{h}px;overflow:hidden;">{style}{html_body}</div>')
     return html, (js if js else sp.fade(f'#{eid}', t))
 
 
@@ -875,13 +919,16 @@ def main(proj_dir: str) -> int:
             return 1
         spec = json.load(open(spec_path, encoding='utf-8'))
         words = meta['words'][sid]
+        els = spec.get('elements', [])
+        # 背景层（role=bg）稳定排最前：DOM 序即 z 序，LLM 给的相对顺序在背景之后保持不变
+        els = sorted(els, key=lambda e: 0 if e.get('role') == 'bg' else 1)
         htmls, jss = [], []
-        for i, e in enumerate(spec.get('elements', [])):
+        for i, e in enumerate(els):
             if not e.get('kind'):
                 print(f"{sid}: 元素{i + 1} 缺 kind，跳过")
                 continue
             try:
-                h, j = render_element(PREFIX, sid, e, i + 1, words, W)
+                h, j = render_element(PREFIX, sid, e, i + 1, words, W, H)
             except ValueError as ex:  # 未知 kind：跳过不炸整段
                 print(f'{sid}: {ex}，跳过')
                 continue

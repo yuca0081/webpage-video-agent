@@ -1,0 +1,20 @@
+[
+ {
+  "name": "calm",
+  "file": "calm.mp3",
+  "duration": 48.0,
+  "mood": "温暖平静的和弦垫——通用科普/叙事，默认推荐"
+ },
+ {
+  "name": "bright",
+  "file": "bright.mp3",
+  "duration": 32.0,
+  "mood": "明快轻亮带琶音——产品介绍/轻松话题/新事物"
+ },
+ {
+  "name": "deep",
+  "file": "deep.mp3",
+  "duration": 48.0,
+  "mood": "低沉深邃的暗色垫——科技/悬疑/硬核知识"
+ }
+]

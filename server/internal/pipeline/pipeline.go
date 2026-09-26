@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -414,7 +416,7 @@ func stageCheck(p *Project) error {
 // 每段一个单段工程 .hf-seg/segNN.html（assemble 生成，含该段画面与配音），
 // 渲出 renders/segs/segNN.mp4；段片缺失或旧于 段帧/音频/段工程 任一来源则重渲，
 // 其余段跳过——rework 只重渲改动段，耗时与段长成正比而非片长。
-// main.mp4 = 全部段片 concat -c copy（段间硬切；转场重叠区算法见 tech-stack §7-6）。
+// main.mp4 = 人声母版 concat -c copy 后按项目配乐混音（见 stageStitch）。
 func stageRender(p *Project) error {
 	sb, err := p.LoadStoryboard()
 	if err != nil {
@@ -449,7 +451,7 @@ func stageRender(p *Project) error {
 	if err := concatSegs(p, sb, segsDir); err != nil {
 		return err
 	}
-	p.Manifest("render.done", "renders/main.mp4")
+	p.Manifest("render.done", "renders/main_voice.mp4")
 	return nil
 }
 
@@ -471,7 +473,8 @@ func segStale(p *Project, segID, out string) bool {
 	return false
 }
 
-// concatSegs 全部段片 concat -c copy 拼成 main.mp4（同源输出参数一致，免重编码）。
+// concatSegs 全部段片 concat -c copy 拼成人声母版 main_voice.mp4（同源输出参数
+// 一致，免重编码）。BGM 在 stitch 阶段从母版混入 main.mp4——换配乐不用重渲画面。
 func concatSegs(p *Project, sb *contract.Storyboard, segsDir string) error {
 	ff, err := ffmpegPath()
 	if err != nil {
@@ -490,7 +493,7 @@ func concatSegs(p *Project, sb *contract.Storyboard, segsDir string) error {
 		ctx = context.Background()
 	}
 	cmd := exec.CommandContext(ctx, ff, "-y", "-v", "error",
-		"-f", "concat", "-safe", "0", "-i", "list.txt", "-c", "copy", "../main.mp4")
+		"-f", "concat", "-safe", "0", "-i", "list.txt", "-c", "copy", "../main_voice.mp4")
 	cmd.Dir = segsDir
 	cmd.Env = cmdEnv()
 	var buf bytes.Buffer
@@ -528,17 +531,225 @@ func cmdEnv() []string {
 	return append(os.Environ(), "PATH="+extraPATH+string(os.PathListSeparator)+os.Getenv("PATH"))
 }
 
-// stageStitch v1 占位：整条渲染即成片；段级并行产物拼接待后续。
+// stageStitch 成片：人声母版 main_voice.mp4 → 按项目配乐（project.json bgm 字段）
+// 混入 BGM（sidechain 闪避：人声压音乐）写 renders/main.mp4；无配乐则直接转正。
+// 母版始终保留，换 BGM 只需重跑本阶段（StitchNow），不动画面渲染。
 func stageStitch(p *Project) error {
-	if !exists(p.Artifact("renders/main.mp4")) {
-		return fmt.Errorf("无 renders/main.mp4（render 阶段未完成？）")
+	voice := p.Artifact("renders/main_voice.mp4")
+	if !exists(voice) {
+		return fmt.Errorf("无 renders/main_voice.mp4（render 阶段未完成？）")
 	}
-	p.Manifest("film.ready", "renders/main.mp4")
+	out := p.Artifact("renders/main.mp4")
+	name, track := bgmFor(p)
+	if track == "" {
+		if err := copyFile(voice, out); err != nil {
+			return err
+		}
+		p.Manifest("film.ready", "renders/main.mp4")
+		return nil
+	}
+	if err := mixBGM(p, voice, track, out); err != nil {
+		return fmt.Errorf("BGM 混音失败: %w", err)
+	}
+	p.Manifest("film.ready", "renders/main.mp4+bgm="+name)
 	return nil
+}
+
+// StitchNow 只跑拼接/混音（成片就绪后换 BGM 用，画面不动）。
+func StitchNow(p *Project) error { return stageStitch(p) }
+
+// ── BGM 混音 ──────────────────────────────────────────────────────
+
+// bgmTrack 曲库清单（ai/assets/music/tracks.json）。
+type bgmTrack struct {
+	Name     string  `json:"name"`
+	File     string  `json:"file"`
+	Duration float64 `json:"duration"`
+	Mood     string  `json:"mood"`
+}
+
+func musicDir() string { return filepath.Join(rootDir, "ai", "assets", "music") }
+
+func loadTracks() []bgmTrack {
+	if rootDir == "" {
+		return nil
+	}
+	b, err := os.ReadFile(filepath.Join(musicDir(), "tracks.json"))
+	if err != nil {
+		return nil
+	}
+	var ts []bgmTrack
+	if json.Unmarshal(b, &ts) != nil {
+		return nil
+	}
+	return ts
+}
+
+// bgmFor 项目配乐解析：project.json "bgm" 字段 → 曲库文件路径（空 = 无配乐）。
+func bgmFor(p *Project) (name, file string) {
+	b, err := os.ReadFile(p.Artifact("project.json"))
+	if err != nil {
+		return "", ""
+	}
+	var meta struct {
+		BGM string `json:"bgm"`
+	}
+	if json.Unmarshal(b, &meta) != nil {
+		return "", ""
+	}
+	want := strings.TrimSpace(meta.BGM)
+	if want == "" || strings.EqualFold(want, "off") {
+		return "", ""
+	}
+	for _, tr := range loadTracks() {
+		if strings.EqualFold(tr.Name, want) {
+			f := filepath.Join(musicDir(), tr.File)
+			if exists(f) {
+				return tr.Name, f
+			}
+			return "", ""
+		}
+	}
+	return "", ""
+}
+
+// mixBGM 人声母版 + 循环 BGM（-stream_loop 无限铺底）→ sidechain 闪避
+//（音乐听人声的话自动压低）→ amix（不归一化，人声原样）。视频流直拷。
+// 母版永不改动，产物写临时文件后原子转正——重复执行无二次混音风险。
+func mixBGM(p *Project, voice, track, out string) error {
+	ff, err := ffmpegPath()
+	if err != nil {
+		return err
+	}
+	fade := ""
+	if dur := probeDuration(voice); dur > 3.5 {
+		fade = fmt.Sprintf(",afade=t=out:st=%.2f:d=1.5", dur-1.7)
+	}
+	fc := fmt.Sprintf("[1:a]volume=0.34%s[m];"+
+		"[m][0:a]sidechaincompress=threshold=0.035:ratio=7:attack=120:release=1100[duck];"+
+		"[0:a][duck]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[aout]", fade)
+	tmp := out + ".bgm.mp4.tmp"
+	cmd := exec.Command(ff, "-y", "-v", "error",
+		"-i", voice,
+		"-stream_loop", "-1", "-i", track,
+		"-filter_complex", fc,
+		"-map", "0:v", "-map", "[aout]",
+		"-c:v", "copy", "-c:a", "aac", "-b:a", "192k", tmp)
+	cmd.Dir = p.Dir
+	cmd.Env = cmdEnv()
+	var buf bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &buf, &buf
+	if err := cmd.Run(); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("ffmpeg 混音退出: %w\n%s", err, tailLines(buf.String(), 20))
+	}
+	_ = os.Remove(out)
+	return os.Rename(tmp, out)
+}
+
+// probeDuration ffprobe 取媒体时长（秒；失败返回 0，调用方跳过淡出）。
+func probeDuration(path string) float64 {
+	if p, err := exec.LookPath("ffprobe"); err == nil {
+		out, err := exec.Command(p, "-v", "error", "-show_entries", "format=duration",
+			"-of", "csv=p=0", path).Output()
+		if err == nil {
+			if f, perr := strconv.ParseFloat(strings.TrimSpace(string(out)), 64); perr == nil {
+				return f
+			}
+		}
+	}
+	if rootDir != "" && extraPATH != "" { // 回退 winget bin 目录
+		for _, cand := range []string{"ffprobe.exe", "ffprobe"} {
+			out, err := exec.Command(filepath.Join(extraPATH, cand), "-v", "error",
+				"-show_entries", "format=duration", "-of", "csv=p=0", path).Output()
+			if err == nil {
+				if f, perr := strconv.ParseFloat(strings.TrimSpace(string(out)), 64); perr == nil {
+					return f
+				}
+			}
+		}
+	}
+	return 0
+}
+
+// copyFile 成片转正（母版保留副本，换 BGM 时可重新混音）。
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	tmp := dst + ".copy.tmp"
+	out, err := os.Create(tmp)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := out.Close(); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	_ = os.Remove(dst)
+	return os.Rename(tmp, dst)
+}
+
+// ListBGM 曲库可读清单（agent 工具用）："calm——温暖平静…"。
+func ListBGM() string {
+	ts := loadTracks()
+	if len(ts) == 0 {
+		return ""
+	}
+	lines := make([]string, 0, len(ts))
+	for _, tr := range ts {
+		lines = append(lines, fmt.Sprintf("%s（%s）", tr.Name, tr.Mood))
+	}
+	return strings.Join(lines, "；")
+}
+
+// SetBGM 写 project.json 的 bgm 字段（track="off"/"" 清除；曲名做曲库校验）。
+func SetBGM(p *Project, track string) error {
+	want := strings.TrimSpace(track)
+	if want != "" && !strings.EqualFold(want, "off") {
+		ok := false
+		for _, tr := range loadTracks() {
+			if strings.EqualFold(tr.Name, want) {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			return fmt.Errorf("曲名 %q 不在曲库（可用：%s）", want, ListBGM())
+		}
+	}
+	b, err := os.ReadFile(p.Artifact("project.json"))
+	if err != nil {
+		return err
+	}
+	var meta map[string]any
+	if err := json.Unmarshal(b, &meta); err != nil {
+		return fmt.Errorf("project.json 解析失败: %w", err)
+	}
+	if want == "" || strings.EqualFold(want, "off") {
+		delete(meta, "bgm")
+	} else {
+		meta["bgm"] = strings.ToLower(want)
+	}
+	nb, _ := json.MarshalIndent(meta, "", "  ")
+	return os.WriteFile(p.Artifact("project.json"), nb, 0o644)
 }
 
 // extraPATH 额外 PATH（如 winget 安装的 FFmpeg bin），由宿主进程注入。
 var extraPATH string
+
+// rootDir 仓库根（SetRootDir 注入）：BGM 曲库定位 ai/assets/music/。
+var rootDir string
+
+// SetRootDir 注入仓库根（server/m0 启动时调用；不注入 = BGM 功能关闭）。
+func SetRootDir(dir string) { rootDir = dir }
 
 // SetExtraPATH 注入额外可执行搜索路径（check/render 需要 ffmpeg）。
 func SetExtraPATH(dir string) { extraPATH = dir }

@@ -222,6 +222,7 @@ func TestValidateSpecCustomAnimExitCamera(t *testing.T) {
 				Css: `.b{position:fixed;top:0;}`,
 				Js:  `tl.to(ID,{opacity:1,repeat:3},T);`},
 			{Kind: "custom", X: 100, Y: 500, W: 600, H: 160, Text: "第三个", Reveal: 2, Html: "<b>x</b>"},
+			{Kind: "custom", X: 100, Y: 700, W: 600, H: 160, Text: "第四个", Reveal: 2, Html: "<b>x</b>"},
 			{Kind: "note", X: 900, Y: 300, Text: "普通", Reveal: 3, Anim: "spin", Exit: 2},
 			{Kind: "label", X: 1400, Y: 600, Text: "chars 用错对象", Anim: "chars"},
 			{Kind: "big", X: 500, Y: 700, Text: "100", Anim: "none"},
@@ -264,5 +265,57 @@ func TestSanitizeSpecCustom(t *testing.T) {
 		if e.Kind == "note" && e.Exit != 19 {
 			t.Fatalf("note exit 应夹到词数-1=19，得到 %d", e.Exit)
 		}
+	}
+}
+
+func TestValidateSpecRoleBg(t *testing.T) {
+	cv := CanvasFor("16:9")
+	// image 背景满画幅：不占安全区（坐标无意义）、不与内容元素判重叠；custom 背景同理
+	s := &CompSpec{Elements: []SpecElement{
+		{Kind: "image", Role: "bg", Query: "星空 银河", Source: "gen", Dim: 0.6, Blur: 4, Reveal: 0},
+		{Kind: "custom", Role: "bg", Text: "氛围粒子", W: 1800, H: 1000, Reveal: 0,
+			Html: `<div class="p"></div>`, Css: `.p{width:10px;height:10px;border-radius:50%;}`},
+		{Kind: "title", Y: 200, Text: "背景上的大字"},
+		{Kind: "note", X: 300, Y: 420, Text: "前景便签", Bg: "butter"},
+		{Kind: "big", X: 500, Y: 600, Text: "42"},
+	}}
+	if errs := ValidateSpec(s, 20, cv); len(errs) != 0 {
+		t.Fatalf("背景层合法布局被拒: %v", errs)
+	}
+	// 违规：role 用在不支持的 kind；image 背景超过 1 张；dim/blur 超范围
+	bad := &CompSpec{Elements: []SpecElement{
+		{Kind: "image", Role: "bg", Query: "星空", Dim: 1.5, Reveal: 0},
+		{Kind: "image", Role: "bg", Query: "海洋", Blur: 30, Reveal: 0},
+		{Kind: "note", Role: "bg", X: 300, Y: 300, Text: "便签当背景", Reveal: 1},
+		{Kind: "label", X: 300, Y: 500, Text: "标注", Reveal: 2},
+		{Kind: "big", X: 500, Y: 600, Text: "100", Reveal: 3},
+	}}
+	errs := ValidateSpec(bad, 20, cv)
+	joined := strings.Join(errs, "\n")
+	for _, want := range []string{"仅 image/custom 支持", "最多 1 个", "dim", "blur"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("应包含 %q，得到: %v", want, errs)
+		}
+	}
+}
+
+func TestSanitizeSpecKeepsBg(t *testing.T) {
+	cv := CanvasFor("16:9")
+	// 背景层满画幅必然与内容重叠：清洗不得删背景，也不得删内容
+	s := &CompSpec{Elements: []SpecElement{
+		{Kind: "custom", Role: "bg", Text: "全屏底", W: 1800, H: 1000, Html: "<b>b</b>", Reveal: 0},
+		{Kind: "note", X: 300, Y: 300, Text: "内容一", Reveal: 1},
+		{Kind: "label", X: 340, Y: 340, Text: "内容二重叠", Reveal: 2},
+		{Kind: "big", X: 500, Y: 600, Text: "42", Reveal: 3},
+	}}
+	SanitizeSpec(s, 20, cv)
+	hasBg := false
+	for _, e := range s.Elements {
+		if e.Role == "bg" {
+			hasBg = true
+		}
+	}
+	if !hasBg {
+		t.Fatalf("清洗误删了背景层: %+v", s.Elements)
 	}
 }

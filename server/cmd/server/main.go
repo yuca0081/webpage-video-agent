@@ -31,6 +31,7 @@ func main() {
 	}
 
 	pipeline.EnsureFFmpeg()
+	pipeline.SetRootDir(root)
 
 	st := store.Open(cfg.PGDSN)
 	hub := events.NewHub()

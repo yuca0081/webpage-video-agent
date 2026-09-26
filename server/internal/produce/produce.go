@@ -9,6 +9,7 @@ package produce
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,6 +19,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	openai "github.com/sashabaranov/go-openai"
 
 	"webpage-video-agent/server/internal/contract"
 	"webpage-video-agent/server/internal/events"
@@ -402,6 +405,18 @@ func (r *Runner) genSpecs(ctx context.Context, p *pipeline.Project, instruction,
 	if err != nil {
 		return err
 	}
+	// 样张截图（ai/snap_samples.py，Edge 无头，mtime 缓存）→ spec 生成改走多模态：
+	// 模型看着真图写 spec，替代纯文字风格描述；截图失败不挡管线（退回纯文本）。
+	if err := r.python(ctx, "ai/snap_samples.py", p.Dir, time.Minute); err != nil {
+		r.emit(p.ID, "progress", "compositions", "样张截图失败，风格注入退回纯文本")
+	}
+	sampleImgs := styleSampleImages(p)
+	gen := func(user string, out any) (openai.Usage, error) {
+		if len(sampleImgs) > 0 {
+			return prov.GenerateJSONVision(ctx, system, user, sampleImgs, 0.7, out)
+		}
+		return prov.GenerateJSON(ctx, system, user, out)
+	}
 	if feedback != "" && only == "" { // 全片重生成：先清旧 spec
 		for _, seg := range sb.Segments {
 			_ = os.Remove(p.Artifact("llm/comp-" + seg.ID + ".spec.json"))
@@ -420,7 +435,7 @@ func (r *Runner) genSpecs(ctx context.Context, p *pipeline.Project, instruction,
 		}
 		v := voices[seg.ID]
 		var spec contract.CompSpec
-		u1, err := prov.GenerateJSON(ctx, system, specUserPrompt(seg, v, instruction, feedback, cv, style, menu), &spec)
+		u1, err := gen(specUserPrompt(seg, v, instruction, feedback, cv, style, menu), &spec)
 		if err != nil {
 			return fmt.Errorf("%s spec 生成失败: %w", seg.ID, err)
 		}
@@ -429,7 +444,7 @@ func (r *Runner) genSpecs(ctx context.Context, p *pipeline.Project, instruction,
 		for repair := 0; repair < 2 && len(errs) > 0; repair++ { // 修复：违规项回喂，最多 2 轮
 			fb := instruction + feedback + "\n上一版 spec 被契约校验拒绝，必须逐条修正：\n- " + strings.Join(errs, "\n- ")
 			var fixed contract.CompSpec
-			u2, err2 := prov.GenerateJSON(ctx, system, specUserPrompt(seg, v, "", fb, cv, style, menu), &fixed)
+			u2, err2 := gen(specUserPrompt(seg, v, "", fb, cv, style, menu), &fixed)
 			if err2 != nil {
 				return fmt.Errorf("%s spec 修复失败: %w", seg.ID, err2)
 			}
@@ -444,8 +459,7 @@ func (r *Runner) genSpecs(ctx context.Context, p *pipeline.Project, instruction,
 			if len(spec.Elements) < 3 {
 				r.emit(p.ID, "progress", "compositions", fmt.Sprintf("%s 清洗后仅 %d 元素，整段重出", seg.ID, len(spec.Elements)))
 				var retry contract.CompSpec
-				u2, err2 := prov.GenerateJSON(ctx, system,
-					specUserPrompt(seg, v, instruction,
+				u2, err2 := gen(specUserPrompt(seg, v, instruction,
 						fmt.Sprintf("上一版几乎每个元素的 kind 都是空的或不认识的。kind 必须从可用元素菜单里逐字选取（%s），每个元素都必须有 kind。", kinds),
 						cv, style, menu), &retry)
 				if err2 == nil {
@@ -577,6 +591,12 @@ satellite antenna fuel bug virus magnet telescope orbit trending-up trending-dow
 cloud-rain-wind cloud-sun robot-arm baby person-circle-stop dices trophy medal crown
 scale ruler clipboard lightbulb-off zap-off anchor truck bike train bus ship send
 
+## 配图（image 元素的 query 与 source）
+- source="search"（默认/不写）：query 是 ≤12 字中文搜索词，配真实照片——动物/地标/物品/场景/产品
+- source="gen"：AI 生图，query 是一句完整画面描述（20–60 字中文，具体到主体/构图/配色），配插画/概念示意/抽象背景；描述尽量往风格样张的气质上靠
+- 真实存在的名人/品牌/产品/新闻实物禁止 gen（生图会编造事实），一律 search
+- 全幅背景：image 加 role="bg"（照片满画幅垫底+自动纸色压暗，每段最多 1 张；dim 控制压暗 0–1 默认 0.55，blur 0–12 毛玻璃）。用一张背景图撑住整段氛围，其余元素叠在上面；背景图 query 走 gen 描述大场景（如渐变宇宙/俯瞰城市/抽象流体），也放 elements 最前
+
 ## 词序表（reveal = 揭示时刻的词序号，0 起）
 %s
 
@@ -584,8 +604,8 @@ scale ruler clipboard lightbulb-off zap-off anchor truck bike train bus ship sen
 %s
 - reveal 按讲解顺序递增、铺满词序（别堆在开头；最大词号 %d）
 - 动效增强（可选）：元素可加 anim 换入场（pop/fade/rise/slide/wipe=左→右揭示/blur=失焦聚焦/chars=逐字，仅 title·big/none=直出）与 exit=词序号（讲完该词退场，给后续元素腾画面；须大于 reveal）；段级顶层可加 camera（zoom_in/zoom_out/pan_left/pan_right/drift）整屏缓推，一屏最多一个，信息密集段别用
-- 语义呼应画面提示：主体物→image（实体名词首选）或 icon（抽象概念）；数据对比→chart_bar；趋势→chart_line；占比→chart_donut 或 chart_pie；对比→双色便签左右分置或 table；流程/步骤→timeline 或箭头串联；要点/卖点→checklist；金句/名言→quote；关键数字→stat 或 big；指向→barrow；向量/维度/批量→strip；分组圈注→zone(+bracket)；整屏氛围/斜切大字板/故障标题/纹理底→custom（每段≤2个，垫底放 elements 最前）；一屏最多一个图表（图表占主视觉位）
-- 画面丰富度（重要）：每屏至少一个视觉锚点（image / 大 icon / 图表 / big / panel 之一），大小拉开层次（主体 300px+、次级 120–200px），禁止全屏小元素平铺
+- 语义呼应画面提示：主体物→image（实体名词首选）或 icon（抽象概念）；数据对比→chart_bar；趋势→chart_line；占比→chart_donut 或 chart_pie；对比→双色便签左右分置或 table；流程/步骤→timeline 或箭头串联；要点/卖点→checklist；金句/名言→quote；关键数字→stat 或 big；指向→barrow；向量/维度/批量→strip；分组圈注→zone(+bracket)；整屏氛围底→image role="bg"（照片背景）或 custom role="bg"（渐变/粒子/光斑特效底，每段各≤1）；斜切大字板/故障标题/纹理装饰→custom（每段≤3个，垫底放 elements 最前）；一屏最多一个图表（图表占主视觉位）
+- 画面丰富度（重要）：每屏至少一个视觉锚点（image / 大 icon / 图表 / big / panel 之一），大小拉开层次（主体 300px+、次级 120–200px），禁止全屏小元素平铺；段落适合铺满氛围时优先给背景层（照片 bg 或特效底），别让画面停在纯色底
 %s
 
 ## 输出（只输出 JSON，无围栏）
@@ -674,6 +694,20 @@ func styleNoteFor(p *pipeline.Project, rootDir string) string {
 		}
 	}
 	return note
+}
+
+// styleSampleImages 已截图的风格样张（style/sample-N.png，ai/snap_samples.py 产物）→ data URL。
+// spec 生成时附给多模态模型：看真图选 kind/配色/调性，替代纯文字风格注入。最多 3 张，缺文件返回 nil。
+func styleSampleImages(p *pipeline.Project) []string {
+	var urls []string
+	for i := 0; i < 3; i++ {
+		b, err := os.ReadFile(p.Artifact(fmt.Sprintf("style/sample-%d.png", i)))
+		if err != nil {
+			break
+		}
+		urls = append(urls, "data:image/png;base64,"+base64.StdEncoding.EncodeToString(b))
+	}
+	return urls
 }
 
 func feedbackBlock(f string) string {

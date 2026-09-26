@@ -32,3 +32,6 @@ deploy/app-linux
 # demo 渲染产物（mp4/抽帧）不入库
 demo/custom-clips/
 demo/selfvideo-frames/
+
+# 本地构建产物（服务二进制）
+server/server.exe

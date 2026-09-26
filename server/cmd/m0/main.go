@@ -34,6 +34,7 @@ func main() {
 		fatal(err)
 	}
 	pipeline.EnsureFFmpeg()
+	pipeline.SetRootDir(repoRoot(cfg))
 	switch os.Args[1] {
 	case "new":
 		if len(os.Args) < 3 {
@@ -61,6 +62,15 @@ func pick(args []string, i int) string {
 		return args[i]
 	}
 	return ""
+}
+
+// repoRoot 仓库根推断（DATA_DIR 的上级，ai/ 在其中；与 server/main.go 同法）。
+func repoRoot(cfg *config.Config) string {
+	root, _ := filepath.Abs(filepath.Join(cfg.DataDir, ".."))
+	if _, err := os.Stat(filepath.Join(root, "ai")); err != nil {
+		return "" // 推断失败：BGM 曲库功能自动失效，管线其余不受影响
+	}
+	return root
 }
 
 func usage() {

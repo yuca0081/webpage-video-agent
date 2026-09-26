@@ -108,8 +108,8 @@
   "kind": "image",
   "name": "照片",
   "category": "媒体",
-  "scene": "实体名词的主视觉（制作期搜图本地化）",
-  "menu": "真实照片（制作时按 query 自动搜图下载本地化，拍立得白框呈现）——有实体名词（动物/地标/物品/场景）时的主视觉首选。x, y, w(默认520), h(默认360), query(中文搜索词2–12字，如\"蓝鲸 海面\"), rot(±3), reveal"
+  "scene": "实体名词的主视觉（制作期搜图或 AI 生图本地化）",
+  "menu": "真实照片或 AI 生图——实体名词主视觉首选。source=\"search\"（默认）=制作期按 query 搜图下载，query 是中文搜索词 2–12 字（如\"蓝鲸 海面\"）；source=\"gen\"=AI 生图，query 是一句完整画面描述 20–60 字（插画/概念示意/抽象背景用，真实名人品牌产品禁用）。role=\"bg\"=全幅背景层（照片满画幅+纸色渐变压暗，每段最多 1 张，放 elements 最前；x/y/w/h 忽略，dim 0–1 压暗浓度默认 0.55，blur 0–12 毛玻璃）。普通图：x, y, w(默认520), h(默认360), rot(±3), reveal"
  },
  {
   "kind": "icon",
@@ -186,6 +186,6 @@
   "name": "自由设计",
   "category": "自由",
   "scene": "注册 kind 组合不出来的视觉效果：斜切大字板/故障标题/氛围光斑/纹理底/创意构图",
-  "menu": "自由设计元素（表达力逃生舱，每段≤2个；纯装饰垫底放 elements 最前）。容器 x,y,w,h（内容裁剪在容器内），text(≤12字=命名)。html(≤2000字,容器内HTML,禁script/iframe/外链img/内联onclick/position:fixed/CSS animation·transition)，css(≤1200字,可选,自动限定在容器内,选择器写自己的类名,@keyframes自动改名)，js(≤1200字,可选GSAP片段:变量 T=本元素揭示秒数、ID=容器选择器、tl=时间线；入场自己负责:先 gsap.set(ID,{opacity:0}) 再 tl.to(...,T)；禁 repeat/yoyo/window/document/定时器/随机)。不给 js 则整容器默认淡入；可用 anim(pop/fade/rise/slide/wipe/blur/hover/none) 换入场。需要图片请用 image 元素另行组合"
+  "menu": "自由设计元素（表达力逃生舱，每段≤3个；纯装饰垫底放 elements 最前）。容器 x,y,w,h（内容裁剪在容器内），text(≤12字=命名)。html(≤3200字,容器内HTML,禁script/iframe/外链img/内联onclick/position:fixed/CSS animation·transition)，css(≤2000字,可选,自动限定在容器内,选择器写自己的类名,@keyframes自动改名)，js(≤2000字,可选GSAP片段:变量 T=本元素揭示秒数、ID=容器选择器、tl=时间线；入场自己负责:先 gsap.set(ID,{opacity:0}) 再 tl.to(...,T)；禁 repeat/yoyo/window/document/定时器/随机，粒子和轨迹用固定坐标或公式算，禁 Math.random)。不给 js 则整容器默认淡入；可用 anim(pop/fade/rise/slide/wipe/blur/none) 换入场。role=\"bg\"=全幅背景特效层（x/y/w/h 忽略满画幅：渐变氛围/粒子雨/光斑漂移/网格底纹，运动全部写进 tl）。需要图片请用 image 元素另行组合"
  }
 ]
