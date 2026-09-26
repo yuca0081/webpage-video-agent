@@ -135,6 +135,72 @@ func (a *Agent) selectedPack(p *pipeline.Project) *methodlib.StylePack {
 	return pack
 }
 
+// regenerateStyle 按用户修改要求重新出样张：旧样张备份防翻车，要求写 input/style_notes.txt，
+// 跑 style_samples 阶段（API 直调；未配 LLM 时降级为会话请求文件）。
+// 失败还原旧样张——项目任何时刻都不留「样张空洞」；成功则清库内指向与截图缓存。
+func (a *Agent) regenerateStyle(p *pipeline.Project, instruction, out string) string {
+	var prev contract.StyleSamples
+	prevDir := ""
+	if json.Unmarshal(mustReadFile(out), &prev) == nil {
+		prevDir = prev.Direction
+	}
+	bak := out + ".bak"
+	if err := os.Rename(out, bak); err != nil {
+		return "备份旧样张失败：" + err.Error()
+	}
+	restore := func(cause error) string {
+		if rerr := os.Rename(bak, out); rerr != nil {
+			return fmt.Sprintf("样张重生成失败，且还原旧样张也失败（备份在 %s）：%v（原因：%v）", bak, rerr, cause)
+		}
+		return "样张重生成失败（已还原旧样张）：" + cause.Error()
+	}
+	_ = os.Remove(p.LLMOutput("style_samples"))
+	for i := 0; i < 3; i++ { // 截图缓存一并清掉，防 produce 把旧图配新样张
+		_ = os.Remove(p.Artifact(fmt.Sprintf("style/sample-%d.png", i)))
+	}
+	notes := "原风格方向：" + prevDir + "\n用户修改要求：" + instruction
+	if err := os.MkdirAll(filepath.Dir(p.Artifact("input/style_notes.txt")), 0o755); err != nil {
+		return restore(err)
+	}
+	if err := os.WriteFile(p.Artifact("input/style_notes.txt"), []byte(notes), 0o644); err != nil {
+		return restore(err)
+	}
+	if err := pipeline.Run(context.Background(), p, "style_samples"); err != nil {
+		return restore(err)
+	}
+	_ = os.Remove(bak)
+	// 自拟重生成后不再指向库内风格包（样张已不是那一包的）
+	if b, rerr := os.ReadFile(p.Artifact("project.json")); rerr == nil {
+		var meta map[string]any
+		if json.Unmarshal(b, &meta) == nil {
+			if id, ok := meta["stylepack_id"].(string); ok && id != "" {
+				meta["stylepack_id"] = ""
+				if nb, merr := json.MarshalIndent(meta, "", "  "); merr == nil {
+					_ = os.WriteFile(p.Artifact("project.json"), nb, 0o644)
+				}
+			}
+		}
+	}
+	dir := prevDir
+	var ss contract.StyleSamples
+	if b, rerr := os.ReadFile(out); rerr == nil && json.Unmarshal(b, &ss) == nil && ss.Direction != "" {
+		dir = ss.Direction
+	}
+	if a.OnEvent != nil {
+		a.OnEvent(p.ID, "style_draft", dir)
+	}
+	msg := fmt.Sprintf("样张已按要求「%s」重新生成，新方向：%s（舞台可预览）。confirmed 已复位——用户须在舞台重新点「确认风格」才能开工", instruction, dir)
+	if a.State(p.ID).HasVideo {
+		msg += "；已有成片仍是旧风格，重新制作才会套用"
+	}
+	return msg
+}
+
+func mustReadFile(path string) []byte {
+	b, _ := os.ReadFile(path)
+	return b
+}
+
 // resolveSegment 用户话里的段引用（3 / 段3 / seg03）→ 分镜里的段。
 func (a *Agent) resolveSegment(p *pipeline.Project, ref string) (id, label string, err error) {
 	sb, lerr := p.LoadStoryboard()
@@ -239,17 +305,29 @@ var tools = []tool{
 		},
 	},
 	{
-		def: toolDef("draft_style_samples", "产出风格样张（方法库选定的风格包，或默认风格包冷启动），等用户在舞台确认", nil),
+		def: toolDef("draft_style_samples", "产出风格样张：首次出样张（方法库风格包或默认包冷启动）；样张已存在时必须带 instruction 按用户要求重新生成", map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"instruction": map[string]any{"type": "string", "description": "用户对风格的修改/新方向要求（如：更暖色调、加猫爪猫耳Q版点缀；换全新方向也写在这）。首次出样张可省略"},
+			},
+		}),
 		gate: func(s State) string {
 			if !s.HasStoryboard {
 				return "先出分镜，再出风格样张"
 			}
 			return ""
 		},
-		run: func(a *Agent, p *pipeline.Project, _ string) string {
+		run: func(a *Agent, p *pipeline.Project, args string) string {
+			var in struct {
+				Instruction string `json:"instruction"`
+			}
+			_ = json.Unmarshal([]byte(args), &in)
 			out := p.Artifact("style/style_samples.json")
 			if _, err := os.Stat(out); err == nil {
-				return "风格样张已出，等用户在舞台点击「确认风格」"
+				if strings.TrimSpace(in.Instruction) == "" {
+					return "风格样张已出，等用户在舞台点击「确认风格」；用户想改风格就带着要求调 instruction 重新生成"
+				}
+				return a.regenerateStyle(p, in.Instruction, out)
 			}
 			// 来源优先级：项目选定的方法库风格包 → 默认风格包（冷启动）
 			if pack := a.selectedPack(p); pack != nil {
@@ -533,6 +611,7 @@ func (a *Agent) systemPrompt(id string, s State) string {
 工作准则：
 - 上面这份状态是唯一事实：状态说成片就绪就是已就绪，直接给下载地址 /api/projects/%s/video/main.mp4；不确定就先 read_project 核对，禁止按聊天历史想象状态。
 - 三前置硬门：文稿、分镜、风格样张（用户确认）——齐了才能 start_production，代码强制，别硬闯；缺哪项就引导用户点对话栏上方的同名标签补齐（文稿也可直接粘进对话），成片就绪后不再 start_production。
+- 换风格/调样张：调 draft_style_samples 并把用户要求原样放进 instruction，样张没重新生成就不能说「已出新样张」——没做工具调用就当没做。
 - 成片就绪后：改某段画面用 rework（整段重生成画面、音频不动）；用户带 📎 段/元素引用的消息几乎都是 rework 意图。元素引用指名了改哪个元素，rework 的 instruction 里点名它（人话名，必要时带元素 id 与时刻）。出片后主动 extract_stylepack 沉淀风格（一次就够，已提炼过不必重复）。
 - 默认自主连贯：能做的直接做（出分镜→出样张→自检一路做下去），到用户门（风格确认）停下说清楚等什么。
 - 工具被拒就换路或向用户解释，不重复硬试；每轮最多 %d 步。

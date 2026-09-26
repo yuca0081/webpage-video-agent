@@ -35,3 +35,4 @@ demo/selfvideo-frames/
 
 # 本地构建产物（服务二进制）
 server/server.exe
+server/server.exe*

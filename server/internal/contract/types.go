@@ -88,7 +88,20 @@ type Sample struct {
 	HTML string `json:"html"` // 样张内容（与成片同一套风格 token，所见即所得）
 }
 
+// ValidateStyleSamples 落定校验：结构合法 + 用户确认（硬门）。
 func ValidateStyleSamples(ss *StyleSamples) error {
+	if err := ValidateStyleSamplesDraft(ss); err != nil {
+		return err
+	}
+	if !ss.Confirmed {
+		return fmt.Errorf("风格图未经用户确认（confirmed=false）——硬门，不可跳过")
+	}
+	return nil
+}
+
+// ValidateStyleSamplesDraft 草稿校验（不含确认门）：LLM 刚生成的样张
+// confirmed 必为 false（等用户在舞台点头），只查结构。
+func ValidateStyleSamplesDraft(ss *StyleSamples) error {
 	if ss.Direction == "" {
 		return fmt.Errorf("direction 为空")
 	}
@@ -99,9 +112,6 @@ func ValidateStyleSamples(ss *StyleSamples) error {
 		if s.HTML == "" {
 			return fmt.Errorf("样张 %d 缺少 HTML 内容", i+1)
 		}
-	}
-	if !ss.Confirmed {
-		return fmt.Errorf("风格图未经用户确认（confirmed=false）——硬门，不可跳过")
 	}
 	return nil
 }

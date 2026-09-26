@@ -1,8 +1,10 @@
 // Package produce：制作任务运行器（确定性编排，LLM 只在需要的点上介入）。
 //
 // 链路：tts（python）→ 每段语义 spec（DeepSeek + 契约校验 + 修复一轮）
-//   → spec 渲染 HTML（python render_spec）→ 管线落盘合成物 → 组装（python assemble）
-//   → check 门禁（失败带着报错重生成 spec 自修复，最多 2 轮）→ 渲染 → 成片。
+//
+//	→ spec 渲染 HTML（python render_spec）→ 管线落盘合成物 → 组装（python assemble）
+//	→ check 门禁（失败带着报错重生成 spec 自修复，最多 2 轮）→ 渲染 → 成片。
+//
 // 每步 SSE 广播 stage 事件；产物落盘可从任意步重放（manifest 记账）。
 package produce
 
@@ -16,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -352,15 +355,15 @@ func (r *Runner) checkWithRepair(ctx context.Context, p *pipeline.Project, instr
 // ── spec 生成（LLM 作业：语义布局）─────────────────────────────
 
 type voiceMeta struct {
-	ID        string        `json:"id"`
-	DurationS float64       `json:"duration_s"`
-	Words     []wordTiming  `json:"words"`
+	ID        string       `json:"id"`
+	DurationS float64      `json:"duration_s"`
+	Words     []wordTiming `json:"words"`
 }
 
 type wordTiming struct {
 	Text  string  `json:"text"`
 	Start float64 `json:"start"`
-	End    float64 `json:"end"`
+	End   float64 `json:"end"`
 }
 
 func loadAudioMeta(p *pipeline.Project) (map[string]voiceMeta, error) {
@@ -411,33 +414,50 @@ func (r *Runner) genSpecs(ctx context.Context, p *pipeline.Project, instruction,
 		r.emit(p.ID, "progress", "compositions", "样张截图失败，风格注入退回纯文本")
 	}
 	sampleImgs := styleSampleImages(p)
+	// NoThink：画面 spec 是结构化 HTML 作业，开思考单段 5–13 分钟（reasoning 占 1 万+ token）；
+	// 关思考后单段分钟级，配合段间并发把全片从半小时级压进几分钟。
 	gen := func(user string, out any) (openai.Usage, error) {
 		if len(sampleImgs) > 0 {
-			return prov.GenerateJSONVision(ctx, system, user, sampleImgs, 0.7, out)
+			return prov.GenerateJSONVisionNoThink(ctx, system, user, sampleImgs, 0.7, out)
 		}
-		return prov.GenerateJSON(ctx, system, user, out)
+		return prov.GenerateJSONNoThink(ctx, system, user, out)
 	}
 	if feedback != "" && only == "" { // 全片重生成：先清旧 spec
 		for _, seg := range sb.Segments {
 			_ = os.Remove(p.Artifact("llm/comp-" + seg.ID + ".spec.json"))
 		}
 	}
+	// 先筛出待生成段（已有产物跳过，重放语义），再并发填坑
+	var todo []contract.Segment
 	for _, seg := range sb.Segments {
 		if only != "" && seg.ID != only {
 			continue
 		}
-		if err := ctx.Err(); err != nil {
-			return err
-		}
 		specPath := p.Artifact("llm/comp-" + seg.ID + ".spec.json")
 		if _, err := os.Stat(specPath); err == nil && feedback == "" && instruction == "" {
-			continue // 已有产物，跳过（重放语义）
+			continue // 已有产物，跳过
 		}
+		todo = append(todo, seg)
+	}
+	// 段间零依赖（输入只读、spec 各落各的文件）→ 有界并发；429/网络抖动由 provider 重试兜底
+	sem := make(chan struct{}, specConcurrency())
+	var wg sync.WaitGroup
+	var errMu sync.Mutex
+	firstErr := error(nil)
+	fail := func(err error) {
+		errMu.Lock()
+		if firstErr == nil {
+			firstErr = err
+		}
+		errMu.Unlock()
+	}
+	work := func(seg contract.Segment, specPath string) {
 		v := voices[seg.ID]
 		var spec contract.CompSpec
 		u1, err := gen(specUserPrompt(seg, v, instruction, feedback, cv, style, menu), &spec)
 		if err != nil {
-			return fmt.Errorf("%s spec 生成失败: %w", seg.ID, err)
+			fail(fmt.Errorf("%s spec 生成失败: %w", seg.ID, err))
+			return
 		}
 		errs := contract.ValidateSpec(&spec, len(v.Words), cv)
 		errs = append(errs, iconErrors(&spec, icons)...)
@@ -446,7 +466,8 @@ func (r *Runner) genSpecs(ctx context.Context, p *pipeline.Project, instruction,
 			var fixed contract.CompSpec
 			u2, err2 := gen(specUserPrompt(seg, v, "", fb, cv, style, menu), &fixed)
 			if err2 != nil {
-				return fmt.Errorf("%s spec 修复失败: %w", seg.ID, err2)
+				fail(fmt.Errorf("%s spec 修复失败: %w", seg.ID, err2))
+				return
 			}
 			u1, spec = u2, fixed
 			errs = contract.ValidateSpec(&spec, len(v.Words), cv)
@@ -460,8 +481,8 @@ func (r *Runner) genSpecs(ctx context.Context, p *pipeline.Project, instruction,
 				r.emit(p.ID, "progress", "compositions", fmt.Sprintf("%s 清洗后仅 %d 元素，整段重出", seg.ID, len(spec.Elements)))
 				var retry contract.CompSpec
 				u2, err2 := gen(specUserPrompt(seg, v, instruction,
-						fmt.Sprintf("上一版几乎每个元素的 kind 都是空的或不认识的。kind 必须从可用元素菜单里逐字选取（%s），每个元素都必须有 kind。", kinds),
-						cv, style, menu), &retry)
+					fmt.Sprintf("上一版几乎每个元素的 kind 都是空的或不认识的。kind 必须从可用元素菜单里逐字选取（%s），每个元素都必须有 kind。", kinds),
+					cv, style, menu), &retry)
 				if err2 == nil {
 					errs2 := contract.ValidateSpec(&retry, len(v.Words), cv)
 					errs2 = append(errs2, iconErrors(&retry, icons)...)
@@ -479,16 +500,41 @@ func (r *Runner) genSpecs(ctx context.Context, p *pipeline.Project, instruction,
 			}
 		}
 		if len(spec.Elements) < 3 {
-			return fmt.Errorf("%s spec 元素不足 3 个（模型输出异常，重试后仍失败）", seg.ID)
+			fail(fmt.Errorf("%s spec 元素不足 3 个（模型输出异常，重试后仍失败）", seg.ID))
+			return
 		}
 		b, _ := json.MarshalIndent(spec, "", "  ")
 		if err := os.WriteFile(specPath, b, 0o644); err != nil {
-			return err
+			fail(err)
+			return
 		}
 		p.Manifest("llm.usage", fmt.Sprintf("spec %s prompt=%d completion=%d tokens", seg.ID, u1.PromptTokens, u1.CompletionTokens))
 		r.emit(p.ID, "progress", "compositions", fmt.Sprintf("%s 画面 spec ✓（%d 元素）", seg.ID, len(spec.Elements)))
 	}
-	return nil
+	for _, seg := range todo {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			if err := ctx.Err(); err != nil {
+				fail(err)
+				return
+			}
+			work(seg, p.Artifact("llm/comp-"+seg.ID+".spec.json"))
+		}()
+	}
+	wg.Wait()
+	return firstErr
+}
+
+// specConcurrency spec 生成并发度（段间零依赖；GLM 编码套餐并发有限，默认 3，
+// 超限 429 由 provider 重试兜底；SPEC_CONCURRENCY 环境变量可调）。
+func specConcurrency() int {
+	if n, err := strconv.Atoi(os.Getenv("SPEC_CONCURRENCY")); err == nil && n >= 1 && n <= 9 {
+		return n
+	}
+	return 3
 }
 
 const specSystemFallback = "你是科普视频的画面设计师，只输出 JSON。风格：手绘叙事（纸面·马克笔）——米黄纸面、深灰线稿、彩色便签、楷体。"

@@ -3,10 +3,13 @@
 package llm
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -62,12 +65,29 @@ func FromEnv(role Role) (*Provider, error) {
 // 返回本次 token 用量（成本记账）；重试时的用量取最后一次成功调用。
 func (p *Provider) GenerateJSON(ctx context.Context, system, user string, out any) (openai.Usage, error) {
 	return p.generate(ctx, system,
-		[]openai.ChatMessagePart{{Type: openai.ChatMessagePartTypeText, Text: user}}, out, 0.7)
+		[]openai.ChatMessagePart{{Type: openai.ChatMessagePartTypeText, Text: user}}, out, 0.7, false)
+}
+
+// GenerateJSONNoThink 同 GenerateJSON，但显式关闭 GLM 的思考（thinking.type=disabled）。
+// 结构化作业（样张/画面 HTML）思考会烧上万 reasoning token、拖到分钟级，纯亏时长。
+func (p *Provider) GenerateJSONNoThink(ctx context.Context, system, user string, out any) (openai.Usage, error) {
+	return p.generate(ctx, system,
+		[]openai.ChatMessagePart{{Type: openai.ChatMessagePartTypeText, Text: user}}, out, 0.7, true)
 }
 
 // GenerateJSONVision 多模态 JSON 作业：user 文本 + 若干图片（data URL）→ 模型，解析同 GenerateJSON。
 // temperature 由调用方定：评审类低温（稳定判断），画面生成类高温（发散）。
 func (p *Provider) GenerateJSONVision(ctx context.Context, system, user string, imageURLs []string, temperature float32, out any) (openai.Usage, error) {
+	return p.generate(ctx, system, visionParts(user, imageURLs), out, temperature, false)
+}
+
+// GenerateJSONVisionNoThink 同 GenerateJSONVision，但关闭思考。画面 spec 这类大 HTML 作业
+// 开思考会烧 1 万+ reasoning token、单段拖到 5–13 分钟；关掉后同样的活分钟级完成。
+func (p *Provider) GenerateJSONVisionNoThink(ctx context.Context, system, user string, imageURLs []string, temperature float32, out any) (openai.Usage, error) {
+	return p.generate(ctx, system, visionParts(user, imageURLs), out, temperature, true)
+}
+
+func visionParts(user string, imageURLs []string) []openai.ChatMessagePart {
 	parts := make([]openai.ChatMessagePart, 0, len(imageURLs)+1)
 	for _, u := range imageURLs {
 		parts = append(parts, openai.ChatMessagePart{
@@ -76,26 +96,17 @@ func (p *Provider) GenerateJSONVision(ctx context.Context, system, user string, 
 		})
 	}
 	parts = append(parts, openai.ChatMessagePart{Type: openai.ChatMessagePartTypeText, Text: user})
-	return p.generate(ctx, system, parts, out, temperature)
+	return parts
 }
 
-func (p *Provider) generate(ctx context.Context, system string, userParts []openai.ChatMessagePart, out any, temperature float32) (openai.Usage, error) {
-	cli := openai.NewClientWithConfig(cfg(p))
+func (p *Provider) generate(ctx context.Context, system string, userParts []openai.ChatMessagePart, out any, temperature float32, noThink bool) (openai.Usage, error) {
 	var lastErr error
 	var usage openai.Usage
 	for attempt := 0; attempt < 3; attempt++ {
 		if attempt > 0 {
 			time.Sleep(time.Duration(attempt) * 2 * time.Second)
 		}
-		resp, err := cli.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
-			Model: p.Model,
-			Messages: []openai.ChatCompletionMessage{
-				{Role: openai.ChatMessageRoleSystem, Content: system},
-				{Role: openai.ChatMessageRoleUser, MultiContent: userParts},
-			},
-			ResponseFormat: &openai.ChatCompletionResponseFormat{Type: openai.ChatCompletionResponseFormatTypeJSONObject},
-			Temperature:    temperature,
-		})
+		resp, err := p.chatOnce(ctx, system, userParts, temperature, noThink)
 		if err != nil {
 			lastErr = err
 			continue // 网络/限流类错误重试
@@ -111,9 +122,68 @@ func (p *Provider) generate(ctx context.Context, system string, userParts []open
 	return usage, fmt.Errorf("LLM 作业 3 次尝试均失败: %w", lastErr)
 }
 
+// glmThinking 智谱思考开关（go-openai 无此字段，手工组包时带上）。
+type glmThinking struct {
+	Type string `json:"type"` // enabled | disabled
+}
+
+// glmChatRequest ChatCompletionRequest + 智谱扩展字段（内嵌扁平序列化）。
+type glmChatRequest struct {
+	openai.ChatCompletionRequest
+	Thinking *glmThinking `json:"thinking,omitempty"`
+}
+
+func (p *Provider) chatOnce(ctx context.Context, system string, userParts []openai.ChatMessagePart, temperature float32, noThink bool) (openai.ChatCompletionResponse, error) {
+	req := glmChatRequest{
+		ChatCompletionRequest: openai.ChatCompletionRequest{
+			Model: p.Model,
+			Messages: []openai.ChatCompletionMessage{
+				{Role: openai.ChatMessageRoleSystem, Content: system},
+				{Role: openai.ChatMessageRoleUser, MultiContent: userParts},
+			},
+			ResponseFormat: &openai.ChatCompletionResponseFormat{Type: openai.ChatCompletionResponseFormatTypeJSONObject},
+			Temperature:    temperature,
+		},
+	}
+	if noThink {
+		req.Thinking = &glmThinking{Type: "disabled"}
+	}
+	body, err := json.Marshal(req)
+	if err != nil {
+		return openai.ChatCompletionResponse{}, err
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, "POST",
+		strings.TrimSuffix(p.BaseURL, "/")+"/chat/completions", bytes.NewReader(body))
+	if err != nil {
+		return openai.ChatCompletionResponse{}, err
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+p.APIKey)
+	httpReq.Header.Set("Content-Type", "application/json")
+	cli := &http.Client{Timeout: 10 * time.Minute}
+	httpResp, err := cli.Do(httpReq)
+	if err != nil {
+		return openai.ChatCompletionResponse{}, err
+	}
+	defer httpResp.Body.Close()
+	b, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return openai.ChatCompletionResponse{}, err
+	}
+	if httpResp.StatusCode != http.StatusOK {
+		return openai.ChatCompletionResponse{}, fmt.Errorf("HTTP %d: %.300s", httpResp.StatusCode, b)
+	}
+	var resp openai.ChatCompletionResponse
+	if err := json.Unmarshal(b, &resp); err != nil {
+		return openai.ChatCompletionResponse{}, fmt.Errorf("响应解析失败: %w（原文前 200 字: %.200s）", err, b)
+	}
+	return resp, nil
+}
+
 func cfg(p *Provider) openai.ClientConfig {
 	c := openai.DefaultConfig(p.APIKey)
 	c.BaseURL = p.BaseURL
+	// 默认 http.Client 无超时：端点偶发挂住会把 Agent 循环/管线永久卡死
+	c.HTTPClient = &http.Client{Timeout: 3 * time.Minute}
 	return c
 }
 

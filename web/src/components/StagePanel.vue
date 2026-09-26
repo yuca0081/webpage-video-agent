@@ -6,6 +6,7 @@ import { fmtClock, segAt, segTable } from '../segtime'
 import { videoURL } from '../api'
 import Timeline from './Timeline.vue'
 import LiveFrame from './LiveFrame.vue'
+import SampleFrame from './SampleFrame.vue'
 
 const props = defineProps<{
   view: ProjectView | null
@@ -125,7 +126,8 @@ watch(() => props.stageSummary, (nv, ov) => {
         <NScrollbar class="ms-scroll">
           <div class="samples">
             <figure v-for="s in styleSamples.samples" :key="s.tag" class="sample">
-              <iframe :srcdoc="s.html" sandbox="" class="frame" :style="{ aspectRatio: view.aspect === '9:16' ? '9/16' : '16/9' }" />
+              <!-- 样张 HTML 固定 960×540，卡片只有半宽——必须整体缩放（SampleFrame），裸 iframe 只会露出左上局部 -->
+              <SampleFrame :html="s.html" />
               <figcaption>
                 <b>{{ s.tag }}</b>
                 <span>{{ s.desc }}</span>
@@ -231,7 +233,7 @@ watch(() => props.stageSummary, (nv, ov) => {
 /* 样张 */
 .samples { display: flex; gap: 16px; padding: 20px; flex-wrap: wrap; }
 .sample { flex: 1; min-width: 320px; max-width: 480px; }
-.frame { width: 100%; border: 1px solid #2b2b33; border-radius: 8px; background: #FDF6E3; }
+.sample :deep(.sf) { border: 1px solid #2b2b33; border-radius: 8px; }
 figcaption { margin-top: 8px; display: flex; flex-direction: column; gap: 2px; }
 figcaption b { font-size: 13px; }
 figcaption span { font-size: 12px; color: #8a8a96; }

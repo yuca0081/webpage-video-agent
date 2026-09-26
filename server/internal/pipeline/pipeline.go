@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -48,6 +49,8 @@ type Project struct {
 	// Ctx 任务级取消信号（pipeline.Run 注入）；runCLI 等长作业用其杀子进程。
 	// 为 nil 时视为 context.Background()（CLI 直跑 m0 run 场景）。
 	Ctx context.Context
+
+	manifestMu sync.Mutex // 并发作业（spec 并行生成）下 manifest.jsonl 追加互斥
 }
 
 func NewProject(dataDir, id string) *Project {
@@ -75,6 +78,8 @@ func (p *Project) Manifest(event, detail string) {
 	line, _ := json.Marshal(map[string]any{
 		"ts": time.Now().Format(time.RFC3339), "event": event, "detail": detail,
 	})
+	p.manifestMu.Lock()
+	defer p.manifestMu.Unlock()
 	fh, err := os.OpenFile(f, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		return
@@ -280,6 +285,7 @@ func storyboardUserPromptNotes(article, notes string) string {
 }
 
 // stageStyleSamples 风格样张（LLM 作业 #2）：必须 confirmed=true 才放行（硬门）。
+// input/style_notes.txt 存在时按用户修改要求重生成（draft_style_samples 带 instruction 写入）。
 func stageStyleSamples(p *Project) error {
 	final := p.Artifact("style/style_samples.json")
 	if exists(final) {
@@ -304,6 +310,33 @@ func stageStyleSamples(p *Project) error {
 		p.Manifest("style.confirmed", ss.Direction)
 		return nil
 	}
+
+	// API 模式：直出样张（confirmed 置 false，等用户在舞台确认——硬门由 final 落定校验把守）。
+	// NoThink：样张是纯 CSS 作业，开思考会烧上万 reasoning token、拖到分钟级。
+	prov, perr := llm.FromEnv(llm.RolePlan)
+	if perr == nil {
+		var ss contract.StyleSamples
+		usage, gerr := prov.GenerateJSONNoThink(context.Background(),
+			"你是视频视觉设计师。只输出 JSON。",
+			styleUserPrompt(p), &ss)
+		if gerr == nil {
+			if verr := contract.ValidateStyleSamplesDraft(&ss); verr != nil {
+				p.Manifest("style_samples.api.rejected", verr.Error())
+				return fmt.Errorf("API 样张被自检拒绝: %w", verr)
+			}
+			ss.Confirmed = false
+			if err := writeFile("", final, mustJSON(ss)); err != nil {
+				return err
+			}
+			p.Manifest("llm.usage", fmt.Sprintf("style_samples prompt=%d completion=%d tokens",
+				usage.PromptTokens, usage.CompletionTokens))
+			p.Manifest("style.drafted", ss.Direction)
+			p.Manifest("style_samples.api", prov.Name+"/"+prov.Model)
+			return nil
+		}
+		p.Manifest("style_samples.api.error", gerr.Error())
+	}
+
 	req := p.LLMRequest("style_samples")
 	if err := writeFile("", req, styleRequest(p, out)); err != nil {
 		return err
@@ -848,30 +881,53 @@ func storyboardRequest(p *Project, article, out string) string {
 `, utf8.RuneCountInString(article), article, out)
 }
 
+// styleBrief 样张作业正文（API 直调与会话请求共用一份，防两处漂移）。
+// input/style_notes.txt 存在时追加用户修改要求（draft_style_samples 带 instruction 写入）。
+// 画布硬定 960×540：舞台 SampleFrame 缩放与 ai/snap_samples.py 截图都按此假设，违反必被裁切。
+func styleBrief(p *Project) string {
+	notes := ""
+	if b, err := os.ReadFile(p.Artifact("input/style_notes.txt")); err == nil && len(strings.TrimSpace(string(b))) > 0 {
+		notes = "\n\n## 用户修改要求（优先满足；未提及的方面保持连贯，不要推倒重来）\n" + string(b) + "\n"
+	}
+	return fmt.Sprintf(`你是视频视觉设计师。按文稿气质提议一个风格方向，产出 1–3 张 HTML 样张：
+- 样张 = 用拟采用风格参数（色板/字体/组件/动效偏好）渲出的静态小画面
+- 样张与成片出自同一套 token，所见即所得；不要用图片/网络资源，纯 CSS
+- 中文用系统楷体 KaiTi（演示环境），正式渲染字体后续本地化
+
+## 画布硬约束（违反必被裁切）
+- 每张样张的 html 是完整自包含文档，画布固定 960×540：html,body{width:960px;height:540px;overflow:hidden}
+- 内容全部落在画布内，不依赖滚动；禁止 vw/vh；大字标题留边距，不得溢出画布
+- CSS 紧凑：内联一个 <style> 块，每张 html 控制在 2000 字符内%s`, notes)
+}
+
+func styleJSONShape() string {
+	return `{
+  "direction": "风格方向名（如：手绘叙事（纸面·马克笔））",
+  "samples": [
+    { "tag": "样张 A · 标题帧", "desc": "说明这张展示什么", "html": "<!doctype html>…整文档…" },
+    { "tag": "样张 B · 数据帧", "desc": "…", "html": "…" }
+  ],
+  "confirmed": false
+}`
+}
+
+func styleUserPrompt(p *Project) string {
+	return styleBrief(p) + "\n\n## 输出要求\n只输出 JSON，无 markdown 围栏：\n" + styleJSONShape()
+}
+
 func styleRequest(p *Project, out string) string {
 	return fmt.Sprintf(`# 作业：风格样张（帧述 M0 · LLM 作业 #2）
 
-## 角色与任务
-你是视频视觉设计师。按文稿气质提议一个风格方向，产出 1–3 张 HTML 样张：
-- 样张 = 用拟采用风格参数（色板/字体/组件/动效偏好）渲出的静态小画面（div/css 即可，300×180 比例感）
-- 样张与成片出自同一套 token，所见即所得；不要用图片/网络资源，纯 CSS
-- 中文用系统楷体 KaiTi（演示环境），正式渲染字体后续本地化
+%s
 
 ## 输出要求
 把 JSON 写到: %s（confirmed 先置 false，用户确认后由管线改为 true——这是硬门）
 
-{
-  "direction": "风格方向名（如：手绘叙事（纸面·马克笔））",
-  "samples": [
-    { "tag": "样张 A · 标题帧", "desc": "说明这张展示什么", "html": "<div style=\"...\">…</div>" },
-    { "tag": "样张 B · 数据帧", "desc": "…", "html": "…" }
-  ],
-  "confirmed": false
-}
+%s
 
 ## 校验
 - direction 非空；samples 1–3 张；每张 html 非空
-`, out)
+`, styleBrief(p), out, styleJSONShape())
 }
 
 func compRequest(p *Project, seg contract.Segment, direction, out string) string {

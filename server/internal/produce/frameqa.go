@@ -19,7 +19,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"webpage-video-agent/server/internal/contract"
@@ -98,6 +100,8 @@ func (r *Runner) frameQA(ctx context.Context, p *pipeline.Project, instruction, 
 }
 
 // reviewSegments 范围内每段抽四帧送审，返回 未过段 → 问题回喂文本。
+// 段间零依赖（各读各的段片、各写各的帧图、verdict 独立）→ 有界并发，模式同 genSpecs：
+// 抽帧 + 视觉调用都在并发区，429/网络抖动由 provider 重试兜底。
 // 单段审查调用失败视为审查器抖动：manifest 记账后跳过（宁可放过不误杀管线）。
 func (r *Runner) reviewSegments(ctx context.Context, p *pipeline.Project, only string) (map[string]string, error) {
 	sb, err := p.LoadStoryboard()
@@ -112,21 +116,40 @@ func (r *Runner) reviewSegments(ctx context.Context, p *pipeline.Project, only s
 	if err != nil {
 		return nil, fmt.Errorf("画面审查需要 API 模式（LLM_API_KEY）: %w", err)
 	}
-	failed := map[string]string{}
+	var todo []contract.Segment
 	for _, seg := range sb.Segments {
 		if only != "" && seg.ID != only {
 			continue
 		}
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		mp4 := p.Artifact("renders/segs/" + seg.ID + ".mp4")
-		if !existsFile(mp4) {
+		if !existsFile(p.Artifact("renders/segs/" + seg.ID + ".mp4")) {
 			continue // 无段片：交给渲染阶段的报错，这里不背
+		}
+		todo = append(todo, seg)
+	}
+	failed := map[string]string{}
+	var mu sync.Mutex
+	firstErr := error(nil)
+	sem := make(chan struct{}, frameqaConcurrency())
+	var wg sync.WaitGroup
+	review := func(seg contract.Segment) {
+		defer wg.Done()
+		defer func() { <-sem }()
+		if err := ctx.Err(); err != nil {
+			mu.Lock()
+			if firstErr == nil {
+				firstErr = err
+			}
+			mu.Unlock()
+			return
 		}
 		sf, err := extractFrames(ctx, p, seg.ID)
 		if err != nil {
-			return nil, err
+			mu.Lock()
+			if firstErr == nil {
+				firstErr = err
+			}
+			mu.Unlock()
+			return
 		}
 		var vd frameVerdict
 		_, rerr := prov.GenerateJSONVision(ctx,
@@ -135,16 +158,36 @@ func (r *Runner) reviewSegments(ctx context.Context, p *pipeline.Project, only s
 			[]string{dataURL(sf.first), dataURL(sf.open), dataURL(sf.last), dataURL(sf.final)}, 0.2, &vd)
 		if rerr != nil {
 			r.Manifest(p, "frameqa.review_error", seg.ID+": "+rerr.Error())
-			continue
+			return
 		}
+		mu.Lock()
+		defer mu.Unlock()
 		if vd.Pass && !hasHigh(vd) {
 			r.Manifest(p, "frameqa.seg", fmt.Sprintf("%s: pass", seg.ID))
-			continue
+			return
 		}
 		r.Manifest(p, "frameqa.seg", fmt.Sprintf("%s: fail（%d 个问题）", seg.ID, len(vd.Issues)))
 		failed[seg.ID] = issuesFeedback(vd)
 	}
+	for _, seg := range todo {
+		wg.Add(1)
+		sem <- struct{}{}
+		go review(seg)
+	}
+	wg.Wait()
+	if firstErr != nil {
+		return nil, firstErr
+	}
 	return failed, nil
+}
+
+// frameqaConcurrency 审查并发度（默认 3 与 spec 生成一致；视觉调用带 4 图较重，
+// 超限 429 由 provider 重试兜底；FRAMEQA_CONCURRENCY 环境变量可调）。
+func frameqaConcurrency() int {
+	if n, err := strconv.Atoi(os.Getenv("FRAMEQA_CONCURRENCY")); err == nil && n >= 1 && n <= 9 {
+		return n
+	}
+	return 3
 }
 
 type segFrames struct {

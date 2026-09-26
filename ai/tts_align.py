@@ -6,9 +6,11 @@
 
 链路（幂等，缺什么补什么）：
   1. storyboard.json 每段旁白 → audio/segNN.txt
-  2. TTS 引擎按优先级：
-       a. SILICONFLOW_API_KEY（推荐，CosyVoice2，中文自然度高；.env 配 key 即启用）
-       b. hyperframes tts（Kokoro zf_xiaobei，离线兜底）
+  2. TTS 引擎按优先级（逐段级联，前者失败落后者）：
+       a. SILICONFLOW_API_KEY（CosyVoice2，中文自然度高；.env 配 key 即启用）
+       b. Edge TTS（微软免费，zh-CN-XiaoxiaoNeural 晓晓；EDGE_TTS_VOICE 可换音色，
+          如 zh-CN-YunxiNeural 云希男声；EDGE_TTS_RATE 可调速，如 +5%）
+       c. hyperframes tts（Kokoro zf_xiaobei，离线兜底，音质差仅应急）
   3. 时间轴锚点：FunASR paraformer-zh（本地，字级时间戳）；
      不可用降级 faster-whisper（词级→字级均分）。
   4. 对齐策略（断句质量的关键）：ASR 只提供「字符 → 时刻」锚点，
@@ -22,7 +24,8 @@
                "phrases": [[w0,w1],[w2,w5], ...]}]}   # 词序号区间 = 字幕短语
   phrases 缺省时渲染层回落整段胶囊（v1 行为）。
 
-依赖：pip install funasr modelscope jieba soundfile torch(CPU)；SILICONFLOW_API_KEY 可选
+依赖：pip install funasr modelscope jieba soundfile torch(CPU) edge-tts；
+     SILICONFLOW_API_KEY 可选；ffmpeg 在 PATH（edge 产物 mp3→wav 转码用）
 """
 import difflib
 import json
@@ -66,6 +69,29 @@ def tts_siliconflow(text, out_wav):
     except Exception as e:
         print(f'  siliconflow tts 失败（回落 kokoro）: {e}')
         return False
+
+
+def tts_edge(text_file, out_wav):
+    """Edge TTS（微软免费）→ mp3 → ffmpeg 转 wav。失败返回 False（回落 Kokoro）。"""
+    voice = os.environ.get('EDGE_TTS_VOICE', 'zh-CN-XiaoxiaoNeural')
+    rate = os.environ.get('EDGE_TTS_RATE', '+0%')
+    mp3 = out_wav.with_suffix('.mp3')
+    r = subprocess.run(
+        [sys.executable, '-m', 'edge_tts', '--file', str(text_file),
+         '--voice', voice, '--rate', rate, '--write-media', str(mp3)],
+        capture_output=True, text=True, timeout=300)
+    if not (mp3.exists() and mp3.stat().st_size > 2000):
+        print(f'  edge-tts FAIL: {(r.stderr or r.stdout)[-150:]}')
+        return False
+    ff = shutil.which('ffmpeg')
+    if not ff:
+        print('  ffmpeg 缺失，edge-tts mp3 无法转 wav')
+        return False
+    r2 = subprocess.run(
+        [ff, '-y', '-v', 'error', '-i', str(mp3), '-ar', '32000', '-ac', '1', str(out_wav)],
+        capture_output=True, text=True, timeout=120)
+    mp3.unlink(missing_ok=True)
+    return r2.returncode == 0 and out_wav.exists()
 
 
 def tts_kokoro(text_file, out_wav):
@@ -219,7 +245,7 @@ def main(proj_dir: str) -> int:
     # 1+2. 文本落盘 + TTS（先写全 txt 再出 wav，避免路径被当文本朗读的坑）
     for seg in sb['segments']:
         (proj / 'audio' / f"{seg['id']}.txt").write_text(seg['narration'], encoding='utf-8')
-    engine = 'siliconflow' if SF_KEY else 'kokoro'
+    engine = 'siliconflow' if SF_KEY else 'edge'
     for seg in sb['segments']:
         wav = proj / 'audio' / f"{seg['id']}.wav"
         if wav.exists():
@@ -227,6 +253,8 @@ def main(proj_dir: str) -> int:
             continue
         if engine == 'siliconflow' and tts_siliconflow(seg['narration'], wav):
             print(seg['id'], 'wav ✓ (cosyvoice)')
+        elif tts_edge(proj / 'audio' / f"{seg['id']}.txt", wav):
+            print(seg['id'], f"wav ✓ (edge {os.environ.get('EDGE_TTS_VOICE', 'zh-CN-XiaoxiaoNeural')})")
         elif tts_kokoro(proj / 'audio' / f"{seg['id']}.txt", wav):
             print(seg['id'], 'wav ✓ (kokoro)')
         else:
