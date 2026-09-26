@@ -6,6 +6,7 @@ import {
 import HistoryRail from './components/HistoryRail.vue'
 import StagePanel from './components/StagePanel.vue'
 import ChatPanel from './components/ChatPanel.vue'
+import GatesModal from './components/GatesModal.vue'
 import NewProjectModal from './components/NewProjectModal.vue'
 import MaterialCenter from './components/MaterialCenter.vue'
 import HomeView from './components/HomeView.vue'
@@ -23,7 +24,7 @@ const style = ref<StyleSamples | null>(null)
 const manuscript = ref<{ content: string; word_count: number } | null>(null)
 const msgs = ref<Msg[]>([])
 const chatDraft = ref('')
-const chatRefs = ref<ChatRef[]>([]) // 📎 引用列表（时间轴/分镜点选加入，输入框上方展示）
+const chatRefs = ref<ChatRef[]>([]) // 引用列表（时间轴/分镜点选加入，输入框上方展示）
 const audioMeta = ref<AudioMeta | null>(null) // 时间轴字幕/配音轨数据源
 // 制作管线各段状态：'' | running | done | error
 const stageState = ref<Record<string, string>>({})
@@ -53,7 +54,8 @@ async function loadProject(id: string) {
   view.value = await api.project(id)
   storyboard.value = view.value.gates.storyboard ? await api.storyboard(id).catch(() => null) : null
   style.value = view.value.gates.style_draft ? await api.style(id).catch(() => null) : null
-  if (view.value.gates.manuscript) manuscript.value = await api.manuscript(id).catch(() => null)
+  // 无条件重拉：门未过也要清掉旧项目的残留（否则新项目会显示上一个项目的文稿/分镜/样张）
+  manuscript.value = view.value.gates.manuscript ? await api.manuscript(id).catch(() => null) : null
   audioMeta.value = await api.audioMeta(id).catch(() => null)
 }
 
@@ -73,6 +75,12 @@ function selectProject(id: string) {
   msgs.value = []
   chatRefs.value = []
   stageState.value = {}
+  // 先清上一项目的全部展示数据：loadProject 是异步的，不清会在新项目页闪现旧内容
+  view.value = null
+  storyboard.value = null
+  style.value = null
+  manuscript.value = null
+  audioMeta.value = null
 }
 
 // 📎 引用：点分镜/时间轴加段级（按段去重）；双击轨道/「引用此刻」加时刻级（按 ±0.75s 去重）；
@@ -146,6 +154,8 @@ loadProjects()
 loadLibrary()
 
 const showNew = ref(false)
+// 三前置弹窗：文稿/分镜/风格（点对话栏标签打开）
+const gateModal = ref<'manuscript' | 'storyboard' | 'style' | null>(null)
 async function onCreated(id: string) {
   showNew.value = false
   await loadProjects()
@@ -213,8 +223,8 @@ const themeOverrides = {
                   class="op-btn" :class="{ on: inspect }"
                   :disabled="!!stageSummary || view.producing"
                   @click="inspect = !inspect"
-                >{{ inspect ? '退出检视' : '🔍 检视' }}</button>
-                <a class="op-btn" :href="videoURL(current)" :download="`${view.name}.mp4`">⬇ 下载成片</a>
+                >{{ inspect ? '退出检视' : '检视' }}</button>
+                <a class="op-btn" :href="videoURL(current)" :download="`${view.name}.mp4`">下载成片</a>
               </div>
             </header>
             <StagePanel
@@ -222,6 +232,7 @@ const themeOverrides = {
               :view="view" :storyboard="storyboard" :style-samples="style" :manuscript="manuscript"
               :stage-summary="stageSummary" :video-id="current" :audio-meta="audioMeta"
               :picked-idx="chatRefs.map(r => r.idx)" :inspect="inspect" @inspect-off="inspect = false"
+              @edit-manuscript="gateModal = 'manuscript'"
               @confirm-style="async () => { if (current) { await api.confirmStyle(current); refresh() } }"
               @seg="addRef"
               @seg-element="addElementRef"
@@ -235,11 +246,15 @@ const themeOverrides = {
           </main>
           <ChatPanel
             :project-id="current" :msgs="msgs" :busy="agentBusy" v-model:draft="chatDraft" :refs="chatRefs" :view="view"
-            @sent="markBusy" @remove-ref="removeRef" @clear-refs="chatRefs = []"
+            @sent="markBusy" @remove-ref="removeRef" @clear-refs="chatRefs = []" @open-gate="g => (gateModal = g)"
           />
         </div>
       </div>
       <NewProjectModal v-model:show="showNew" @created="onCreated" />
+      <GatesModal
+        :project-id="current" :gate="gateModal" :view="view"
+        @close="gateModal = null" @saved="refresh" @chat-sent="markBusy"
+      />
     </n-message-provider>
   </n-config-provider>
 </template>

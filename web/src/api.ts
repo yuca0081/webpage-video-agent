@@ -8,11 +8,11 @@ async function j<T>(res: Response): Promise<T> {
 export const api = {
   listProjects: () => fetch('/api/projects').then(r => j<ProjectRow[]>(r)),
 
-  createProject: (name: string, manuscript: string, aspect = '9:16', stylepackId = '') =>
+  createProject: (name: string, topic: string, aspect = '9:16') =>
     fetch('/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, manuscript, aspect, stylepack_id: stylepackId }),
+      body: JSON.stringify({ name, topic, aspect }),
     }).then(r => j<{ id: string; name: string }>(r)),
 
   project: (id: string) => fetch(`/api/projects/${id}`).then(r => j<ProjectView>(r)),
@@ -23,6 +23,22 @@ export const api = {
 
   manuscript: (id: string) =>
     fetch(`/api/projects/${id}/manuscript`).then(r => j<{ content: string; word_count: number }>(r)),
+
+  // 文稿弹窗保存（article.txt 为真源；storyboard_stale=分镜基于旧稿需重新生成）
+  saveManuscript: (id: string, content: string) =>
+    fetch(`/api/projects/${id}/manuscript`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+    }).then(r => j<{ ok: boolean; word_count: number; storyboard_stale: boolean }>(r)),
+
+  // 风格弹窗选定库内风格包（预览后显式确认 = 硬门通过）
+  applyStyle: (id: string, stylepackId: string) =>
+    fetch(`/api/projects/${id}/style/apply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stylepack_id: stylepackId }),
+    }).then(r => j<{ ok: boolean; direction: string }>(r)),
 
   style: (id: string) => fetch(`/api/projects/${id}/style`).then(r => j<StyleSamples>(r)),
 

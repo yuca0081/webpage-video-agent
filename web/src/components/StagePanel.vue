@@ -18,7 +18,7 @@ const props = defineProps<{
   pickedIdx: number[]
   inspect: boolean // 检视模式开关在标题行（App 持有），进入时定位到当前播放时刻
 }>()
-const emit = defineEmits<{ 'confirm-style': []; seg: [idx: number, key: string]; 'seg-element': [ref: ChatRef]; cancel: []; 'pick-time': [t: number]; 'inspect-off': [] }>()
+const emit = defineEmits<{ 'confirm-style': []; seg: [idx: number, key: string]; 'seg-element': [ref: ChatRef]; cancel: []; 'pick-time': [t: number]; 'inspect-off': []; 'edit-manuscript': [] }>()
 
 const stageName: Record<string, string> = {
   tts: '配音', compositions: '画面', assemble: '组装', check: '检查', render: '渲染', frameqa: '画面审查',
@@ -85,6 +85,7 @@ watch(() => props.stageSummary, (nv, ov) => {
       <div v-if="!view.gates.storyboard && manuscript" class="pane">
         <div class="pane-head">
           文稿 <NTag size="small" :bordered="false">{{ manuscript.word_count }} 字</NTag>
+          <NButton size="tiny" quaternary class="edit-btn" @click="emit('edit-manuscript')">编辑</NButton>
         </div>
         <NScrollbar class="ms-scroll">
           <article class="manuscript">{{ manuscript.content }}</article>
@@ -159,7 +160,7 @@ watch(() => props.stageSummary, (nv, ov) => {
             @play="playing = true" @pause="playing = false" @ended="playing = false"
           />
           <button v-show="!inspect && !playing" class="now-btn" @click="pickTime(cur)">
-            📎 引用此刻 {{ fmtClock(cur) }}
+            引用此刻 {{ fmtClock(cur) }}
           </button>
           <LiveFrame
             v-if="inspect && inspectSegId"
@@ -176,14 +177,23 @@ watch(() => props.stageSummary, (nv, ov) => {
 
       <!-- 制作中：进度面板（其余状态都不满足 = 管线在跑或等待中） -->
       <div v-else class="pane producing">
-        <NSpin size="large" />
-        <div class="prod-title">{{ view.producing || stageSummary ? '制作管线运行中' : '准备中…' }}</div>
-        <div v-if="stageSummary" class="stages">
-          <div v-for="st in stageSummary" :key="st.key" class="pstage" :data-state="st.state">
-            <span class="dot" />{{ stageName[st.key] ?? st.key }}
+        <template v-if="!view.producing && !stageSummary">
+          <div class="prod-title">三件事齐了就开工</div>
+          <p class="prep-hint">
+            点右侧对话栏上方的标签补齐：<b>文稿</b>（编辑或 AI 起草）、<b>分镜</b>（我来生成）、<b>风格</b>（选库内或描述方向），然后在对话里说「开始」。
+          </p>
+          <NButton type="primary" @click="emit('edit-manuscript')">先填文稿</NButton>
+        </template>
+        <template v-else>
+          <NSpin size="large" />
+          <div class="prod-title">制作管线运行中</div>
+          <div v-if="stageSummary" class="stages">
+            <div v-for="st in stageSummary" :key="st.key" class="pstage" :data-state="st.state">
+              <span class="dot" />{{ stageName[st.key] ?? st.key }}
+            </div>
           </div>
-        </div>
-        <button v-if="view.producing" class="stop-btn" @click="emit('cancel')">■ 停止制作</button>
+          <button v-if="view.producing" class="stop-btn" @click="emit('cancel')">■ 停止制作</button>
+        </template>
       </div>
     </template>
 
@@ -203,6 +213,7 @@ watch(() => props.stageSummary, (nv, ov) => {
   flex: none; display: flex; align-items: center; gap: 10px;
   padding: 12px 18px; font-weight: 600; border-bottom: 1px solid #202027; color: #d9d9e0;
 }
+.pane-head .edit-btn { margin-left: auto; font-weight: 400; }
 .ms-scroll { flex: 1; }
 .manuscript { padding: 26px 34px; line-height: 2.1; font-size: 15px; color: #cfcfd8; white-space: pre-wrap; max-width: 860px; margin: 0 auto; font-family: 'KaiTi', 'STKaiti', serif; font-size: 17px; }
 
@@ -255,6 +266,8 @@ figcaption span { font-size: 12px; color: #8a8a96; }
 /* 制作中（pstage = 进度胶囊；不能叫 .stage，会和外层舞台 section 撞类名导致 align/padding 污染） */
 .producing { align-items: center; justify-content: center; gap: 18px; }
 .prod-title { color: #c3c3cd; font-size: 15px; }
+.prep-hint { max-width: 480px; text-align: center; color: #8a8a96; font-size: 13px; line-height: 1.9; }
+.prep-hint b { color: #f0c674; font-weight: 600; }
 .stages { display: flex; gap: 10px; }
 .pstage {
   display: flex; align-items: center; gap: 6px; font-size: 13px; color: #7c7c88;

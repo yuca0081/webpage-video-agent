@@ -44,8 +44,10 @@ func (s *Server) Router() *gin.Engine {
 	r.GET("/api/projects", s.listProjects)
 	r.GET("/api/projects/:id", s.projectView)
 	r.GET("/api/projects/:id/manuscript", s.manuscript)
+	r.PUT("/api/projects/:id/manuscript", s.saveManuscript)
 	r.GET("/api/projects/:id/storyboard", s.storyboard)
 	r.GET("/api/projects/:id/style", s.style)
+	r.POST("/api/projects/:id/style/apply", s.applyStyle)
 	r.POST("/api/projects/:id/style/confirm", s.confirmStyle)
 	r.POST("/api/projects/:id/chat", s.chat)
 	r.POST("/api/draft/manuscript", s.draftManuscript)
@@ -85,17 +87,21 @@ func (s *Server) Router() *gin.Engine {
 func (s *Server) createProject(c *gin.Context) {
 	var in struct {
 		Name        string `json:"name"`
-		Manuscript  string `json:"manuscript"`
-		Aspect      string `json:"aspect"`      // 9:16（默认，plan §7 M1）| 16:9
+		Topic       string `json:"topic"`        // 一句话主题（文稿弹窗 AI 起草的种子）
+		Manuscript  string `json:"manuscript"`   // 可选：直接带稿创建（不走弹窗补）
+		Aspect      string `json:"aspect"`       // 9:16（默认，plan §7 M1）| 16:9
 		StylePackID string `json:"stylepack_id"` // 方法库复用（可空 = 冷启动自拟）
 	}
 	if err := c.ShouldBindJSON(&in); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
+	in.Topic = strings.TrimSpace(in.Topic)
 	in.Manuscript = strings.TrimSpace(in.Manuscript)
-	if in.Manuscript == "" {
-		c.JSON(400, gin.H{"error": "文稿不能为空（硬门 1/3）"})
+	// 新建只要求名称+主题（文稿/风格是三前置，进工作区后在对话栏标签里补）；
+	// 带稿直建是老路径，兼容保留。
+	if in.Topic == "" && in.Manuscript == "" {
+		c.JSON(400, gin.H{"error": "主题必填（一句话说清要讲什么，例：蚊子为什么嗡嗡叫）"})
 		return
 	}
 	if in.Aspect != "16:9" && in.Aspect != "9:16" {
@@ -108,7 +114,11 @@ func (s *Server) createProject(c *gin.Context) {
 		}
 	}
 	if in.Name == "" {
-		in.Name = strings.SplitN(in.Manuscript, "\n", 2)[0]
+		src := in.Topic
+		if src == "" {
+			src = strings.SplitN(in.Manuscript, "\n", 2)[0]
+		}
+		in.Name = src
 		if r := []rune(in.Name); len(r) > 24 {
 			in.Name = string(r[:24])
 		}
@@ -121,14 +131,16 @@ func (s *Server) createProject(c *gin.Context) {
 	} {
 		_ = os.MkdirAll(filepath.Join(p.Dir, d), 0o755)
 	}
-	if err := os.WriteFile(p.Artifact("input/article.txt"), []byte(in.Manuscript), 0o644); err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
+	if in.Manuscript != "" {
+		if err := os.WriteFile(p.Artifact("input/article.txt"), []byte(in.Manuscript), 0o644); err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
 	}
 	meta, _ := json.MarshalIndent(map[string]any{
 		"id": id, "name": in.Name, "status": "created", "aspect": in.Aspect,
-		"stylepack_id": in.StylePackID,
-		"created_at":   time.Now().Format(time.RFC3339),
+		"topic": in.Topic, "stylepack_id": in.StylePackID,
+		"created_at": time.Now().Format(time.RFC3339),
 	}, "", "  ")
 	_ = os.WriteFile(p.Artifact("project.json"), meta, 0o644)
 	p.Manifest("project.created", fmt.Sprintf("%s（%s）", in.Name, in.Aspect))
@@ -188,16 +200,21 @@ func (s *Server) projectView(c *gin.Context) {
 	}
 	st := s.Agent.State(id)
 	aspect := "16:9" // 旧项目无字段，与已渲成片一致
+	topic := ""
 	if b, err := os.ReadFile(p.Artifact("project.json")); err == nil {
 		var meta struct {
 			Aspect string `json:"aspect"`
+			Topic  string `json:"topic"`
 		}
-		if json.Unmarshal(b, &meta) == nil && meta.Aspect != "" {
-			aspect = meta.Aspect
+		if json.Unmarshal(b, &meta) == nil {
+			if meta.Aspect != "" {
+				aspect = meta.Aspect
+			}
+			topic = meta.Topic
 		}
 	}
 	c.JSON(200, gin.H{
-		"id": id, "name": st.Name, "aspect": aspect,
+		"id": id, "name": st.Name, "aspect": aspect, "topic": topic,
 		"gates": gin.H{
 			"manuscript": st.HasManuscript, "storyboard": st.HasStoryboard, "style_confirmed": st.StyleConfirmed,
 			"style_draft": st.HasStyle, "style_direction": st.StyleDirection,
@@ -223,6 +240,91 @@ func (s *Server) manuscript(c *gin.Context) {
 		return
 	}
 	c.JSON(200, m)
+}
+
+// saveManuscript 文稿弹窗保存。article.txt 是唯一真源；manuscript.json 是管线产物
+// （重放语义：存在即跳过）——改稿必须删掉它，否则重新制作时 TTS 拿的还是旧稿。
+// 已有分镜不硬删：响应带 storyboard_stale，由前端提示"分镜基于旧稿，需重新生成"。
+func (s *Server) saveManuscript(c *gin.Context) {
+	var in struct {
+		Content string `json:"content"`
+	}
+	if err := c.ShouldBindJSON(&in); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	content := strings.TrimSpace(in.Content)
+	if content == "" {
+		c.JSON(400, gin.H{"error": "文稿不能为空"})
+		return
+	}
+	id := c.Param("id")
+	p := pipeline.NewProject(s.DataDir, id)
+	if _, err := os.Stat(p.Dir); err != nil {
+		c.JSON(404, gin.H{"error": "项目不存在"})
+		return
+	}
+	if err := os.WriteFile(p.Artifact("input/article.txt"), []byte(content), 0o644); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	_ = os.Remove(p.Artifact("manuscripts/manuscript.json"))
+	_, hasSb := os.Stat(p.Artifact("storyboards/storyboard.json"))
+	s.updateStatus(id, "manuscript")
+	words := len([]rune(content))
+	p.Manifest("manuscript.saved", fmt.Sprintf("%d 字", words))
+	s.Hub.Emit(id, "msg", "", fmt.Sprintf("文稿已更新（%d 字）", words))
+	c.JSON(200, gin.H{"ok": true, "word_count": words, "storyboard_stale": hasSb == nil})
+}
+
+// applyStyle 风格弹窗选定库内风格包：写 style_samples.json 并直接标记已确认
+// （弹窗里预览样张后显式点「确认使用」= 硬门通过，无需再回舞台点一遍）。
+// 同时把选定包记入 project.json，后续 extract_stylepack / 复用链路读同一字段。
+func (s *Server) applyStyle(c *gin.Context) {
+	var in struct {
+		StylePackID string `json:"stylepack_id"`
+	}
+	if err := c.ShouldBindJSON(&in); err != nil || strings.TrimSpace(in.StylePackID) == "" {
+		c.JSON(400, gin.H{"error": "缺少 stylepack_id"})
+		return
+	}
+	pack, ok := s.Lib.Get(strings.TrimSpace(in.StylePackID))
+	if !ok || !pack.Published {
+		c.JSON(400, gin.H{"error": "风格包不存在或未发布"})
+		return
+	}
+	id := c.Param("id")
+	p := pipeline.NewProject(s.DataDir, id)
+	if _, err := os.Stat(p.Dir); err != nil {
+		c.JSON(404, gin.H{"error": "项目不存在"})
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(p.Artifact("style/style_samples.json")), 0o755); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	// 弹窗预览 + 显式确认一步完成：confirmed 翻 true（StyleSamplesJSON 默认 false 等舞台点头）
+	var ss map[string]any
+	if err := json.Unmarshal(pack.StyleSamplesJSON(), &ss); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	ss["confirmed"] = true
+	if err := os.WriteFile(p.Artifact("style/style_samples.json"), mustJSON(ss), 0o644); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	if b, err := os.ReadFile(p.Artifact("project.json")); err == nil {
+		var meta map[string]any
+		if json.Unmarshal(b, &meta) == nil {
+			meta["stylepack_id"] = pack.ID
+			_ = os.WriteFile(p.Artifact("project.json"), mustJSON(meta), 0o644)
+		}
+	}
+	s.updateStatus(id, "style")
+	p.Manifest("style.applied", fmt.Sprintf("库内风格包「%s」", pack.Name))
+	s.Hub.Emit(id, "style_confirmed", "", pack.Direction)
+	c.JSON(200, gin.H{"ok": true, "direction": pack.Direction})
 }
 
 func (s *Server) storyboard(c *gin.Context) {
@@ -322,8 +424,8 @@ func (s *Server) draftManuscript(c *gin.Context) {
 func (s *Server) chat(c *gin.Context) {
 	id := c.Param("id")
 	var in struct {
-		Content string       `json:"content"`
-		Refs    []store.Ref  `json:"refs"` // 引用卡片（段/元素，M2 起结构化）
+		Content string      `json:"content"`
+		Refs    []store.Ref `json:"refs"` // 引用卡片（段/元素，M2 起结构化）
 	}
 	if err := c.ShouldBindJSON(&in); err != nil || strings.TrimSpace(in.Content) == "" {
 		c.JSON(400, gin.H{"error": "消息不能为空"})

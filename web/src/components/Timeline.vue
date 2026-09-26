@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { AudioMeta, Storyboard } from '../types'
 import { segTable } from '../segtime'
 
 // 多轨时间轴：标尺（可点/拖擦洗）+ 分镜/字幕/配音三轨 + 播放头。
 // 数据：分镜 duration_hint；有 audio_meta 时用真实配音时长（+0.35 尾垫，与 MP4 拼接口径一致）
 // 和字级时间戳切短语字幕。
+// 长片可读：内容层与视口层分离——内容层按「平均每段 ≥88px、最短段 ≥48px」定宽（封顶 3 倍视口），
+// 视口出横向滚动条；块定位仍是百分比（相对内容层），三轨/标尺/播放头天然同坐标系。
 const props = defineProps<{
   storyboard: Storyboard | null
   audioMeta: AudioMeta | null
@@ -48,6 +50,39 @@ const phrases = computed<Phrase[]>(() => {
 })
 
 const pct = (t: number) => `${(t / total.value) * 100}%`
+
+// ── 横向滚动：内容层定宽 ─────────────────────────────
+const viewportEl = ref<HTMLElement | null>(null)
+const viewW = ref(0)
+let ro: ResizeObserver | null = null
+onMounted(() => {
+  ro = new ResizeObserver(entries => {
+    for (const e of entries) viewW.value = e.contentRect.width
+  })
+  if (viewportEl.value) ro.observe(viewportEl.value)
+})
+onBeforeUnmount(() => ro?.disconnect())
+
+const contentW = computed(() => {
+  const w = Math.max(viewW.value, 320)
+  const arr = segs.value
+  if (!arr.length) return w
+  const avg = total.value / arr.length
+  const minDur = Math.min(...arr.map(s => s.dur))
+  const pps = Math.min(Math.max(w / total.value, 88 / avg, 48 / minDur), (3 * w) / total.value)
+  return Math.max(w, total.value * pps)
+})
+
+// 播放跟随：播放头滚出可视区时把视口带过去（拖动擦洗时不抢）
+watch(() => props.currentTime, () => {
+  const vp = viewportEl.value
+  if (dragging.value || !vp || contentW.value <= vp.clientWidth) return
+  const x = (Math.min(props.currentTime, total.value) / total.value) * contentW.value
+  const l = vp.scrollLeft
+  if (x < l + 24 || x > l + vp.clientWidth - 24) {
+    vp.scrollLeft = Math.min(Math.max(x - vp.clientWidth * 0.35, 0), contentW.value - vp.clientWidth)
+  }
+})
 
 // 标尺刻度：主刻度间隔从 [1,2,5,10,15,30,60] 里选（约 6~9 个），总长不太长时补 1/5 秒细刻度
 const ticks = computed(() => {
@@ -125,7 +160,8 @@ function onLaneDblClick(e: MouseEvent, start: number, dur: number) {
       <div v-if="audioMeta" class="lbl">配音</div>
     </div>
 
-    <div ref="tracksEl" class="tracks">
+    <div ref="viewportEl" class="viewport">
+      <div ref="tracksEl" class="tracks" :style="{ width: contentW + 'px' }">
       <!-- 标尺：点击定位 / 双击引用该时刻；播放头手柄在此拖动 -->
       <div class="ruler" @pointerdown="onRulerClick" @dblclick="onRulerDblClick">
         <i v-for="m in minors" :key="`m${m}`" class="minor" :style="{ left: pct(m) }" />
@@ -149,7 +185,6 @@ function onLaneDblClick(e: MouseEvent, start: number, dur: number) {
           @click="pickSeg(s, $event)"
           @dblclick.stop="onLaneDblClick($event, s.start, s.dur)"
         >
-          <span v-if="pickedIdx.includes(s.idx)" class="pin">📎</span>
           <b>{{ s.idx }}</b>
           <i>{{ s.key }}</i>
         </div>
@@ -189,6 +224,7 @@ function onLaneDblClick(e: MouseEvent, start: number, dur: number) {
 
       <!-- 播放头竖线（贯穿三轨） -->
       <div class="line" :class="{ scrubbing: dragging }" :style="{ left: playheadPct }" />
+      </div>
     </div>
   </div>
 </template>
@@ -200,7 +236,18 @@ function onLaneDblClick(e: MouseEvent, start: number, dur: number) {
 .corner em { font-style: normal; color: #55555f; margin-left: 3px; }
 .lbl { flex: 1; display: flex; align-items: center; font-size: 10px; color: #55555f; letter-spacing: 2px; }
 
-.tracks { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+/* 视口层：长片出横向滚动条（细样式，贴时间轴下方）；内容层定宽保证块可读 */
+.viewport {
+  flex: 1; min-width: 0; overflow-x: auto; overflow-y: hidden;
+  padding-bottom: 9px; /* 给滚动条留位，不压轨道 */
+  scrollbar-width: thin; scrollbar-color: #2e2e38 #101016;
+}
+.viewport::-webkit-scrollbar { height: 8px; }
+.viewport::-webkit-scrollbar-track { background: #101016; border-radius: 4px; }
+.viewport::-webkit-scrollbar-thumb { background: #2e2e38; border-radius: 4px; }
+.viewport::-webkit-scrollbar-thumb:hover { background: #3a3a45; }
+
+.tracks { position: relative; min-width: 100%; display: flex; flex-direction: column; gap: 3px; }
 
 .ruler {
   position: relative; height: 20px; border-radius: 5px; cursor: crosshair;
@@ -224,7 +271,6 @@ function onLaneDblClick(e: MouseEvent, start: number, dur: number) {
 .blk b { font-size: 10px; color: #7c7c88; flex: none; }
 .blk i { font-style: normal; font-size: 11px; color: #c3c3cd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .blk.on i { color: #f0c674; }
-.pin { position: absolute; right: 2px; top: 0; font-size: 9px; line-height: 1; opacity: .9; }
 
 .ph {
   position: absolute; top: 0; bottom: 0; cursor: pointer; overflow: hidden; white-space: nowrap;

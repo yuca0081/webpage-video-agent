@@ -27,7 +27,7 @@ const dateOf = (iso: string) => (iso ?? '').slice(5, 10).replace('-', '/')
       <p class="slogan">聊天即创作 —— 粘贴一篇文章，还你一部带配音、字幕、动画的成片</p>
       <div class="cta">
         <button class="primary" @click="emit('new')">＋ 新建视频</button>
-        <button class="ghost" @click="emit('materials')">🎨 去素材区找灵感</button>
+        <button class="ghost" @click="emit('materials')">去素材区找灵感</button>
       </div>
     </div>
 

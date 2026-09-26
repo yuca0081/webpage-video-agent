@@ -10,6 +10,7 @@ export interface ProjectView {
   id: string
   name: string
   aspect: string
+  topic: string // 一句话主题（文稿弹窗 AI 起草的种子；老项目为空）
   gates: {
     manuscript: boolean
     storyboard: boolean
