@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	openai "github.com/sashabaranov/go-openai"
 
@@ -49,7 +50,13 @@ type State struct {
 	StyleDirection string
 	StyleConfirmed bool
 	HasVideo       bool
+	VideoAt        time.Time
 	Producing      bool
+	// 最近一轮制作终态（manifest 里 produce/rework 的 done|error|cancelled）。
+	// 不注入它，agent 会拿失败前渲染的旧成片把失败轮幻觉成「已完成」。
+	LastEvent  string
+	LastDetail string
+	LastAt     time.Time
 }
 
 func (a *Agent) State(id string) State {
@@ -70,8 +77,13 @@ func (a *Agent) State(id string) State {
 	if b, err := os.ReadFile(p.Artifact("style/style_samples.json")); err == nil && json.Unmarshal(b, &ss) == nil {
 		st.HasStyle, st.StyleDirection, st.StyleConfirmed = true, ss.Direction, ss.Confirmed
 	}
-	if _, err := os.Stat(p.Artifact("renders/main.mp4")); err == nil {
+	if info, err := os.Stat(p.Artifact("renders/main.mp4")); err == nil {
 		st.HasVideo = true
+		st.VideoAt = info.ModTime()
+	}
+	if ev, detail, ts := lastProduceResult(p); ev != "" {
+		st.LastEvent, st.LastDetail = ev, detail
+		st.LastAt, _ = time.Parse(time.RFC3339, ts)
 	}
 	if b, err := os.ReadFile(p.Artifact("project.json")); err == nil {
 		var pj struct {
@@ -108,12 +120,43 @@ func (s State) summary() string {
 		add(false, "风格样张")
 	}
 	if s.HasVideo {
-		lines = append(lines, "✓ 成片已就绪")
+		if s.LastEvent != "" && strings.HasSuffix(s.LastEvent, ".error") {
+			lines = append(lines, fmt.Sprintf("✗ 最近一轮制作失败（%s）：%s", s.LastAt.Format("15:04"), firstLine(s.LastDetail, 140)))
+			lines = append(lines, "⚠ 舞台上若能播成片，那是失败前的旧版（不要当成本轮结果）")
+		} else if s.LastEvent != "" && strings.HasSuffix(s.LastEvent, ".cancelled") {
+			lines = append(lines, fmt.Sprintf("⏹ 最近一轮制作被取消（%s）", s.LastAt.Format("15:04")))
+		} else {
+			lines = append(lines, "✓ 成片已就绪")
+		}
 	}
 	if s.Producing {
-		lines = append(lines, "⏳ 制作管线运行中")
+		lines = append(lines, "⏳ 制作管线运行中（成片/失败都会自动汇报到对话）")
 	}
 	return strings.Join(lines, "\n")
+}
+
+// lastProduceResult 读 manifest 最近一条制作终态事件（produce/rework 的 done|error|cancelled）。
+func lastProduceResult(p *pipeline.Project) (event, detail, ts string) {
+	b, err := os.ReadFile(p.Artifact("manifest.jsonl"))
+	if err != nil {
+		return "", "", ""
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		var e struct {
+			Event  string `json:"event"`
+			Detail string `json:"detail"`
+			TS     string `json:"ts"`
+		}
+		if json.Unmarshal([]byte(line), &e) != nil {
+			continue
+		}
+		switch e.Event {
+		case "produce.done", "produce.error", "produce.cancelled",
+			"rework.done", "rework.error", "rework.cancelled":
+			event, detail, ts = e.Event, e.Detail, e.TS
+		}
+	}
+	return event, detail, ts
 }
 
 // selectedPack 建项目时选定的方法库风格包（project.json stylepack_id）。
@@ -244,6 +287,16 @@ type tool struct {
 }
 
 func noGate(State) string { return "" }
+
+// voiceAliases 项目音色别名（与 ai/tts_align.py VOICE_ALIASES 保持一致）。
+var voiceAliases = map[string]string{
+	"晓晓": "zh-CN-XiaoxiaoNeural",
+	"晓伊": "zh-CN-XiaoyiNeural",
+	"云健": "zh-CN-YunjianNeural",
+	"云希": "zh-CN-YunxiNeural",
+	"云扬": "zh-CN-YunyangNeural",
+	"云野": "zh-CN-YunyeNeural",
+}
 
 var tools = []tool{
 	{
@@ -559,6 +612,85 @@ var tools = []tool{
 		},
 	},
 	{
+		def: toolDef("list_segments", "列出分镜各段：id/段名/旁白摘要/画面元素清单（id+人话名）。要精确点名某段某元素改动前先看这里", nil),
+		gate: func(s State) string {
+			if !s.HasStoryboard {
+				return "还没有分镜"
+			}
+			return ""
+		},
+		run: func(a *Agent, p *pipeline.Project, _ string) string {
+			sb, err := p.LoadStoryboard()
+			if err != nil {
+				return "分镜读取失败：" + err.Error()
+			}
+			var b strings.Builder
+			for _, seg := range sb.Segments {
+				fmt.Fprintf(&b, "段%d %s「%s」（约%.0fs）旁白：%s\n", seg.Idx, seg.ID, seg.Key, seg.DurationHint, firstLine(seg.Narration, 60))
+				if rb, rerr := os.ReadFile(p.Artifact("compositions/registry/" + seg.ID + ".json")); rerr == nil {
+					var reg contract.ElementRegistry
+					if json.Unmarshal(rb, &reg) == nil && len(reg.Elements) > 0 {
+						parts := make([]string, 0, len(reg.Elements))
+						for _, e := range reg.Elements {
+							parts = append(parts, fmt.Sprintf("%s（%s）", e.Name, e.ID))
+						}
+						b.WriteString("  元素：" + strings.Join(parts, "、") + "\n")
+					}
+				}
+			}
+			return b.String()
+		},
+	},
+	{
+		def: toolDef("set_voice", "换配音音色：voice 留空=列出可用音色；设置后音频全量重配并自动整片重制（成片好了自动在对话里报结果）", map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"voice": map[string]any{"type": "string", "description": "音色中文名（晓晓/晓伊/云健/云希/云扬/云野）或完整 Edge 音色 id（zh-CN-YunjianNeural）；留空只列音色"},
+			},
+		}),
+		gate: func(s State) string {
+			if !s.HasStoryboard {
+				return "还没有分镜，没有旁白可配音"
+			}
+			if s.Producing {
+				return "制作/重做运行中，先等完成"
+			}
+			return ""
+		},
+		run: func(a *Agent, p *pipeline.Project, args string) string {
+			var in struct {
+				Voice string `json:"voice"`
+			}
+			_ = json.Unmarshal([]byte(args), &in)
+			want := strings.TrimSpace(in.Voice)
+			if want == "" {
+				return "可用音色：晓晓（女·温暖，默认）、晓伊（女·清亮）、云健（男·磁性浑厚）、云希（男·年轻阳光）、云扬（男·新闻专业）、云野（男·沉稳）。用 voice=名字 设置"
+			}
+			id := voiceAliases[want]
+			if id == "" {
+				id = want // 允许直接给完整 id
+			}
+			if !strings.Contains(id, "-") || !strings.Contains(id, "Neural") {
+				return fmt.Sprintf("不认识音色 %q。可用：晓晓/晓伊/云健/云希/云扬/云野，或完整 Edge 音色 id", want)
+			}
+			if err := pipeline.SetVoice(p, id); err != nil {
+				return "设置失败：" + err.Error()
+			}
+			if _, err := os.Stat(p.Artifact("audio_meta.json")); err != nil {
+				return fmt.Sprintf("音色已设为 %s，首次制作时生效", id)
+			}
+			ok, err := a.Producer.Start(p.ID)
+			if err != nil {
+				return "重制启动失败：" + err.Error()
+			}
+			if !ok {
+				return "制作已在运行中，音色已更新到下一次制作"
+			}
+			a.Emit(p.ID, "stage", "pipeline", "running")
+			return fmt.Sprintf("音色已换为 %s：配音全量重配 + 整片重制已启动，结果自动在对话里报", id)
+		},
+	},
+	{
 		def: toolDef("export", "导出成片（返回下载地址）", nil),
 		gate: func(s State) string {
 			if !s.HasVideo {
@@ -612,7 +744,7 @@ func (a *Agent) systemPrompt(id string, s State) string {
 - 上面这份状态是唯一事实：状态说成片就绪就是已就绪，直接给下载地址 /api/projects/%s/video/main.mp4；不确定就先 read_project 核对，禁止按聊天历史想象状态。
 - 三前置硬门：文稿、分镜、风格样张（用户确认）——齐了才能 start_production，代码强制，别硬闯；缺哪项就引导用户点对话栏上方的同名标签补齐（文稿也可直接粘进对话），成片就绪后不再 start_production。
 - 换风格/调样张：调 draft_style_samples 并把用户要求原样放进 instruction，样张没重新生成就不能说「已出新样张」——没做工具调用就当没做。
-- 成片就绪后：改某段画面用 rework（整段重生成画面、音频不动）；用户带 📎 段/元素引用的消息几乎都是 rework 意图。元素引用指名了改哪个元素，rework 的 instruction 里点名它（人话名，必要时带元素 id 与时刻）。出片后主动 extract_stylepack 沉淀风格（一次就够，已提炼过不必重复）。
+- 成片就绪后：改某段画面用 rework（整段重生成画面、音频不动）；用户带 📎 段/元素引用的消息几乎都是 rework 意图。元素引用指名了改哪个元素，rework 的 instruction 里点名它（人话名，必要时带元素 id 与时刻）。要精确定位段与元素先 list_segments。换配音音色用 set_voice（空参列音色，设置后自动整片重制）。出片后主动 extract_stylepack 沉淀风格（一次就够，已提炼过不必重复）。
 - 默认自主连贯：能做的直接做（出分镜→出样张→自检一路做下去），到用户门（风格确认）停下说清楚等什么。
 - 工具被拒就换路或向用户解释，不重复硬试；每轮最多 %d 步。
 - 回复短：一段话讲清做了什么、下一步是什么，不堆术语、不复述参数。`, s.Name, id, s.summary(), id, maxSteps)
@@ -620,6 +752,12 @@ func (a *Agent) systemPrompt(id string, s State) string {
 
 // Run 一轮对话：userText 与 refs 已入库。Agent 循环产出最终回复入库并广播。
 func (a *Agent) Run(projectID, userText string, refs []store.Ref) {
+	// 兜底：任何 panic 也必须给对话框一个交代，不能静默死掉
+	defer func() {
+		if r := recover(); r != nil {
+			a.finish(projectID, fmt.Sprintf("这一轮处理中断了：%v", r), "error")
+		}
+	}()
 	p := pipeline.NewProject(a.DataDir, projectID)
 	prov, err := llm.FromEnv(llm.RoleDialogue)
 	if err != nil {
@@ -753,6 +891,47 @@ func (a *Agent) finish(projectID, content, typ string) {
 		_ = a.Store.SaveMsg(&store.Msg{ProjectID: projectID, Role: "agent", Type: "text", Content: content})
 	}
 	a.Emit(projectID, "agent_msg", "", content)
+}
+
+// NotifyResult 制作管线终态回聊天。制作/重做是对话轮结束后异步跑的，
+// 成败必须由这里兜底写进对话框，否则用户无从得知结果（OnDone 由 main 接线到本方法）。
+func (a *Agent) NotifyResult(projectID, status, detail string) {
+	var content, typ string
+	switch status {
+	case "video":
+		content = "✅ 成片就绪：" + detail + "，舞台可直接预览。"
+		typ = "text"
+	case "cancelled":
+		content = "⏹ 已取消：" + detail
+		typ = "text"
+	default: // failed
+		msg := detail
+		if strings.Contains(detail, "✗") { // check 类失败：只挑 ✗ 行与计数，对话框不刷屏
+			var keep []string
+			for _, ln := range strings.Split(detail, "\n") {
+				t := strings.TrimSpace(ln)
+				if strings.HasPrefix(t, "✗") || strings.Contains(t, "error(s)") {
+					keep = append(keep, t)
+				}
+			}
+			if len(keep) > 0 {
+				msg = strings.Join(keep, "\n")
+			}
+		}
+		content = "❌ 制作失败：" + capRunes(msg, 500) + "\n回我一句「继续」，我就接着修。"
+		typ = "error"
+	}
+	_ = a.Store.SaveMsg(&store.Msg{ProjectID: projectID, Role: "agent", Type: typ, Content: content})
+	a.Emit(projectID, "agent_msg", "", content)
+}
+
+// capRunes 截断到 n 个 rune（多行保留，失败诊断往往跨行）。
+func capRunes(s string, n int) string {
+	r := []rune(strings.TrimSpace(s))
+	if len(r) <= n {
+		return string(r)
+	}
+	return string(r[:n]) + "…"
 }
 
 func (a *Agent) saveToolMsg(projectID, name, args, result string) {

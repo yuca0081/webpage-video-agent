@@ -16,6 +16,7 @@ import (
 	"webpage-video-agent/server/internal/events"
 	"webpage-video-agent/server/internal/methodlib"
 	"webpage-video-agent/server/internal/pipeline"
+	"webpage-video-agent/server/internal/styleref"
 	"webpage-video-agent/server/internal/produce"
 	"webpage-video-agent/server/internal/store"
 )
@@ -38,17 +39,17 @@ func main() {
 	lib := methodlib.New(cfg.DataDir)
 	producer := &produce.Runner{
 		DataDir: cfg.DataDir, RootDir: root, Hub: hub,
-		OnDone: func(id, status string) {
-			hub.Emit(id, "stage", "pipeline", status)
-		},
 	}
 	ag := &agent.Agent{
 		DataDir: cfg.DataDir, RootDir: root, Store: st, Lib: lib, Producer: producer,
 		Emit:    hub.Emit,
 		OnEvent: func(id, event, detail string) { hub.Emit(id, event, "", detail) },
 	}
+	// 制作终态（成片/失败/取消）必须落进聊天框——异步管线跑完时对话轮早已结束
+	producer.OnDone = ag.NotifyResult
+	refs := styleref.NewStore(cfg.DataDir, root)
 	srv := &api.Server{
-		DataDir: cfg.DataDir, RootDir: root, Store: st, Hub: hub, Agent: ag, Producer: producer, Lib: lib,
+		DataDir: cfg.DataDir, RootDir: root, Store: st, Hub: hub, Agent: ag, Producer: producer, Lib: lib, Refs: refs,
 	}
 
 	gin.SetMode(gin.ReleaseMode)

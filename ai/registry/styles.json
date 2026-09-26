@@ -1,245 +1,991 @@
 [
-  {
-    "id": "cosmos",
-    "direction": "深空渐变（高饱和·宇宙系）",
-    "genre": "天文/物理/未来学/宏观科普",
-    "keywords": ["深空", "宇宙", "太空", "星", "cosmos", "行星"],
-    "photo": "深空星云、行星地平线、璀璨星空、渐变宇宙（插画感优先）",
-    "tokens": {
-      "font": "'Segoe UI','Microsoft YaHei',sans-serif",
-      "bg": {"type": "linear", "from": "#0B1035", "to": "#1B0B54", "angle": 200, "fx": ["stars", "glow"],
-             "glow": [{"color": "#E30050", "x": 80, "y": 8, "r": 42, "alpha": "33"}, {"color": "#4D9DE0", "x": 12, "y": 85, "r": 38, "alpha": "2E"}]},
-      "ink": "#EAF0FF", "txt": "#FFFFFF", "surface": "#FFFFFF", "surface_txt": "#141A33",
-      "accent": ["#00C2A8", "#4D9DE0", "#FBBE00", "#E30050", "#FF7A59", "#B388EB"],
-      "primary": "#FBBE00", "arrow": "#4D9DE0",
-      "border_w": 0, "radius": 20, "shadow": "0 16px 40px rgba(0,0,0,.38)",
-      "title": {"weight": 800, "spacing": 3},
-      "cap": {"mode": "bar", "bg": "rgba(6,10,40,.72)", "color": "#FFFFFF"},
-      "img": {"frame": "polaroid", "shadow": "0 18px 44px rgba(0,0,0,.5)"}
-    }
-  },
-  {
-    "id": "mathboard",
-    "direction": "数学线框（manim 风）",
-    "genre": "数学/算法/逻辑推理/几何科普",
-    "keywords": ["数学", "线框", "manim", "公式", "几何", "算法"],
-    "photo": "极少用照片；几何线框、坐标系、函数曲线（线稿感）",
-    "tokens": {
-      "font": "'Cambria','Cambria Math','Microsoft YaHei',serif",
-      "bg": {"type": "solid", "from": "#283645", "fx": []},
-      "ink": "#9DB8D6", "txt": "#FFFFFF", "surface": "#32455C", "surface_txt": "#FFFFFF",
-      "accent": ["#58C4DD", "#83C167", "#FC6255", "#FFFF00", "#B189C6", "#F0A07C"],
-      "primary": "#58C4DD", "arrow": "#FC6255",
-      "border_w": 0, "radius": 10, "shadow": "none",
-      "title": {"weight": 700, "spacing": 1},
-      "cap": {"mode": "plain", "color": "#FFFFFF"},
-      "img": {"frame": "clean", "shadow": "0 10px 30px rgba(0,0,0,.4)"}
-    }
-  },
-  {
-    "id": "voxmap",
-    "direction": "地缘档案（深蓝地图·新闻系）",
-    "genre": "地缘政治/历史/社会议题/新闻解读",
-    "keywords": ["地缘", "地图", "档案", "历史", "新闻", "vox"],
-    "photo": "档案老照片、卫星图、地图俯瞰、纪实镜头（泛黄色调）",
-    "tokens": {
-      "font": "'Arial Narrow','Oswald','Microsoft YaHei',sans-serif",
-      "bg": {"type": "linear", "from": "#10243E", "to": "#0C1B30", "angle": 180, "fx": []},
-      "ink": "#5B8FBF", "txt": "#FFFFFF", "surface": "#1A3452", "surface_txt": "#FFFFFF",
-      "accent": ["#FFC845", "#5B8FBF", "#E4572E", "#3E8E8E", "#F0A07C", "#8CA3C3"],
-      "primary": "#FFC845", "arrow": "#FFC845",
-      "border_w": 0, "radius": 12, "shadow": "0 14px 34px rgba(0,0,0,.4)",
-      "title": {"weight": 900, "spacing": 4},
-      "cap": {"mode": "bar", "bg": "rgba(10,20,34,.82)", "color": "#FFFFFF"},
-      "img": {"frame": "polaroid", "shadow": "0 16px 40px rgba(0,0,0,.55)"}
-    }
-  },
-  {
-    "id": "manual",
-    "direction": "高能说明书（浅灰工程·拆解系）",
-    "genre": "工业产品拆解/流程原理/日用品科普（「XX是如何工作的」）",
-    "keywords": ["说明书", "工程", "拆解", "回形针", "原理", "机械"],
-    "photo": "产品拆解、工程剖面、白底 3D 渲染、蓝图线稿",
-    "tokens": {
-      "font": "'Segoe UI','Microsoft YaHei',sans-serif",
-      "bg": {"type": "solid", "from": "#F5F6F7", "fx": ["grid"], "fx_color": "#D0D5DB"},
-      "ink": "#212429", "txt": "#212429", "surface": "#FFFFFF", "surface_txt": "#212429",
-      "accent": ["#3B82F6", "#0D9488", "#F97316", "#FACC15", "#8B5CF6", "#EF4444"],
-      "primary": "#3B82F6", "arrow": "#F97316",
-      "border_w": 0, "radius": 14, "shadow": "0 10px 24px rgba(33,36,41,.10)",
-      "title": {"weight": 800, "spacing": 2},
-      "cap": {"mode": "bar", "bg": "rgba(33,36,41,.85)", "color": "#FFFFFF"},
-      "img": {"frame": "clean", "shadow": "0 12px 28px rgba(33,36,41,.16)"}
-    }
-  },
-  {
-    "id": "keynote-dark",
-    "direction": "发布会深色（大留白·聚光系）",
-    "genre": "高端产品发布/品牌片/硬件介绍",
-    "keywords": ["发布会", "深色", "聚光", "apple", "keynote", "高端"],
-    "photo": "黑底产品特写、暗调棚拍、微距细节、电影感打光",
-    "tokens": {
-      "font": "'Segoe UI','Microsoft YaHei',sans-serif",
-      "bg": {"type": "solid", "from": "#000000", "fx": ["glow"],
-             "glow": [{"color": "#2997FF", "x": 50, "y": 108, "r": 55, "alpha": "26"}]},
-      "ink": "#3A3A3E", "txt": "#F5F5F7", "surface": "rgba(255,255,255,.08)", "surface_txt": "#F5F5F7",
-      "accent": ["#2997FF", "#30D158", "#BF5AF2", "#FF9F0A", "#64D2FF", "#FF375F"],
-      "primary": "#2997FF", "arrow": "#86868B",
-      "border_w": 0, "radius": 24, "shadow": "0 0 80px rgba(41,151,255,.14)",
-      "title": {"weight": 700, "spacing": 0},
-      "cap": {"mode": "plain", "color": "#F5F5F7"},
-      "img": {"frame": "glass", "shadow": "0 30px 80px rgba(0,0,0,.6)"}
-    }
-  },
-  {
-    "id": "softplay",
-    "direction": "轻快多彩（便签贴纸·工具系）",
-    "genre": "效率工具/协作 SaaS/教育 App 介绍",
-    "keywords": ["轻快", "多彩", "贴纸", "工具", "notion", "figma", "活泼"],
-    "photo": "黏土 3D 渲染、粉彩插画、涂鸦贴纸、明快工作台",
-    "tokens": {
-      "font": "'Segoe UI','Microsoft YaHei',sans-serif",
-      "bg": {"type": "solid", "from": "#F7F6F3", "fx": ["dots"], "fx_color": "#D9D6CE"},
-      "ink": "#37352F", "txt": "#37352F", "surface": "#FFFFFF", "surface_txt": "#37352F",
-      "accent": ["#A259FF", "#1ABCFE", "#0ACF83", "#F24E1E", "#FFC700", "#FF7AB6"],
-      "primary": "#A259FF", "arrow": "#F24E1E",
-      "border_w": 0, "radius": 18, "shadow": "0 8px 20px rgba(55,53,47,.12)",
-      "title": {"weight": 800, "spacing": 1},
-      "cap": {"mode": "pill", "bg": "rgba(255,255,255,.94)", "color": "#37352F", "border": "2px solid #E6E4DE"},
-      "img": {"frame": "clean", "shadow": "0 10px 24px rgba(55,53,47,.16)"}
-    }
-  },
-  {
-    "id": "meshglass",
-    "direction": "渐变玻璃（SaaS 深色系）",
-    "genre": "AI 产品/开发者工具/通用 SaaS 宣传",
-    "keywords": ["玻璃", "渐变", "saas", "ai", "科技感", "现代"],
-    "photo": "抽象渐变网格、全息光晕、深色仪表盘界面、极光渐变",
-    "tokens": {
-      "font": "'Segoe UI','Microsoft YaHei',sans-serif",
-      "bg": {"type": "linear", "from": "#0F1023", "to": "#141032", "angle": 160, "fx": ["glow", "grid"],
-             "fx_color": "#FFFFFF",
-             "glow": [{"color": "#7C3AED", "x": 18, "y": 12, "r": 48, "alpha": "66"},
-                      {"color": "#2563EB", "x": 85, "y": 30, "r": 42, "alpha": "59"},
-                      {"color": "#EC4899", "x": 60, "y": 95, "r": 46, "alpha": "52"}]},
-      "ink": "rgba(255,255,255,.22)", "txt": "#F8FAFC", "surface": "rgba(255,255,255,.08)", "surface_txt": "#F8FAFC",
-      "accent": ["#7C3AED", "#2563EB", "#EC4899", "#22D3EE", "#34D399", "#F59E0B"],
-      "primary": "#7C3AED", "arrow": "#22D3EE",
-      "border_w": 1, "radius": 20, "shadow": "0 20px 50px rgba(0,0,0,.42)",
-      "title": {"weight": 700, "spacing": 0},
-      "cap": {"mode": "bar", "bg": "rgba(15,16,35,.72)", "color": "#F8FAFC", "border": "1px solid rgba(255,255,255,.18)"},
-      "img": {"frame": "glass", "shadow": "0 24px 60px rgba(0,0,0,.5)"}
-    }
-  },
-  {
-    "id": "presschart",
-    "direction": "财经图表（米粉纸·报刊系）",
-    "genre": "金融/经济/商业数据解读",
-    "keywords": ["财经", "金融", "图表", "报刊", "经济", "ft"],
-    "photo": "金融区街景、交易大厅虚化、报纸质感、冷静办公场景（少用）",
-    "tokens": {
-      "font": "'Georgia','Microsoft YaHei',serif",
-      "bg": {"type": "solid", "from": "#FFF1E5", "fx": ["grid"], "fx_color": "#E0D5C8"},
-      "ink": "#33302E", "txt": "#33302E", "surface": "#FFFFFF", "surface_txt": "#33302E",
-      "accent": ["#0F5499", "#0D7680", "#990F3D", "#FF8833", "#66605C", "#B8B2AD"],
-      "primary": "#990F3D", "arrow": "#0F5499",
-      "border_w": 0, "radius": 8, "shadow": "0 8px 22px rgba(51,48,46,.12)",
-      "title": {"weight": 700, "spacing": 1, "color": "#33302E"},
-      "cap": {"mode": "bar", "bg": "rgba(26,26,26,.85)", "color": "#FFF1E5"},
-      "img": {"frame": "clean", "shadow": "0 8px 20px rgba(51,48,46,.18)"}
-    }
-  },
-  {
-    "id": "opendata",
-    "direction": "公益数据（白底清爽·统计系）",
-    "genre": "社会/健康/环境统计、通用数据科普",
-    "keywords": ["公益", "数据", "统计", "社会", "owid", "tableau"],
-    "photo": "航拍纪实、人群俯瞰、农田卫星图、日常人物抓拍",
-    "tokens": {
-      "font": "'Segoe UI','Microsoft YaHei',sans-serif",
-      "bg": {"type": "solid", "from": "#FFFFFF", "fx": []},
-      "ink": "#D0D0D0", "txt": "#333333", "surface": "#FFFFFF", "surface_txt": "#333333",
-      "accent": ["#4E79A7", "#F28E2B", "#E15759", "#76B7B2", "#59A14F", "#EDC948"],
-      "primary": "#4E79A7", "arrow": "#E15759",
-      "border_w": 1, "radius": 12, "shadow": "0 6px 18px rgba(0,0,0,.08)",
-      "title": {"weight": 800, "spacing": 0, "color": "#333333"},
-      "cap": {"mode": "bar", "bg": "rgba(40,40,40,.85)", "color": "#FFFFFF"},
-      "img": {"frame": "clean", "shadow": "0 8px 20px rgba(0,0,0,.14)"}
-    }
-  },
-  {
-    "id": "medcare",
-    "direction": "清洁医疗（薄荷青·健康系）",
-    "genre": "医疗/健康/生物科技科普",
-    "keywords": ["医疗", "健康", "薄荷", "清洁", "医学", "生物"],
-    "photo": "洁净医疗白、明亮实验室、柔和蓝调诊所、显微细胞",
-    "tokens": {
-      "font": "'Segoe UI','Microsoft YaHei',sans-serif",
-      "bg": {"type": "linear", "from": "#E0F2F1", "to": "#E8F5F4", "angle": 180, "fx": []},
-      "ink": "#00695C", "txt": "#263238", "surface": "#FFFFFF", "surface_txt": "#263238",
-      "accent": ["#00897B", "#4DB6AC", "#FF7043", "#26A69A", "#FFB74D", "#80CBC4"],
-      "primary": "#00897B", "arrow": "#00897B",
-      "border_w": 0, "radius": 24, "shadow": "0 10px 26px rgba(0,105,92,.14)",
-      "title": {"weight": 800, "spacing": 1, "color": "#00695C"},
-      "cap": {"mode": "pill", "bg": "rgba(255,255,255,.95)", "color": "#263238", "border": "2px solid #B2DFDB"},
-      "img": {"frame": "clean", "shadow": "0 12px 28px rgba(0,105,92,.18)"}
-    }
-  },
-  {
-    "id": "evergreen",
-    "direction": "自然环保（草绿·生态系）",
-    "genre": "气候/能源/环保/农业科普",
-    "keywords": ["自然", "环保", "绿色", "生态", "气候", "能源"],
-    "photo": "森林航拍、风电光伏、冰川、再生农业、自然微距逆光",
-    "tokens": {
-      "font": "'Georgia','Microsoft YaHei',serif",
-      "bg": {"type": "linear", "from": "#F1F8E9", "to": "#E6F2DC", "angle": 180, "fx": []},
-      "ink": "#2D5A27", "txt": "#1B3A1B", "surface": "#FFFFFF", "surface_txt": "#1B3A1B",
-      "accent": ["#4CAF50", "#8BC34A", "#2D5A27", "#F9A825", "#00897B", "#8D6E63"],
-      "primary": "#4CAF50", "arrow": "#2D5A27",
-      "border_w": 0, "radius": 18, "shadow": "0 10px 24px rgba(45,90,39,.14)",
-      "title": {"weight": 700, "spacing": 1, "color": "#2D5A27"},
-      "cap": {"mode": "bar", "bg": "rgba(27,58,27,.85)", "color": "#F1F8E9"},
-      "img": {"frame": "clean", "shadow": "0 12px 28px rgba(45,90,39,.2)"}
-    }
-  },
-  {
-    "id": "techiso",
-    "direction": "深色等距科技（紫青霓虹·AI 系）",
-    "genre": "AI/云计算/区块链/数码硬件科普",
-    "keywords": ["等距", "霓虹", "赛博", "芯片", "硬件", "iso"],
-    "photo": "等距 3D 深紫、霓虹电路、赛博城市俯瞰、发光机房、科技粒子",
-    "tokens": {
-      "font": "'Segoe UI','Microsoft YaHei',sans-serif",
-      "bg": {"type": "linear", "from": "#0D0D1F", "to": "#1A103A", "angle": 170, "fx": ["glow", "grid"],
-             "fx_color": "#7C3AED",
-             "glow": [{"color": "#7C3AED", "x": 22, "y": 18, "r": 44, "alpha": "3D"},
-                      {"color": "#22D3EE", "x": 82, "y": 78, "r": 38, "alpha": "2E"}]},
-      "ink": "rgba(229,231,235,.35)", "txt": "#E5E7EB", "surface": "rgba(255,255,255,.07)", "surface_txt": "#E5E7EB",
-      "accent": ["#7C3AED", "#22D3EE", "#E879F9", "#A78BFA", "#34D399", "#F59E0B"],
-      "primary": "#A78BFA", "arrow": "#22D3EE",
-      "border_w": 1, "radius": 16, "shadow": "0 0 40px rgba(124,58,237,.22)",
-      "title": {"weight": 800, "spacing": 2},
-      "cap": {"mode": "bar", "bg": "rgba(13,13,31,.8)", "color": "#E5E7EB", "border": "1px solid rgba(124,58,237,.4)"},
-      "img": {"frame": "glass", "shadow": "0 20px 50px rgba(124,58,237,.35)"}
-    }
-  },
-  {
-    "id": "chalkboard",
-    "direction": "黑板粉笔（课堂手写系）",
-    "genre": "课堂讲解/学校知识/慢节奏科普",
-    "keywords": ["黑板", "粉笔", "课堂", "教学", "学校"],
-    "photo": "课堂黑板、手写笔记、旧课本插画、校园场景",
-    "tokens": {
-      "font": "'KaiTi','STKaiti','Microsoft YaHei',serif",
-      "bg": {"type": "solid", "from": "#2E4640", "fx": []},
-      "ink": "rgba(255,253,245,.75)", "txt": "#FFFDF5", "surface": "rgba(255,255,255,.07)", "surface_txt": "#FFFDF5",
-      "accent": ["#FFD54F", "#80DEEA", "#FF8A80", "#A5D6A7", "#FFCC80", "#CE93D8"],
-      "primary": "#FFD54F", "arrow": "#FFFDF5",
-      "border_w": 2, "radius": 8, "shadow": "none",
-      "title": {"weight": 700, "spacing": 6},
-      "cap": {"mode": "plain", "color": "#FFFDF5"},
-      "img": {"frame": "polaroid", "shadow": "0 12px 30px rgba(0,0,0,.45)"}
-    }
+ {
+  "id": "cosmos",
+  "direction": "深空渐变（高饱和·宇宙系）",
+  "genre": "天文/物理/未来学/宏观科普",
+  "keywords": [
+   "深空",
+   "宇宙",
+   "太空",
+   "星",
+   "cosmos",
+   "行星"
+  ],
+  "photo": "深空星云、行星地平线、璀璨星空、渐变宇宙（插画感优先）",
+  "layouts": [
+   {
+    "id": "planet-hero",
+    "name": "行星主场",
+    "desc": "主视觉（image/icon 380–500px）居右 x≈1050–1650，左侧 title 大字+一条 note 竖排说明，远处 1–2 个小 icon 当星点点缀，共 4–6 元素"
+   },
+   {
+    "id": "stat-orbit",
+    "name": "数据星环",
+    "desc": "一个图表居左占主视觉（w≥520），右侧 2–3 个 stat 高低错落（纵向间隔≥100px）像卫星环绕，可加 1 个 chip 结论"
+   },
+   {
+    "id": "light-band",
+    "name": "光带横贯",
+    "desc": "一条 beam 或大字横贯画面中部，上方 title，下方左右各一个 note 对比陈述，中轴对称"
+   },
+   {
+    "id": "deep-quote",
+    "name": "星空金句",
+    "desc": "背景 role=\"bg\" 星云压暗，quote 或 big 满屏居中，配 1 个 icon + 1 个 label，共 3–4 元素，其余留空"
+   },
+   {
+    "id": "orbit-flow",
+    "name": "轨道流程",
+    "desc": "3–4 步箭头串联横排 y≈380–500，每步 icon+label，末尾一个 chip 结论，整体一条弧线节奏"
+   }
+  ],
+  "tokens": {
+   "font": "'Segoe UI','Microsoft YaHei',sans-serif",
+   "bg": {
+    "type": "linear",
+    "from": "#0B1035",
+    "to": "#1B0B54",
+    "angle": 200,
+    "fx": [
+     "stars",
+     "glow"
+    ],
+    "glow": [
+     {
+      "color": "#E30050",
+      "x": 80,
+      "y": 8,
+      "r": 42,
+      "alpha": "33"
+     },
+     {
+      "color": "#4D9DE0",
+      "x": 12,
+      "y": 85,
+      "r": 38,
+      "alpha": "2E"
+     }
+    ]
+   },
+   "ink": "#EAF0FF",
+   "txt": "#FFFFFF",
+   "surface": "#FFFFFF",
+   "surface_txt": "#141A33",
+   "accent": [
+    "#00C2A8",
+    "#4D9DE0",
+    "#FBBE00",
+    "#E30050",
+    "#FF7A59",
+    "#B388EB"
+   ],
+   "primary": "#FBBE00",
+   "arrow": "#4D9DE0",
+   "border_w": 0,
+   "radius": 20,
+   "shadow": "0 16px 40px rgba(0,0,0,.38)",
+   "title": {
+    "weight": 800,
+    "spacing": 3
+   },
+   "cap": {
+    "mode": "bar",
+    "bg": "rgba(6,10,40,.72)",
+    "color": "#FFFFFF"
+   },
+   "img": {
+    "frame": "polaroid",
+    "shadow": "0 18px 44px rgba(0,0,0,.5)"
+   }
   }
+ },
+ {
+  "id": "mathboard",
+  "direction": "数学线框（manim 风）",
+  "genre": "数学/算法/逻辑推理/几何科普",
+  "keywords": [
+   "数学",
+   "线框",
+   "manim",
+   "公式",
+   "几何",
+   "算法"
+  ],
+  "photo": "极少用照片；几何线框、坐标系、函数曲线（线稿感）",
+  "tokens": {
+   "font": "'Cambria','Cambria Math','Microsoft YaHei',serif",
+   "bg": {
+    "type": "solid",
+    "from": "#283645",
+    "fx": []
+   },
+   "ink": "#9DB8D6",
+   "txt": "#FFFFFF",
+   "surface": "#32455C",
+   "surface_txt": "#FFFFFF",
+   "accent": [
+    "#58C4DD",
+    "#83C167",
+    "#FC6255",
+    "#FFFF00",
+    "#B189C6",
+    "#F0A07C"
+   ],
+   "primary": "#58C4DD",
+   "arrow": "#FC6255",
+   "border_w": 0,
+   "radius": 10,
+   "shadow": "none",
+   "title": {
+    "weight": 700,
+    "spacing": 1
+   },
+   "cap": {
+    "mode": "plain",
+    "color": "#FFFFFF"
+   },
+   "img": {
+    "frame": "clean",
+    "shadow": "0 10px 30px rgba(0,0,0,.4)"
+   }
+  }
+ },
+ {
+  "id": "voxmap",
+  "direction": "地缘档案（深蓝地图·新闻系）",
+  "genre": "地缘政治/历史/社会议题/新闻解读",
+  "keywords": [
+   "地缘",
+   "地图",
+   "档案",
+   "历史",
+   "新闻",
+   "vox"
+  ],
+  "photo": "档案老照片、卫星图、地图俯瞰、纪实镜头（泛黄色调）",
+  "layouts": [
+   {
+    "id": "map-stage",
+    "name": "满幅地图",
+    "desc": "image role=\"bg\" 满幅垫底（地图/卫星/俯瞰），左下一块 panel 放 2–3 行说明，叠 1 个 stat，右上 1 个 chip 地区名"
+   },
+   {
+    "id": "dossier",
+    "name": "档案卷宗",
+    "desc": "左侧 image 老照片（拍立得框 380px+），右侧 timeline 2–4 节点，顶部 title 一行，像一页解密档案"
+   },
+   {
+    "id": "tension-line",
+    "name": "局势线",
+    "desc": "chart_line 横贯中部（w≥700），线上下各 1 个 note 标注关键节点，角落 1 个 chip，其余留深色底"
+   },
+   {
+    "id": "press-quote",
+    "name": "新闻金句",
+    "desc": "背景 role=\"bg\" 老照片压暗，quote 满屏居中，配 1 个 label 署名/日期，共 3–4 元素"
+   },
+   {
+    "id": "tag-map",
+    "name": "标注墙",
+    "desc": "4–6 个 chip 高低错落散布（间距≥90px），中心或角落 1 个大 icon 或 stat 压阵，不许对齐成排"
+   }
+  ],
+  "tokens": {
+   "font": "'Arial Narrow','Oswald','Microsoft YaHei',sans-serif",
+   "bg": {
+    "type": "linear",
+    "from": "#10243E",
+    "to": "#0C1B30",
+    "angle": 180,
+    "fx": []
+   },
+   "ink": "#5B8FBF",
+   "txt": "#FFFFFF",
+   "surface": "#1A3452",
+   "surface_txt": "#FFFFFF",
+   "accent": [
+    "#FFC845",
+    "#5B8FBF",
+    "#E4572E",
+    "#3E8E8E",
+    "#F0A07C",
+    "#8CA3C3"
+   ],
+   "primary": "#FFC845",
+   "arrow": "#FFC845",
+   "border_w": 0,
+   "radius": 12,
+   "shadow": "0 14px 34px rgba(0,0,0,.4)",
+   "title": {
+    "weight": 900,
+    "spacing": 4
+   },
+   "cap": {
+    "mode": "bar",
+    "bg": "rgba(10,20,34,.82)",
+    "color": "#FFFFFF"
+   },
+   "img": {
+    "frame": "polaroid",
+    "shadow": "0 16px 40px rgba(0,0,0,.55)"
+   }
+  }
+ },
+ {
+  "id": "manual",
+  "direction": "高能说明书（浅灰工程·拆解系）",
+  "genre": "工业产品拆解/流程原理/日用品科普（「XX是如何工作的」）",
+  "keywords": [
+   "说明书",
+   "工程",
+   "拆解",
+   "回形针",
+   "原理",
+   "机械"
+  ],
+  "photo": "产品拆解、工程剖面、白底 3D 渲染、蓝图线稿",
+  "layouts": [
+   {
+    "id": "exploded",
+    "name": "拆解标注",
+    "desc": "主体 image/icon 400–520px 居中，3 个 label+arrow 从四周指向部件（上下错开），底部一行 note 结论，像工程标注图"
+   },
+   {
+    "id": "step-rail",
+    "name": "步骤轨道",
+    "desc": "timeline 3–5 节点纵列居左 x≈280–420，右侧 chart/image 示意（w≥460），步骤色蓝橙交替"
+   },
+   {
+    "id": "spec-table",
+    "name": "参数表",
+    "desc": "title 居顶一行，table 居中（3–5 行），右侧或角落 1 个 stat 强调关键值，工整但有一处破格大字"
+   },
+   {
+    "id": "cutaway",
+    "name": "剖面对比",
+    "desc": "左右两块 panel 各配一个 icon/image（外部 vs 内部），中间 barrow 指向右块，顶部 title 点题"
+   },
+   {
+    "id": "conveyor",
+    "name": "流水线",
+    "desc": "2–3 个 icon/便签横排 y≈380–480，barrow 串联，每步配 ≤8 字 label，首尾各 1 个 chip 收束"
+   }
+  ],
+  "tokens": {
+   "font": "'Segoe UI','Microsoft YaHei',sans-serif",
+   "bg": {
+    "type": "solid",
+    "from": "#F5F6F7",
+    "fx": [
+     "grid"
+    ],
+    "fx_color": "#D0D5DB"
+   },
+   "ink": "#212429",
+   "txt": "#212429",
+   "surface": "#FFFFFF",
+   "surface_txt": "#212429",
+   "accent": [
+    "#3B82F6",
+    "#0D9488",
+    "#F97316",
+    "#FACC15",
+    "#8B5CF6",
+    "#EF4444"
+   ],
+   "primary": "#3B82F6",
+   "arrow": "#F97316",
+   "border_w": 0,
+   "radius": 14,
+   "shadow": "0 10px 24px rgba(33,36,41,.10)",
+   "title": {
+    "weight": 800,
+    "spacing": 2
+   },
+   "cap": {
+    "mode": "bar",
+    "bg": "rgba(33,36,41,.85)",
+    "color": "#FFFFFF"
+   },
+   "img": {
+    "frame": "clean",
+    "shadow": "0 12px 28px rgba(33,36,41,.16)"
+   }
+  }
+ },
+ {
+  "id": "keynote-dark",
+  "direction": "发布会深色（大留白·聚光系）",
+  "genre": "高端产品发布/品牌片/硬件介绍",
+  "keywords": [
+   "发布会",
+   "深色",
+   "聚光",
+   "apple",
+   "keynote",
+   "高端"
+  ],
+  "photo": "黑底产品特写、暗调棚拍、微距细节、电影感打光",
+  "layouts": [
+   {
+    "id": "hero-type",
+    "name": "大字海报",
+    "desc": "满屏一句 ≤10 字的 big（fs 160–200）居中 y≈380–480，底部一行 label 注脚，加 1 个 icon 或 chip，共 3–4 元素，留白≥60%"
+   },
+   {
+    "id": "spotlight",
+    "name": "聚光主角",
+    "desc": "image/icon 460–560px 居左 x≈260–820，右侧竖排 checklist（≤3 条）或 2 个 note，背景一圈聚光渐变"
+   },
+   {
+    "id": "number-reveal",
+    "name": "数字揭晓",
+    "desc": "一个 stat（w≥520）居中偏上，头顶 label 小字铺垫，下方一行 label 释义，共 3–5 元素，四周大面积留黑"
+   },
+   {
+    "id": "glass-duel",
+    "name": "玻璃对比",
+    "desc": "左右两块 panel 各承载一个主体（image/icon），中间 barrow 从左指向右，文字 ≤4 处，其余留白"
+   },
+   {
+    "id": "quiet-row",
+    "name": "静默三联",
+    "desc": "3 个 icon+label 等距横排 y≈420，title 居上 y≈200，其余全部留白，禁止再加元素"
+   }
+  ],
+  "tokens": {
+   "font": "'Segoe UI','Microsoft YaHei',sans-serif",
+   "bg": {
+    "type": "solid",
+    "from": "#000000",
+    "fx": [
+     "glow"
+    ],
+    "glow": [
+     {
+      "color": "#2997FF",
+      "x": 50,
+      "y": 108,
+      "r": 55,
+      "alpha": "26"
+     }
+    ]
+   },
+   "ink": "#3A3A3E",
+   "txt": "#F5F5F7",
+   "surface": "rgba(255,255,255,.08)",
+   "surface_txt": "#F5F5F7",
+   "accent": [
+    "#2997FF",
+    "#30D158",
+    "#BF5AF2",
+    "#FF9F0A",
+    "#64D2FF",
+    "#FF375F"
+   ],
+   "primary": "#2997FF",
+   "arrow": "#86868B",
+   "border_w": 0,
+   "radius": 24,
+   "shadow": "0 0 80px rgba(41,151,255,.14)",
+   "title": {
+    "weight": 700,
+    "spacing": 0
+   },
+   "cap": {
+    "mode": "plain",
+    "color": "#F5F5F7"
+   },
+   "img": {
+    "frame": "glass",
+    "shadow": "0 30px 80px rgba(0,0,0,.6)"
+   }
+  }
+ },
+ {
+  "id": "softplay",
+  "direction": "轻快多彩（便签贴纸·工具系）",
+  "genre": "效率工具/协作 SaaS/教育 App 介绍",
+  "keywords": [
+   "轻快",
+   "多彩",
+   "贴纸",
+   "工具",
+   "notion",
+   "figma",
+   "活泼"
+  ],
+  "photo": "黏土 3D 渲染、粉彩插画、涂鸦贴纸、明快工作台",
+  "tokens": {
+   "font": "'Segoe UI','Microsoft YaHei',sans-serif",
+   "bg": {
+    "type": "solid",
+    "from": "#F7F6F3",
+    "fx": [
+     "dots"
+    ],
+    "fx_color": "#D9D6CE"
+   },
+   "ink": "#37352F",
+   "txt": "#37352F",
+   "surface": "#FFFFFF",
+   "surface_txt": "#37352F",
+   "accent": [
+    "#A259FF",
+    "#1ABCFE",
+    "#0ACF83",
+    "#F24E1E",
+    "#FFC700",
+    "#FF7AB6"
+   ],
+   "primary": "#A259FF",
+   "arrow": "#F24E1E",
+   "border_w": 0,
+   "radius": 18,
+   "shadow": "0 8px 20px rgba(55,53,47,.12)",
+   "title": {
+    "weight": 800,
+    "spacing": 1
+   },
+   "cap": {
+    "mode": "pill",
+    "bg": "rgba(255,255,255,.94)",
+    "color": "#37352F",
+    "border": "2px solid #E6E4DE"
+   },
+   "img": {
+    "frame": "clean",
+    "shadow": "0 10px 24px rgba(55,53,47,.16)"
+   }
+  }
+ },
+ {
+  "id": "meshglass",
+  "direction": "渐变玻璃（SaaS 深色系）",
+  "genre": "AI 产品/开发者工具/通用 SaaS 宣传",
+  "keywords": [
+   "玻璃",
+   "渐变",
+   "saas",
+   "ai",
+   "科技感",
+   "现代"
+  ],
+  "photo": "抽象渐变网格、全息光晕、深色仪表盘界面、极光渐变",
+  "tokens": {
+   "font": "'Segoe UI','Microsoft YaHei',sans-serif",
+   "bg": {
+    "type": "linear",
+    "from": "#0F1023",
+    "to": "#141032",
+    "angle": 160,
+    "fx": [
+     "glow",
+     "grid"
+    ],
+    "fx_color": "#FFFFFF",
+    "glow": [
+     {
+      "color": "#7C3AED",
+      "x": 18,
+      "y": 12,
+      "r": 48,
+      "alpha": "66"
+     },
+     {
+      "color": "#2563EB",
+      "x": 85,
+      "y": 30,
+      "r": 42,
+      "alpha": "59"
+     },
+     {
+      "color": "#EC4899",
+      "x": 60,
+      "y": 95,
+      "r": 46,
+      "alpha": "52"
+     }
+    ]
+   },
+   "ink": "rgba(255,255,255,.22)",
+   "txt": "#F8FAFC",
+   "surface": "rgba(255,255,255,.08)",
+   "surface_txt": "#F8FAFC",
+   "accent": [
+    "#7C3AED",
+    "#2563EB",
+    "#EC4899",
+    "#22D3EE",
+    "#34D399",
+    "#F59E0B"
+   ],
+   "primary": "#7C3AED",
+   "arrow": "#22D3EE",
+   "border_w": 1,
+   "radius": 20,
+   "shadow": "0 20px 50px rgba(0,0,0,.42)",
+   "title": {
+    "weight": 700,
+    "spacing": 0
+   },
+   "cap": {
+    "mode": "bar",
+    "bg": "rgba(15,16,35,.72)",
+    "color": "#F8FAFC",
+    "border": "1px solid rgba(255,255,255,.18)"
+   },
+   "img": {
+    "frame": "glass",
+    "shadow": "0 24px 60px rgba(0,0,0,.5)"
+   }
+  }
+ },
+ {
+  "id": "presschart",
+  "direction": "财经图表（米粉纸·报刊系）",
+  "genre": "金融/经济/商业数据解读",
+  "keywords": [
+   "财经",
+   "金融",
+   "图表",
+   "报刊",
+   "经济",
+   "ft"
+  ],
+  "photo": "金融区街景、交易大厅虚化、报纸质感、冷静办公场景（少用）",
+  "tokens": {
+   "font": "'Georgia','Microsoft YaHei',serif",
+   "bg": {
+    "type": "solid",
+    "from": "#FFF1E5",
+    "fx": [
+     "grid"
+    ],
+    "fx_color": "#E0D5C8"
+   },
+   "ink": "#33302E",
+   "txt": "#33302E",
+   "surface": "#FFFFFF",
+   "surface_txt": "#33302E",
+   "accent": [
+    "#0F5499",
+    "#0D7680",
+    "#990F3D",
+    "#FF8833",
+    "#66605C",
+    "#B8B2AD"
+   ],
+   "primary": "#990F3D",
+   "arrow": "#0F5499",
+   "border_w": 0,
+   "radius": 8,
+   "shadow": "0 8px 22px rgba(51,48,46,.12)",
+   "title": {
+    "weight": 700,
+    "spacing": 1,
+    "color": "#33302E"
+   },
+   "cap": {
+    "mode": "bar",
+    "bg": "rgba(26,26,26,.85)",
+    "color": "#FFF1E5"
+   },
+   "img": {
+    "frame": "clean",
+    "shadow": "0 8px 20px rgba(51,48,46,.18)"
+   }
+  }
+ },
+ {
+  "id": "opendata",
+  "direction": "公益数据（白底清爽·统计系）",
+  "genre": "社会/健康/环境统计、通用数据科普",
+  "keywords": [
+   "公益",
+   "数据",
+   "统计",
+   "社会",
+   "owid",
+   "tableau"
+  ],
+  "photo": "航拍纪实、人群俯瞰、农田卫星图、日常人物抓拍",
+  "tokens": {
+   "font": "'Segoe UI','Microsoft YaHei',sans-serif",
+   "bg": {
+    "type": "solid",
+    "from": "#FFFFFF",
+    "fx": []
+   },
+   "ink": "#D0D0D0",
+   "txt": "#333333",
+   "surface": "#FFFFFF",
+   "surface_txt": "#333333",
+   "accent": [
+    "#4E79A7",
+    "#F28E2B",
+    "#E15759",
+    "#76B7B2",
+    "#59A14F",
+    "#EDC948"
+   ],
+   "primary": "#4E79A7",
+   "arrow": "#E15759",
+   "border_w": 1,
+   "radius": 12,
+   "shadow": "0 6px 18px rgba(0,0,0,.08)",
+   "title": {
+    "weight": 800,
+    "spacing": 0,
+    "color": "#333333"
+   },
+   "cap": {
+    "mode": "bar",
+    "bg": "rgba(40,40,40,.85)",
+    "color": "#FFFFFF"
+   },
+   "img": {
+    "frame": "clean",
+    "shadow": "0 8px 20px rgba(0,0,0,.14)"
+   }
+  }
+ },
+ {
+  "id": "medcare",
+  "direction": "清洁医疗（薄荷青·健康系）",
+  "genre": "医疗/健康/生物科技科普",
+  "keywords": [
+   "医疗",
+   "健康",
+   "薄荷",
+   "清洁",
+   "医学",
+   "生物"
+  ],
+  "photo": "洁净医疗白、明亮实验室、柔和蓝调诊所、显微细胞",
+  "tokens": {
+   "font": "'Segoe UI','Microsoft YaHei',sans-serif",
+   "bg": {
+    "type": "linear",
+    "from": "#E0F2F1",
+    "to": "#E8F5F4",
+    "angle": 180,
+    "fx": []
+   },
+   "ink": "#00695C",
+   "txt": "#263238",
+   "surface": "#FFFFFF",
+   "surface_txt": "#263238",
+   "accent": [
+    "#00897B",
+    "#4DB6AC",
+    "#FF7043",
+    "#26A69A",
+    "#FFB74D",
+    "#80CBC4"
+   ],
+   "primary": "#00897B",
+   "arrow": "#00897B",
+   "border_w": 0,
+   "radius": 24,
+   "shadow": "0 10px 26px rgba(0,105,92,.14)",
+   "title": {
+    "weight": 800,
+    "spacing": 1,
+    "color": "#00695C"
+   },
+   "cap": {
+    "mode": "pill",
+    "bg": "rgba(255,255,255,.95)",
+    "color": "#263238",
+    "border": "2px solid #B2DFDB"
+   },
+   "img": {
+    "frame": "clean",
+    "shadow": "0 12px 28px rgba(0,105,92,.18)"
+   }
+  }
+ },
+ {
+  "id": "evergreen",
+  "direction": "自然环保（草绿·生态系）",
+  "genre": "气候/能源/环保/农业科普",
+  "keywords": [
+   "自然",
+   "环保",
+   "绿色",
+   "生态",
+   "气候",
+   "能源"
+  ],
+  "photo": "森林航拍、风电光伏、冰川、再生农业、自然微距逆光",
+  "tokens": {
+   "font": "'Georgia','Microsoft YaHei',serif",
+   "bg": {
+    "type": "linear",
+    "from": "#F1F8E9",
+    "to": "#E6F2DC",
+    "angle": 180,
+    "fx": []
+   },
+   "ink": "#2D5A27",
+   "txt": "#1B3A1B",
+   "surface": "#FFFFFF",
+   "surface_txt": "#1B3A1B",
+   "accent": [
+    "#4CAF50",
+    "#8BC34A",
+    "#2D5A27",
+    "#F9A825",
+    "#00897B",
+    "#8D6E63"
+   ],
+   "primary": "#4CAF50",
+   "arrow": "#2D5A27",
+   "border_w": 0,
+   "radius": 18,
+   "shadow": "0 10px 24px rgba(45,90,39,.14)",
+   "title": {
+    "weight": 700,
+    "spacing": 1,
+    "color": "#2D5A27"
+   },
+   "cap": {
+    "mode": "bar",
+    "bg": "rgba(27,58,27,.85)",
+    "color": "#F1F8E9"
+   },
+   "img": {
+    "frame": "clean",
+    "shadow": "0 12px 28px rgba(45,90,39,.2)"
+   }
+  }
+ },
+ {
+  "id": "techiso",
+  "direction": "深色等距科技（紫青霓虹·AI 系）",
+  "genre": "AI/云计算/区块链/数码硬件科普",
+  "keywords": [
+   "等距",
+   "霓虹",
+   "赛博",
+   "芯片",
+   "硬件",
+   "iso"
+  ],
+  "photo": "等距 3D 深紫、霓虹电路、赛博城市俯瞰、发光机房、科技粒子",
+  "tokens": {
+   "font": "'Segoe UI','Microsoft YaHei',sans-serif",
+   "bg": {
+    "type": "linear",
+    "from": "#0D0D1F",
+    "to": "#1A103A",
+    "angle": 170,
+    "fx": [
+     "glow",
+     "grid"
+    ],
+    "fx_color": "#7C3AED",
+    "glow": [
+     {
+      "color": "#7C3AED",
+      "x": 22,
+      "y": 18,
+      "r": 44,
+      "alpha": "3D"
+     },
+     {
+      "color": "#22D3EE",
+      "x": 82,
+      "y": 78,
+      "r": 38,
+      "alpha": "2E"
+     }
+    ]
+   },
+   "ink": "rgba(229,231,235,.35)",
+   "txt": "#E5E7EB",
+   "surface": "rgba(255,255,255,.07)",
+   "surface_txt": "#E5E7EB",
+   "accent": [
+    "#7C3AED",
+    "#22D3EE",
+    "#E879F9",
+    "#A78BFA",
+    "#34D399",
+    "#F59E0B"
+   ],
+   "primary": "#A78BFA",
+   "arrow": "#22D3EE",
+   "border_w": 1,
+   "radius": 16,
+   "shadow": "0 0 40px rgba(124,58,237,.22)",
+   "title": {
+    "weight": 800,
+    "spacing": 2
+   },
+   "cap": {
+    "mode": "bar",
+    "bg": "rgba(13,13,31,.8)",
+    "color": "#E5E7EB",
+    "border": "1px solid rgba(124,58,237,.4)"
+   },
+   "img": {
+    "frame": "glass",
+    "shadow": "0 20px 50px rgba(124,58,237,.35)"
+   }
+  }
+ },
+ {
+  "id": "chalkboard",
+  "direction": "黑板粉笔（课堂手写系）",
+  "genre": "课堂讲解/学校知识/慢节奏科普",
+  "keywords": [
+   "黑板",
+   "粉笔",
+   "课堂",
+   "教学",
+   "学校"
+  ],
+  "photo": "课堂黑板、手写笔记、旧课本插画、校园场景",
+  "tokens": {
+   "font": "'KaiTi','STKaiti','Microsoft YaHei',serif",
+   "bg": {
+    "type": "solid",
+    "from": "#2E4640",
+    "fx": []
+   },
+   "ink": "rgba(255,253,245,.75)",
+   "txt": "#FFFDF5",
+   "surface": "rgba(255,255,255,.07)",
+   "surface_txt": "#FFFDF5",
+   "accent": [
+    "#FFD54F",
+    "#80DEEA",
+    "#FF8A80",
+    "#A5D6A7",
+    "#FFCC80",
+    "#CE93D8"
+   ],
+   "primary": "#FFD54F",
+   "arrow": "#FFFDF5",
+   "border_w": 2,
+   "radius": 8,
+   "shadow": "none",
+   "title": {
+    "weight": 700,
+    "spacing": 6
+   },
+   "cap": {
+    "mode": "plain",
+    "color": "#FFFDF5"
+   },
+   "img": {
+    "frame": "polaroid",
+    "shadow": "0 12px 30px rgba(0,0,0,.45)"
+   }
+  }
+ },
+ {
+  "direction": "暗调版画红潮（政治寓言）",
+  "genre": "悬疑叙事、社会议题、剧情PV、宣言式主题片头",
+  "id": "vid-ref20260926-205226",
+  "keywords": [
+   "黑幕压场",
+   "灰雾都市",
+   "红黑放射",
+   "留白大字",
+   "版画剪影",
+   "字幕条居中",
+   "断裂拼贴",
+   "俄文名标"
+  ],
+  "layouts": [
+   {
+    "id": "void_halo",
+    "name": "黑幕微光",
+    "desc": "全黑底，中心512px微弱光晕为唯一锚点，无主体，大留白，底部字幕带上方留空，元素3：光晕、暗影、字幕位"
+   },
+   {
+    "id": "smash_star",
+    "name": "碎裂放射",
+    "desc": "满幅红黑放射星形背景居中，中央偏上放主标题图块占60%宽，背景残破碎片点缀，字幕条底部居中，元素4不重叠"
+   },
+   {
+    "id": "mist_city",
+    "name": "雾都对称",
+    "desc": "灰调城市天际线居中对称占下半，上部大留白，教堂轮廓为背景锚点，白字黑边字幕底部居中，元素4"
+   },
+   {
+    "id": "door_closeup",
+    "name": "暗门特写",
+    "desc": "金属雕花主体居中满幅，四周暗角仅中部受光，说明文字居中偏上，中文字幕底部居中，元素3"
+   },
+   {
+    "id": "name_card",
+    "name": "大字名牌",
+    "desc": "极简浅灰米底，黑色粗体外文名居中为唯一锚点占50%宽，小字框底部居中，留白超60%，元素3"
+   }
+  ],
+  "photo": "灰暗都市雾景、版画质感剪影、红黑拼贴、破旧照片碎片",
+  "tokens": {
+   "font": "'Georgia','SimHei','Microsoft YaHei',serif",
+   "bg": {
+    "type": "linear",
+    "from": "#0C0E0E",
+    "to": "#362E2B",
+    "angle": 180,
+    "fx": [
+     "noise",
+     "glow"
+    ],
+    "glow": [
+     {
+      "color": "#5D5A56",
+      "x": 50,
+      "y": 45,
+      "r": 55,
+      "alpha": "22"
+     },
+     {
+      "color": "#8F2339",
+      "x": 50,
+      "y": 20,
+      "r": 35,
+      "alpha": "1A"
+     }
+    ]
+   },
+   "ink": "#D7D4CD",
+   "txt": "#D7D4CD",
+   "surface": "rgba(215,212,205,0.08)",
+   "surface_txt": "#B5AFAA",
+   "accent": [
+    "#8F2339",
+    "#B5AFAA",
+    "#5D5A56",
+    "#928583",
+    "#34B3AC",
+    "#362E2B"
+   ],
+   "primary": "#8F2339",
+   "arrow": "#B5AFAA",
+   "border_w": 0,
+   "radius": 2,
+   "shadow": "0 8px 40px rgba(0,0,0,0.6)",
+   "title": {
+    "weight": 900,
+    "spacing": 6
+   },
+   "cap": {
+    "mode": "bar",
+    "bg": "rgba(12,14,14,0.75)",
+    "color": "#D7D4CD"
+   },
+   "img": {
+    "frame": "polaroid",
+    "shadow": "0 12px 32px rgba(0,0,0,0.55)"
+   }
+  }
+ }
 ]

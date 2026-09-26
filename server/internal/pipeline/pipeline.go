@@ -438,7 +438,9 @@ func stageCompositions(p *Project) error {
 func stageCheck(p *Project) error {
 	out, err := runCLI(p, "npx", "--yes", "hyperframes@0.8.55", "check")
 	if err != nil {
-		return fmt.Errorf("check 未过（诊断如下，修复后重跑）:\n%s", tailLines(out, 30))
+		// 完整输出：上游修复轮要从 ✗ 行提取报错段（截断会丢 Layout 段的重叠错误）；
+		// 对话/清单侧各自再做 tail/挑行
+		return fmt.Errorf("check 未过（诊断如下，修复后重跑）:\n%s", out)
 	}
 	_ = writeFile("", p.Artifact(".hyperframes-ok"), "check passed "+time.Now().Format(time.RFC3339)+"\n")
 	p.Manifest("check.passed", "")
@@ -775,6 +777,27 @@ func SetBGM(p *Project, track string) error {
 	return os.WriteFile(p.Artifact("project.json"), nb, 0o644)
 }
 
+// SetVoice 写 project.json 的 voice 字段（旁白音色，Edge TTS 音色 id；空串清除回落默认）。
+// 音色变化时 tts_align.py 检测 audio_meta.json 的 voice 字段不符会全量重配音。
+func SetVoice(p *Project, voice string) error {
+	want := strings.TrimSpace(voice)
+	b, err := os.ReadFile(p.Artifact("project.json"))
+	if err != nil {
+		return err
+	}
+	var meta map[string]any
+	if err := json.Unmarshal(b, &meta); err != nil {
+		return fmt.Errorf("project.json 解析失败: %w", err)
+	}
+	if want == "" {
+		delete(meta, "voice")
+	} else {
+		meta["voice"] = want
+	}
+	nb, _ := json.MarshalIndent(meta, "", "  ")
+	return os.WriteFile(p.Artifact("project.json"), nb, 0o644)
+}
+
 // extraPATH 额外 PATH（如 winget 安装的 FFmpeg bin），由宿主进程注入。
 var extraPATH string
 
@@ -892,6 +915,7 @@ func styleBrief(p *Project) string {
 	return fmt.Sprintf(`你是视频视觉设计师。按文稿气质提议一个风格方向，产出 1–3 张 HTML 样张：
 - 样张 = 用拟采用风格参数（色板/字体/组件/动效偏好）渲出的静态小画面
 - 样张与成片出自同一套 token，所见即所得；不要用图片/网络资源，纯 CSS
+- 多张样张的构图版式必须明显不同（如：大字海报 / 主视觉分栏 / 数据焦点 / 满幅底图+侧栏各取其一），不要每张都排成「标题+元素网格」；每张 desc 写明用了哪种版式
 - 中文用系统楷体 KaiTi（演示环境），正式渲染字体后续本地化
 
 ## 画布硬约束（违反必被裁切）

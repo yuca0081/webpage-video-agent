@@ -2,11 +2,12 @@
 import { computed, onMounted, ref } from 'vue'
 import { NTag, NTabs, NTabPane } from 'naive-ui'
 import LibraryPanel from './LibraryPanel.vue'
+import RefVideos from './RefVideos.vue'
 import { api, galleryURL } from '../api'
 import type { ElementInfo, StyleInfo, StylePack } from '../types'
 
 const props = defineProps<{ packs: StylePack[] }>()
-const emit = defineEmits<{ publish: [id: string] }>()
+const emit = defineEmits<{ publish: [id: string]; ingested: [] }>()
 
 // 元素库状态：注册表（elements/styles 顺序即权威顺序）+ 样张矩阵清单
 const tab = ref<'styles' | 'elements'>('styles')
@@ -43,6 +44,9 @@ const empty = computed(() => !Object.keys(gallery.value).length)
     <NTabs v-model:value="tab" type="line" size="small" class="tabs">
       <NTabPane name="styles" tab="风格库">
         <LibraryPanel :packs="props.packs" @publish="emit('publish', $event)" />
+      </NTabPane>
+      <NTabPane name="videos" tab="视频解析">
+        <RefVideos @ingested="emit('ingested')" />
       </NTabPane>
       <NTabPane name="elements" tab="元素库" class="pane">
         <div v-if="empty" class="none">

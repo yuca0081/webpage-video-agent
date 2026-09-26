@@ -100,6 +100,37 @@ func (l *Library) DraftFromProject(projectDir, projectID, projectName string) (*
 	return &pack, nil
 }
 
+// AddVideoPack 从参考视频解析结果起草风格包（published=false 等用户确认）。
+// 同一引用重复确认 = 幂等返回已有条目。
+func (l *Library) AddVideoPack(refID, name, direction, desc, sampleHTML, sampleTag string) (*StylePack, error) {
+	if direction == "" || sampleHTML == "" {
+		return nil, fmt.Errorf("风格包不完整（direction/样张缺失）")
+	}
+	packs, _ := l.List()
+	origin := "video:" + refID
+	for i := range packs {
+		if packs[i].OriginProject == origin {
+			return &packs[i], nil
+		}
+	}
+	pack := StylePack{
+		ID:            "sp" + time.Now().Format("20060102-150405"),
+		Name:          name,
+		Direction:     direction,
+		Desc:          desc,
+		SampleHTML:    sampleHTML,
+		SampleTag:     sampleTag,
+		OriginProject: origin,
+		Published:     false,
+		CreatedAt:     time.Now(),
+	}
+	packs = append(packs, pack)
+	if err := l.save(packs); err != nil {
+		return nil, err
+	}
+	return &pack, nil
+}
+
 // Publish 用户确认入库。
 func (l *Library) Publish(id string) (*StylePack, error) {
 	packs, err := l.List()

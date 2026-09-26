@@ -206,7 +206,7 @@ const themeOverrides = {
 
         <!-- 素材区：风格库 + 元素库 -->
         <MaterialCenter
-          v-else-if="page === 'materials'" :packs="library" @publish="publishPack"
+          v-else-if="page === 'materials'" :packs="library" @publish="publishPack" @ingested="loadLibrary"
         />
 
         <!-- 工作区：项目三栏 -->

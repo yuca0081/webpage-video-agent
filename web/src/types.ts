@@ -123,3 +123,29 @@ export interface StyleInfo {
   keywords: string[]
   photo: string
 }
+
+// ── 参考视频解析（素材中心）────────────────────────────────
+export interface RefVideoLayout {
+  id: string
+  name: string
+  desc: string
+}
+
+export interface RefVideoStyle {
+  direction: string
+  genre: string
+  keywords: string[]
+  photo: string
+  layouts: RefVideoLayout[]
+  samples: { tag: string; desc: string; html: string }[]
+}
+
+export interface RefVideo {
+  id: string
+  name: string
+  status: 'pending' | 'running' | 'done' | 'error'
+  error?: string
+  confirmed: boolean
+  created_at: string
+  style?: RefVideoStyle
+}

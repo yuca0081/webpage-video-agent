@@ -18,6 +18,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -35,7 +37,7 @@ type Runner struct {
 	DataDir string // 仓库根 data/（项目在 data/projects/<id>）
 	RootDir string // 仓库根（ai/ 脚本所在）
 	Hub     *events.Hub
-	OnDone  func(projectID, status string) // 状态回写（DB + project.json）
+	OnDone  func(projectID, status, detail string) // 终态回写（status: video|failed|cancelled；detail 供聊天汇报失败原因等）
 }
 
 var (
@@ -68,7 +70,7 @@ func (r *Runner) Start(projectID string) (bool, error) {
 			r.emit(projectID, "cancelled", "", "用户取消制作")
 			r.Manifest(p, "produce.cancelled", "")
 			if r.OnDone != nil {
-				r.OnDone(projectID, "cancelled")
+				r.OnDone(projectID, "cancelled", "用户取消制作")
 			}
 			return
 		}
@@ -77,7 +79,7 @@ func (r *Runner) Start(projectID string) (bool, error) {
 			r.emit(projectID, "error", "", err.Error())
 			r.Manifest(p, "produce.error", err.Error())
 			if r.OnDone != nil {
-				r.OnDone(projectID, "failed")
+				r.OnDone(projectID, "failed", err.Error())
 			}
 		}
 	}()
@@ -138,7 +140,7 @@ func (r *Runner) Rework(projectID, segID, instruction string) (bool, error) {
 			r.emit(projectID, "cancelled", "", "用户取消重做")
 			r.Manifest(p, "rework.cancelled", seg.ID)
 			if r.OnDone != nil {
-				r.OnDone(projectID, "cancelled")
+				r.OnDone(projectID, "cancelled", "用户取消重做")
 			}
 			return
 		}
@@ -147,7 +149,7 @@ func (r *Runner) Rework(projectID, segID, instruction string) (bool, error) {
 			r.emit(projectID, "error", "", err.Error())
 			r.Manifest(p, "rework.error", seg.ID+": "+err.Error())
 			if r.OnDone != nil {
-				r.OnDone(projectID, "failed")
+				r.OnDone(projectID, "failed", err.Error())
 			}
 		}
 	}()
@@ -218,7 +220,7 @@ func (r *Runner) runRework(ctx context.Context, p *pipeline.Project, seg contrac
 	r.emit(id, "done", "", "renders/main.mp4")
 	r.Manifest(p, "rework.done", seg.ID)
 	if r.OnDone != nil {
-		r.OnDone(id, "video")
+		r.OnDone(id, "video", fmt.Sprintf("段%d「%s」画面重做完成", seg.Idx, seg.Key))
 	}
 	return nil
 }
@@ -281,7 +283,7 @@ func (r *Runner) run(ctx context.Context, p *pipeline.Project) error {
 	r.emit(id, "done", "", "renders/main.mp4")
 	r.Manifest(p, "produce.done", "renders/main.mp4")
 	if r.OnDone != nil {
-		r.OnDone(id, "video")
+		r.OnDone(id, "video", "全片制作完成")
 	}
 	return nil
 }
@@ -324,15 +326,40 @@ func (r *Runner) checkWithRepair(ctx context.Context, p *pipeline.Project, instr
 		if ctx.Err() != nil { // 用户取消 ≠ check 失败，别进修复轮
 			return ctx.Err()
 		}
+		// 廉价修复先行：checker 对对比度项给了建议色就直接回填 HTML 再检，
+		// 不烧 LLM 修复轮——LLM 回喂修对比度从未收敛过（同色反复重生成）。
+		if n := applyContrastFixes(p, err.Error()); n > 0 {
+			r.emit(p.ID, "stage", "check", fmt.Sprintf("contrast-fix：按建议色回填 %d 处", n))
+			r.Manifest(p, "check.contrast_fix", fmt.Sprintf("%d 处", n))
+			if err := r.python(ctx, "ai/assemble.py", p.Dir, 2*time.Minute); err == nil {
+				if pipeline.Run(ctx, p, "check") == nil {
+					r.emit(p.ID, "stage", "check", "done")
+					return nil
+				}
+			}
+			// 回填后仍不过 → 落到下面的 LLM 修复轮
+		}
 		if attempt == 3 {
 			r.emit(p.ID, "stage", "check", "error: "+err.Error())
 			return fmt.Errorf("check 三轮未过: %w", err)
 		}
-		feedback := "上一版画面被自动布局检查拒绝，报错摘要：\n" + tail(err.Error(), 25) +
-			"\n常见原因：元素重叠/越界。请整体重排：拉开间距、避开底部字幕带（禁放区见布局规则）、必要时减少元素。"
-		r.emit(p.ID, "stage", "check", "repair：带着报错重生成画面")
+		// 修复目标 = 重做段 ∪ 本轮报错涉及的段：check 是全片门禁，重做段之外的段
+		// 报错时若只重生成重做段，那些错误永远修不掉（结构性死锁）。
+		targets := failingSegs(err.Error())
+		if only != "" && !slices.Contains(targets, only) {
+			targets = append([]string{only}, targets...)
+		}
+		repairOnly := strings.Join(targets, ",")
+		feedback := "上一版画面被自动检查拒绝，报错摘要（✗ 行逐项都要修）：\n" + tail(err.Error(), 25) +
+			"\n修复规则：\n" +
+			"- 重叠/越界：整体重排拉开间距，避开底部字幕带（禁放区见布局规则），必要时减少元素。\n" +
+			"- 对比度 ✗：文字色与它实际压着的背景太接近。检查器的建议色不可信（实测往往不达标）——" +
+			"文字压在照片/深色底上一律改极浅色（#EFE9DA、#E3E3E3 级），浅色底上用深色（#2D2D2D 级）；" +
+			"中灰（#616161、#9E9E9E）做正文/标注色直接不达标，禁用。\n" +
+			"逐项修完再输出。"
+		r.emit(p.ID, "stage", "check", fmt.Sprintf("repair：重生成画面（段：%s）", repairOnly))
 		r.Manifest(p, "check.repair", tail(err.Error(), 10))
-		if err := r.genSpecs(ctx, p, instruction, feedback, only); err != nil {
+		if err := r.genSpecs(ctx, p, instruction, feedback, repairOnly); err != nil {
 			return err
 		}
 		if err := r.fetchImages(ctx, p); err != nil {
@@ -341,7 +368,7 @@ func (r *Runner) checkWithRepair(ctx context.Context, p *pipeline.Project, instr
 		if err := r.renderSpecs(ctx, p); err != nil {
 			return err
 		}
-		r.clearFrames(p, only)
+		r.clearFrames(p, repairOnly)
 		if err := pipeline.Run(ctx, p, "compositions"); err != nil {
 			return fmt.Errorf("合成物落盘失败: %w", err)
 		}
@@ -350,6 +377,37 @@ func (r *Runner) checkWithRepair(ctx context.Context, p *pipeline.Project, instr
 		}
 	}
 	return errors.New("unreachable")
+}
+
+// segIDRe 段 id（seg01、seg02…）。
+var segIDRe = regexp.MustCompile(`seg\d{2,}`)
+
+// failingSegs 从 check 诊断提取报错（✗ 行）涉及的段 id：选择器前缀 #segNN-… 与
+// 对比度项的 source 路径都算。info 行不取——健康段没必要重生成。
+func failingSegs(checkOut string) []string {
+	set := map[string]bool{}
+	var order []string
+	add := func(id string) {
+		if !set[id] {
+			set[id] = true
+			order = append(order, id)
+		}
+	}
+	lines := strings.Split(checkOut, "\n")
+	for i, ln := range lines {
+		if !strings.HasPrefix(strings.TrimSpace(ln), "✗") {
+			continue
+		}
+		for _, id := range segIDRe.FindAllString(ln, -1) {
+			add(id)
+		}
+		if i+1 < len(lines) { // 对比度项的选择器在 ✗ 行，段文件在下一行 Try/source
+			for _, id := range segIDRe.FindAllString(lines[i+1], -1) {
+				add(id)
+			}
+		}
+	}
+	return order
 }
 
 // ── spec 生成（LLM 作业：语义布局）─────────────────────────────
@@ -408,6 +466,8 @@ func (r *Runner) genSpecs(ctx context.Context, p *pipeline.Project, instruction,
 	if err != nil {
 		return err
 	}
+	// 版式库：命中注册表风格的每段先指定一个构图版式（段号轮换），治布局单调
+	layouts := styleLayoutsFor(p, r.RootDir)
 	// 样张截图（ai/snap_samples.py，Edge 无头，mtime 缓存）→ spec 生成改走多模态：
 	// 模型看着真图写 spec，替代纯文字风格描述；截图失败不挡管线（退回纯文本）。
 	if err := r.python(ctx, "ai/snap_samples.py", p.Dir, time.Minute); err != nil {
@@ -427,10 +487,17 @@ func (r *Runner) genSpecs(ctx context.Context, p *pipeline.Project, instruction,
 			_ = os.Remove(p.Artifact("llm/comp-" + seg.ID + ".spec.json"))
 		}
 	}
-	// 先筛出待生成段（已有产物跳过，重放语义），再并发填坑
+	// 先筛出待生成段（已有产物跳过，重放语义），再并发填坑。
+	// only 逗号分隔多段（rework 主目标段 + check 报错段一起修）。
+	onlySet := map[string]bool{}
+	for _, id := range strings.Split(only, ",") {
+		if id = strings.TrimSpace(id); id != "" {
+			onlySet[id] = true
+		}
+	}
 	var todo []contract.Segment
 	for _, seg := range sb.Segments {
-		if only != "" && seg.ID != only {
+		if len(onlySet) > 0 && !onlySet[seg.ID] {
 			continue
 		}
 		specPath := p.Artifact("llm/comp-" + seg.ID + ".spec.json")
@@ -453,8 +520,9 @@ func (r *Runner) genSpecs(ctx context.Context, p *pipeline.Project, instruction,
 	}
 	work := func(seg contract.Segment, specPath string) {
 		v := voices[seg.ID]
+		lb := layoutNote(layouts, seg.Idx)
 		var spec contract.CompSpec
-		u1, err := gen(specUserPrompt(seg, v, instruction, feedback, cv, style, menu), &spec)
+		u1, err := gen(specUserPrompt(seg, v, instruction, feedback, cv, style, menu, lb), &spec)
 		if err != nil {
 			fail(fmt.Errorf("%s spec 生成失败: %w", seg.ID, err))
 			return
@@ -464,7 +532,7 @@ func (r *Runner) genSpecs(ctx context.Context, p *pipeline.Project, instruction,
 		for repair := 0; repair < 2 && len(errs) > 0; repair++ { // 修复：违规项回喂，最多 2 轮
 			fb := instruction + feedback + "\n上一版 spec 被契约校验拒绝，必须逐条修正：\n- " + strings.Join(errs, "\n- ")
 			var fixed contract.CompSpec
-			u2, err2 := gen(specUserPrompt(seg, v, "", fb, cv, style, menu), &fixed)
+			u2, err2 := gen(specUserPrompt(seg, v, "", fb, cv, style, menu, lb), &fixed)
 			if err2 != nil {
 				fail(fmt.Errorf("%s spec 修复失败: %w", seg.ID, err2))
 				return
@@ -479,10 +547,10 @@ func (r *Runner) genSpecs(ctx context.Context, p *pipeline.Project, instruction,
 			// 带着明确要求整段重出一次，仍不行才报错——空白段比失败更隐蔽。
 			if len(spec.Elements) < 3 {
 				r.emit(p.ID, "progress", "compositions", fmt.Sprintf("%s 清洗后仅 %d 元素，整段重出", seg.ID, len(spec.Elements)))
-				var retry contract.CompSpec
-				u2, err2 := gen(specUserPrompt(seg, v, instruction,
-					fmt.Sprintf("上一版几乎每个元素的 kind 都是空的或不认识的。kind 必须从可用元素菜单里逐字选取（%s），每个元素都必须有 kind。", kinds),
-					cv, style, menu), &retry)
+					var retry contract.CompSpec
+					u2, err2 := gen(specUserPrompt(seg, v, instruction,
+						fmt.Sprintf("上一版几乎每个元素的 kind 都是空的或不认识的。kind 必须从可用元素菜单里逐字选取（%s），每个元素都必须有 kind。", kinds),
+						cv, style, menu, lb), &retry)
 				if err2 == nil {
 					errs2 := contract.ValidateSpec(&retry, len(v.Words), cv)
 					errs2 = append(errs2, iconErrors(&retry, icons)...)
@@ -594,7 +662,7 @@ func iconErrors(s *contract.CompSpec, icons map[string]bool) []string {
 	return errs
 }
 
-func specUserPrompt(seg contract.Segment, v voiceMeta, instruction, feedback string, cv contract.Canvas, style, menu string) string {
+func specUserPrompt(seg contract.Segment, v voiceMeta, instruction, feedback string, cv contract.Canvas, style, menu, layout string) string {
 	var wb strings.Builder
 	for i, w := range v.Words {
 		if i > 0 && i%10 == 0 {
@@ -622,6 +690,7 @@ func specUserPrompt(seg contract.Segment, v voiceMeta, instruction, feedback str
 - 标题：%s
 - 旁白（%d 词，%.1f 秒）：%s
 - %s：%s
+%s
 %s
 ## 可用元素（kind 与参数；坐标基于 %d×%d 画布%s）
 %s
@@ -656,7 +725,7 @@ scale ruler clipboard lightbulb-off zap-off anchor truck bike train bus ship sen
 
 ## 输出（只输出 JSON，无围栏）
 {"note":"布局思路一句话","camera":"（可选）zoom_in/zoom_out/pan_left/pan_right/drift","elements":[…]}
-`, instrBlock, seg.Key, len(v.Words), v.DurationS, seg.Narration, briefLabel, seg.VisualBrief, style,
+`, instrBlock, seg.Key, len(v.Words), v.DurationS, seg.Narration, briefLabel, seg.VisualBrief, style, layout,
 		int(cv.W), int(cv.H), map[bool]string{true: " 竖屏 9:16", false: ""}[cv.Aspect == "9:16"],
 		menu,
 		wb.String(), rules, len(v.Words)-1, feedbackBlock(feedback))
@@ -692,54 +761,117 @@ func elementRegistry(rootDir string) (menu, kinds string, err error) {
 	return strings.Join(lines, "\n"), strings.Join(ks, "/"), nil
 }
 
-// styleNoteFor 项目风格方向 → spec 提示里的风格说明（题材 + 配图调性）。
-// 方向在 ai/registry/styles.json 注册表命中时给出题材与配图 query 调性，未命中只给方向名。
-func styleNoteFor(p *pipeline.Project, rootDir string) string {
-	b, err := os.ReadFile(p.Artifact("style/style_samples.json"))
-	if err != nil {
-		return ""
-	}
+// styleLayout 风格版式（构图模式）：styles.json layouts 字段，描述本风格的标准构图，
+// spec 生成每段先选一个版式再填元素——治"整齐网格 PPT 感"。
+type styleLayout struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Desc string `json:"desc"`
+}
+
+// styleRegEntry styles.json 条目（Go 侧只消费方向/题材/配图调性/版式）。
+type styleRegEntry struct {
+	Direction string        `json:"direction"`
+	Genre     string        `json:"genre"`
+	Keywords  []string      `json:"keywords"`
+	Photo     string        `json:"photo"`
+	Layouts   []styleLayout `json:"layouts"`
+}
+
+// projectDirection 项目已确认/已起草的风格方向（style_samples.json）。
+func projectDirection(p *pipeline.Project) string {
 	var ss struct {
 		Direction string `json:"direction"`
 	}
-	if json.Unmarshal(b, &ss) != nil || ss.Direction == "" {
+	if b, err := os.ReadFile(p.Artifact("style/style_samples.json")); err == nil &&
+		json.Unmarshal(b, &ss) == nil {
+		return ss.Direction
+	}
+	return ""
+}
+
+// matchStyleReg 方向名 → 注册表条目。两轮匹配：完整方向名子串优先，再关键词最长命中
+// （与 ai/engines/stylepack_generic.py match 同语义）。未命中返回 nil。
+func matchStyleReg(direction, rootDir string) *styleRegEntry {
+	if direction == "" {
+		return nil
+	}
+	b, err := os.ReadFile(filepath.Join(rootDir, "ai", "registry", "styles.json"))
+	if err != nil {
+		return nil
+	}
+	var styles []styleRegEntry
+	if json.Unmarshal(b, &styles) != nil {
+		return nil
+	}
+	for i := range styles {
+		if styles[i].Direction != "" && strings.Contains(direction, styles[i].Direction) {
+			return &styles[i]
+		}
+	}
+	best, bestLen := -1, 0
+	for i := range styles {
+		for _, kw := range styles[i].Keywords {
+			n := len([]rune(kw))
+			if kw != "" && strings.Contains(direction, kw) && n > bestLen {
+				best, bestLen = i, n
+			}
+		}
+	}
+	if best >= 0 {
+		return &styles[best]
+	}
+	return nil
+}
+
+// styleNoteFor 项目风格方向 → spec 提示里的风格说明（题材 + 配图调性）。
+func styleNoteFor(p *pipeline.Project, rootDir string) string {
+	direction := projectDirection(p)
+	if direction == "" {
 		return ""
 	}
-	note := "\n## 本片风格\n- 方向：" + ss.Direction
-	reg, err := os.ReadFile(filepath.Join(rootDir, "ai", "registry", "styles.json"))
-	if err != nil {
+	note := "\n## 本片风格\n- 方向：" + direction
+	st := matchStyleReg(direction, rootDir)
+	if st == nil {
 		return note
 	}
-	var styles []struct {
-		Direction string   `json:"direction"`
-		Keywords  []string `json:"keywords"`
-		Genre     string   `json:"genre"`
-		Photo     string   `json:"photo"`
+	if st.Genre != "" {
+		note += "\n- 适用题材：" + st.Genre
 	}
-	if json.Unmarshal(reg, &styles) != nil {
-		return note
-	}
-	for _, st := range styles {
-		hit := st.Direction != "" && strings.Contains(ss.Direction, st.Direction)
-		if !hit {
-			for _, kw := range st.Keywords {
-				if kw != "" && strings.Contains(ss.Direction, kw) {
-					hit = true
-					break
-				}
-			}
-		}
-		if hit {
-			if st.Genre != "" {
-				note += "\n- 适用题材：" + st.Genre
-			}
-			if st.Photo != "" {
-				note += "\n- 配图 query 调性：" + st.Photo + "（image 的 query 往这个调性上靠）"
-			}
-			break
-		}
+	if st.Photo != "" {
+		note += "\n- 配图 query 调性：" + st.Photo + "（image 的 query 往这个调性上靠）"
 	}
 	return note
+}
+
+// styleLayoutsFor 项目风格 → 注册表命中的版式列表（未命中/老注册表返回 nil）。
+func styleLayoutsFor(p *pipeline.Project, rootDir string) []styleLayout {
+	st := matchStyleReg(projectDirection(p), rootDir)
+	if st == nil {
+		return nil
+	}
+	return st.Layouts
+}
+
+// layoutNote 本段版式注入块：指定版式（按段号轮换，相邻段天然不同）+ 全表可改选。
+// layouts 为空返回 ""，行为与旧版一致。校验硬底线（≥3 元素、不重叠）不放松。
+func layoutNote(layouts []styleLayout, segIdx int) string {
+	if len(layouts) == 0 {
+		return ""
+	}
+	if segIdx < 1 {
+		segIdx = 1
+	}
+	asg := layouts[(segIdx-1)%len(layouts)]
+	var b strings.Builder
+	b.WriteString("\n## 本段版式（先定构图，再往里填元素；禁止退回「标题+小卡平铺」的默认网格）\n")
+	fmt.Fprintf(&b, "- 本段指定版式：%s（%s）——%s\n", asg.ID, asg.Name, asg.Desc)
+	b.WriteString("- 本风格可用版式（画面提示与指定版式明显冲突时可改选，note 首句写「版式：<id>」）：\n")
+	for _, l := range layouts {
+		fmt.Fprintf(&b, "  - %s（%s）：%s\n", l.ID, l.Name, l.Desc)
+	}
+	b.WriteString("- 元素数量与铺排以版式描述为准（下方 4–7 个的一般规则让位于版式；仍须 ≥3 个且不重叠）")
+	return b.String()
 }
 
 // styleSampleImages 已截图的风格样张（style/sample-N.png，ai/snap_samples.py 产物）→ data URL。
@@ -802,8 +934,13 @@ func (r *Runner) fetchImages(ctx context.Context, p *pipeline.Project) error {
 // render_spec 的产物、compositions 落盘阶段的输入，删了会退化成等待人工。
 func (r *Runner) clearFrames(p *pipeline.Project, only string) {
 	if only != "" {
-		_ = os.Remove(p.Artifact("compositions/frames/" + only + ".html"))
-		_ = os.Remove(p.Artifact("compositions/registry/" + only + ".json"))
+		for _, id := range strings.Split(only, ",") {
+			if id = strings.TrimSpace(id); id == "" {
+				continue
+			}
+			_ = os.Remove(p.Artifact("compositions/frames/" + id + ".html"))
+			_ = os.Remove(p.Artifact("compositions/registry/" + id + ".json"))
+		}
 		return
 	}
 	files, _ := filepath.Glob(filepath.Join(p.Dir, "compositions", "frames", "*.html"))
@@ -827,4 +964,67 @@ func firstLine(s string, n int) string {
 		return string(r[:n]) + "…"
 	}
 	return s
+}
+
+// contrastSuggRe 抓 checker 对比度诊断对：✗ 选择器 比值:1 (need …) \n Try rgb(..); source frames/segNN.html
+var contrastSuggRe = regexp.MustCompile(
+	`✗[ ]*([^\r\n]+?)\s+[0-9]+(?:\.[0-9]+)?:1\s*\(need[^)]*\)\s*\n\s*Try\s+(rgb\([^)]*\))\s*;\s*source\s+(\S+)`)
+
+// applyContrastFixes 把 checker 给的对比度建议色直接回填到段帧 HTML（追加
+// data-contrast-fix 样式块，!important 压过内联样式），返回本次新回填的处数。
+// 已在 HTML 里的同条规则跳过（内容去重）：LLM 修复轮重生成 HTML 会冲掉旧补丁，
+// 此时规则缺席会重新回填；规则在却还报同项，说明该建议色无效，不重复打转。
+func applyContrastFixes(p *pipeline.Project, checkOut string) int {
+	type fix struct {
+		file, css string
+	}
+	var fixes []fix
+	for _, m := range contrastSuggRe.FindAllStringSubmatch(checkOut, -1) {
+		sel, color, src := strings.TrimSpace(m[1]), m[2], m[3]
+		if !strings.HasPrefix(src, "compositions/frames/") || !strings.HasSuffix(src, ".html") {
+			continue // 只动段帧，别处一概不碰
+		}
+		fixes = append(fixes, fix{src, sel + "{color:" + color + "!important}"})
+	}
+	if len(fixes) == 0 {
+		return 0
+	}
+	perFile := map[string][]string{}
+	for _, f := range fixes {
+		perFile[f.file] = append(perFile[f.file], f.css)
+	}
+	n := 0
+	for rel, rules := range perFile {
+		path := p.Artifact(rel)
+		b, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		html := string(b)
+		var fresh []string
+		for _, css := range rules {
+			if !strings.Contains(html, css) {
+				fresh = append(fresh, css)
+			}
+		}
+		if len(fresh) == 0 {
+			continue
+		}
+		block := "<style data-contrast-fix=\"1\">" + strings.Join(fresh, "") + "</style>"
+		if i := strings.Index(html, `<style data-contrast-fix`); i >= 0 {
+			if j := strings.Index(html[i:], "</style>"); j >= 0 {
+				html = html[:i] + block + html[i+j+len("</style>"):]
+			} else {
+				continue
+			}
+		} else if i := strings.Index(html, "</body>"); i >= 0 {
+			html = html[:i] + block + "\n" + html[i:]
+		} else {
+			html += block
+		}
+		if err := os.WriteFile(path, []byte(html), 0o644); err == nil {
+			n += len(fresh)
+		}
+	}
+	return n
 }

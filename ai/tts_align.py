@@ -44,6 +44,29 @@ SF_MODEL = 'FunAudioLLM/CosyVoice2-0.5B'
 SF_VOICE = 'FunAudioLLM/CosyVoice2-0.5B:alex'   # 备选 :benjamin :charles :david 等，出片 A/B 后定
 SF_KEY = ''
 
+# 项目级音色（project.json "voice" 字段）：中文名或完整 Edge 音色 id。
+# 设置后锁定 edge 引擎并以此音色全量重配（audio_meta.json 的 voice 字段变更即触发）。
+VOICE_ALIASES = {
+    '晓晓': 'zh-CN-XiaoxiaoNeural',   # 女 · 温暖（默认）
+    '晓伊': 'zh-CN-XiaoyiNeural',     # 女 · 清亮
+    '云健': 'zh-CN-YunjianNeural',    # 男 · 磁性浑厚
+    '云希': 'zh-CN-YunxiNeural',      # 男 · 年轻阳光
+    '云扬': 'zh-CN-YunyangNeural',    # 男 · 新闻专业
+    '云野': 'zh-CN-YunyeNeural',      # 男 · 沉稳
+}
+
+
+def project_voice(proj):
+    """读 project.json 的 voice，别名翻译成完整音色 id；空 = 用默认。"""
+    pj = proj / 'project.json'
+    if not pj.exists():
+        return ''
+    try:
+        raw = str(json.load(open(pj, encoding='utf-8')).get('voice') or '').strip()
+    except Exception:
+        return ''
+    return VOICE_ALIASES.get(raw, raw) if raw else ''
+
 _FUNASR = None
 _WHISPER = None
 
@@ -71,9 +94,9 @@ def tts_siliconflow(text, out_wav):
         return False
 
 
-def tts_edge(text_file, out_wav):
+def tts_edge(text_file, out_wav, voice=None):
     """Edge TTS（微软免费）→ mp3 → ffmpeg 转 wav。失败返回 False（回落 Kokoro）。"""
-    voice = os.environ.get('EDGE_TTS_VOICE', 'zh-CN-XiaoxiaoNeural')
+    voice = voice or os.environ.get('EDGE_TTS_VOICE', 'zh-CN-XiaoxiaoNeural')
     rate = os.environ.get('EDGE_TTS_RATE', '+0%')
     mp3 = out_wav.with_suffix('.mp3')
     r = subprocess.run(
@@ -245,7 +268,26 @@ def main(proj_dir: str) -> int:
     # 1+2. 文本落盘 + TTS（先写全 txt 再出 wav，避免路径被当文本朗读的坑）
     for seg in sb['segments']:
         (proj / 'audio' / f"{seg['id']}.txt").write_text(seg['narration'], encoding='utf-8')
-    engine = 'siliconflow' if SF_KEY else 'edge'
+    pv = project_voice(proj)
+    engine = 'edge' if pv else ('siliconflow' if SF_KEY else 'edge')
+    edge_voice = pv or os.environ.get('EDGE_TTS_VOICE', 'zh-CN-XiaoxiaoNeural')
+
+    # 项目音色切换 → 旧 wav 全部作废重配（audio_meta.json 的 voice 字段对不上即触发）
+    meta_path = proj / 'audio_meta.json'
+    prev_meta_voice = ''
+    if meta_path.exists():
+        try:
+            prev_meta_voice = str(json.load(open(meta_path, encoding='utf-8')).get('voice') or '')
+        except Exception:
+            prev_meta_voice = ''
+    meta_voice = pv or 'default'
+    if prev_meta_voice and prev_meta_voice != meta_voice:
+        removed = 0
+        for w in (proj / 'audio').glob('*.wav'):
+            w.unlink()
+            removed += 1
+        print(f'音色切换 {prev_meta_voice} → {meta_voice}，重配 {removed} 段')
+
     for seg in sb['segments']:
         wav = proj / 'audio' / f"{seg['id']}.wav"
         if wav.exists():
@@ -253,8 +295,8 @@ def main(proj_dir: str) -> int:
             continue
         if engine == 'siliconflow' and tts_siliconflow(seg['narration'], wav):
             print(seg['id'], 'wav ✓ (cosyvoice)')
-        elif tts_edge(proj / 'audio' / f"{seg['id']}.txt", wav):
-            print(seg['id'], f"wav ✓ (edge {os.environ.get('EDGE_TTS_VOICE', 'zh-CN-XiaoxiaoNeural')})")
+        elif tts_edge(proj / 'audio' / f"{seg['id']}.txt", wav, edge_voice):
+            print(seg['id'], f"wav ✓ (edge {edge_voice})")
         elif tts_kokoro(proj / 'audio' / f"{seg['id']}.txt", wav):
             print(seg['id'], 'wav ✓ (kokoro)')
         else:
@@ -288,9 +330,9 @@ def main(proj_dir: str) -> int:
                        'words': words, 'phrases': phrases})
         print(f'{sid}: {len(words)} 词 / {len(phrases)} 短语 ✓（锚点 {src}，匹配率 {ratio:.0%}）')
 
-    json.dump({'voices': voices}, open(proj / 'audio_meta.json', 'w', encoding='utf-8'),
+    json.dump({'voices': voices, 'voice': meta_voice}, open(proj / 'audio_meta.json', 'w', encoding='utf-8'),
               ensure_ascii=False, indent=1)
-    print(f'audio_meta.json ✓（{len(voices)} 段，engine={engine}）')
+    print(f'audio_meta.json ✓（{len(voices)} 段，engine={engine}，voice={meta_voice}）')
     return 0
 
 

@@ -24,6 +24,7 @@ import (
 	"webpage-video-agent/server/internal/pipeline"
 	"webpage-video-agent/server/internal/produce"
 	"webpage-video-agent/server/internal/store"
+	"webpage-video-agent/server/internal/styleref"
 )
 
 type Server struct {
@@ -34,6 +35,7 @@ type Server struct {
 	Agent    *agent.Agent
 	Producer *produce.Runner
 	Lib      *methodlib.Library
+	Refs     *styleref.Store
 }
 
 func (s *Server) Router() *gin.Engine {
@@ -64,6 +66,10 @@ func (s *Server) Router() *gin.Engine {
 	r.GET("/api/registry", s.registry)
 	r.GET("/api/gallery", s.gallery)
 	r.GET("/api/gallery/:style/:file", s.galleryFile)
+	r.POST("/api/references", s.uploadReference)
+	r.GET("/api/references", s.listReferences)
+	r.POST("/api/references/:id/analyze", s.analyzeReference)
+	r.POST("/api/references/:id/confirm", s.confirmReference)
 
 	// 前端产物（web/dist）存在则托管
 	dist := filepath.Join(s.RootDir, "web", "dist")
@@ -748,4 +754,90 @@ func mustJSON(v any) []byte {
 func mustOpen(path string) *os.File {
 	f, _ := os.Open(path)
 	return f
+}
+
+// ── 参考视频解析（素材中心「视频解析」）────────────────────────
+
+// uploadReference 上传视频 → 落盘登记 → 立即异步解析。
+func (s *Server) uploadReference(c *gin.Context) {
+	fh, err := c.FormFile("video")
+	if err != nil {
+		c.JSON(400, gin.H{"error": "缺少 video 文件字段"})
+		return
+	}
+	name := filepath.Base(fh.Filename)
+	if !strings.ContainsAny(name, ".") {
+		c.JSON(400, gin.H{"error": "文件名要有扩展名（mp4/mov/webm 等）"})
+		return
+	}
+	ref, err := s.Refs.Save(name, func(dst string) error {
+		return c.SaveUploadedFile(fh, dst)
+	})
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	_, _ = s.Refs.Analyze(ref.ID) // 上传即解析；状态轮询 GET /api/references
+	c.JSON(200, ref)
+}
+
+func (s *Server) listReferences(c *gin.Context) {
+	refs, err := s.Refs.List()
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	if refs == nil {
+		refs = []styleref.Ref{}
+	}
+	c.JSON(200, refs)
+}
+
+// analyzeReference 解析（重试入口；上传时已自动起过一次）。
+func (s *Server) analyzeReference(c *gin.Context) {
+	started, err := s.Refs.Analyze(c.Param("id"))
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	if !started {
+		c.JSON(409, gin.H{"error": "已在解析中"})
+		return
+	}
+	c.JSON(200, gin.H{"ok": true})
+}
+
+// confirmReference 解析结果入库：styles.json 注册（引擎吃 tokens）+ 方法库 pack 草稿。
+func (s *Server) confirmReference(c *gin.Context) {
+	ref, err := s.Refs.Get(c.Param("id"))
+	if err != nil {
+		c.JSON(404, gin.H{"error": "引用不存在"})
+		return
+	}
+	if ref.Status != "done" || ref.Style == nil {
+		c.JSON(400, gin.H{"error": "还没解析完成，不能入库"})
+		return
+	}
+	regID := styleref.RegistryID(ref.ID)
+	if err := styleref.AppendRegistry(s.RootDir, regID, ref.Style); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	desc := ref.Style.Genre
+	if desc != "" {
+		desc = "从参考视频「" + ref.Name + "」解析提炼；" + desc
+	} else {
+		desc = "从参考视频「" + ref.Name + "」解析提炼"
+	}
+	pack, err := s.Lib.AddVideoPack(ref.ID, ref.Style.Direction, ref.Style.Direction, desc,
+		ref.Style.Samples[0].HTML, ref.Style.Samples[0].Tag)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	if err := s.Refs.MarkConfirmed(ref.ID); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"ok": true, "registry_id": regID, "pack": pack})
 }

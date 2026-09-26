@@ -1,4 +1,4 @@
-import type { AudioMeta, ChatRef, ElementInfo, Msg, ProjectRow, ProjectView, Storyboard, StyleInfo, StylePack, StyleSamples } from './types'
+import type { AudioMeta, ChatRef, ElementInfo, Msg, ProjectRow, ProjectView, RefVideo, Storyboard, StyleInfo, StylePack, StyleSamples } from './types'
 
 async function j<T>(res: Response): Promise<T> {
   if (!res.ok) throw new Error((await res.json().catch(() => ({} as any))).error ?? res.statusText)
@@ -82,6 +82,18 @@ export const api = {
   registry: () => fetch('/api/registry').then(r => j<{ elements: ElementInfo[]; styles: StyleInfo[] }>(r)),
 
   gallery: () => fetch('/api/gallery').then(r => j<Record<string, string[]>>(r)),
+
+  // ── 参考视频解析 ──
+  uploadReference: (file: File) => {
+    const fd = new FormData()
+    fd.append('video', file)
+    return fetch('/api/references', { method: 'POST', body: fd }).then(r => j<RefVideo>(r))
+  },
+  listReferences: () => fetch('/api/references').then(r => j<RefVideo[]>(r)),
+  analyzeReference: (id: string) =>
+    fetch(`/api/references/${id}/analyze`, { method: 'POST' }).then(r => j<{ ok: boolean }>(r)),
+  confirmReference: (id: string) =>
+    fetch(`/api/references/${id}/confirm`, { method: 'POST' }).then(r => j<{ ok: boolean; registry_id: string }>(r)),
 }
 
 export const videoURL = (id: string) => `/api/projects/${id}/video/main.mp4`

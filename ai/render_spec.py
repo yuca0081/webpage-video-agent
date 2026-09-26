@@ -938,7 +938,8 @@ def main(proj_dir: str) -> int:
         body_js = '\n      '.join(jss)
         cam = str((spec.get('camera') or '')).strip()
         if cam in ANIM_CAMERA:  # 段级镜头缓推：内容包一层 cam（字幕带在 cam 外，保持不动）
-            body_html = f'<div id="{sid}-cam" style="position:absolute;inset:0;">{body_html}</div>'
+            # cam 容器缩放缓推是设计行为，溢出 root 属预期（checker 豁免标记）
+            body_html = f'<div id="{sid}-cam" data-layout-allow-overflow style="position:absolute;inset:0;">{body_html}</div>'
             body_js = f'{body_js}\n      {ANIM_CAMERA[cam](f"#{sid}-cam", meta["scene"][sid])}'
         full = sp.wrap(proj, PREFIX, sid, body_html, body_js, W, H)
         payload = {'html': full, 'elements': extract_elements(full)}
