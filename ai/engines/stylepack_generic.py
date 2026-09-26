@@ -17,6 +17,7 @@ import re
 from colorutil import pair as _pair, on as _on  # noqa: F401  WCAG 对比度工具（共享）
 from stylepack import (  # 动画与数据装载与风格无关，直接复用
     load, pop, fade, rise, draw_x, chars_reveal, stagger_pop, stagger_grow, cue,
+    slide, wipe, blur_in, exit_fade,
 )
 
 REGISTRY = pathlib.Path(__file__).resolve().parent.parent / 'registry' / 'styles.json'

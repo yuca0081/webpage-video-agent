@@ -3,6 +3,8 @@ package contract
 import (
 	"fmt"
 	"math"
+	"regexp"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -13,7 +15,10 @@ import (
 
 // CompSpec 一段画面的语义布局。
 type CompSpec struct {
-	Note     string        `json:"note"`
+	Note string `json:"note"`
+	// Camera 段级镜头缓推（内容层整体变换，字幕带不动）：
+	// zoom_in|zoom_out|pan_left|pan_right|drift；空/none = 静止。
+	Camera   string        `json:"camera,omitempty"`
 	Elements []SpecElement `json:"elements"`
 }
 
@@ -69,6 +74,14 @@ type SpecElement struct {
 	Rot  float64 `json:"rot,omitempty"`
 	Fs   float64 `json:"fs,omitempty"`
 	Reveal int   `json:"reveal,omitempty"` // 揭示词位（段内词序号，0 起）
+	// custom 自由元素（表达力逃生舱，每段 ≤2 个）：容器内直出 HTML/CSS/GSAP。
+	Html string `json:"html,omitempty"` // 容器内 HTML（禁 script/外链/内联事件）
+	Css  string `json:"css,omitempty"`  // 自动 scope 到容器；@keyframes 自动改名
+	Js   string `json:"js,omitempty"`   // GSAP 片段：T=揭示秒、ID=容器选择器、tl=时间线
+	// 动效词表 v2：anim 入场覆盖（pop|fade|rise|slide|wipe|blur|chars|none），
+	// exit 退场词位（0 = 不退场，讲完该词即退）。
+	Anim string `json:"anim,omitempty"`
+	Exit int    `json:"exit,omitempty"`
 }
 
 var specKinds = map[string]bool{
@@ -80,6 +93,7 @@ var specKinds = map[string]bool{
 	"zone": true, "timeline": true, "bracket": true, "strip": true,
 	"barrow": true, "table": true,
 	"quote": true, "checklist": true, "stat": true,
+	"custom": true,
 }
 
 // bbox 保守估计元素占位（供边界与重叠检查）。
@@ -302,6 +316,16 @@ func (e *SpecElement) bbox(cv Canvas) (x0, y0, w, h float64, ok bool) {
 			h = 68
 		}
 		return x, y, w, h, true
+	case "custom":
+		w := e.W
+		if w == 0 {
+			w = 560
+		}
+		h := e.H
+		if h == 0 {
+			h = 320
+		}
+		return e.X, e.Y, w, h, true
 	}
 	return 0, 0, 0, 0, false
 }
@@ -322,6 +346,12 @@ func ValidateSpec(s *CompSpec, wordCount int, cv Canvas) []string {
 	if n := len(s.Elements); n < 3 || n > 12 {
 		errs = append(errs, fmt.Sprintf("元素数 %d 不在 3–12 范围（尽量 4–8）", n))
 	}
+	switch s.Camera {
+	case "", "none", "zoom_in", "zoom_out", "pan_left", "pan_right", "drift":
+	default:
+		errs = append(errs, fmt.Sprintf("camera %q 不在词表（zoom_in/zoom_out/pan_left/pan_right/drift）", s.Camera))
+	}
+	customCount := 0
 	type box struct {
 		i int
 		b specBox
@@ -334,8 +364,34 @@ func ValidateSpec(s *CompSpec, wordCount int, cv Canvas) []string {
 			errs = append(errs, tag+": 未知 kind")
 			continue
 		}
+		if e.Kind == "custom" {
+			customCount++
+		}
 		if e.Reveal < 0 || (wordCount > 0 && e.Reveal >= wordCount) {
 			errs = append(errs, fmt.Sprintf("%s: reveal=%d 超出词数 %d", tag, e.Reveal, wordCount))
+		}
+		if e.Exit != 0 {
+			if e.Exit < 0 || (wordCount > 0 && e.Exit >= wordCount) {
+				errs = append(errs, fmt.Sprintf("%s: exit=%d 超出词数 %d", tag, e.Exit, wordCount))
+			} else if e.Exit <= e.Reveal {
+				errs = append(errs, fmt.Sprintf("%s: exit=%d 须晚于 reveal=%d（先入场再退场）", tag, e.Exit, e.Reveal))
+			}
+		}
+		if e.Anim != "" {
+			switch e.Anim {
+			case "pop", "fade", "rise", "slide", "wipe", "blur", "chars", "none":
+			default:
+				errs = append(errs, fmt.Sprintf("%s: anim %q 不在动效词表（pop/fade/rise/slide/wipe/blur/chars/none）", tag, e.Anim))
+			}
+			if e.Anim == "chars" && e.Kind != "title" && e.Kind != "big" {
+				errs = append(errs, tag+": anim=chars 仅 title/big 支持（其余 kind 无逐字 span）")
+			}
+			if e.Anim != "" && e.Kind != "custom" && !simpleAnimKind(e.Kind) {
+				errs = append(errs, tag+": anim 入场覆盖不支持组合类元素（子元素有专属揭示脚本）")
+			}
+		}
+		if e.Kind == "custom" {
+			errs = append(errs, validateCustom(e, tag)...)
 		}
 		needText := e.Kind == "title" || e.Kind == "note" || e.Kind == "label" || e.Kind == "big" ||
 			e.Kind == "chip" || e.Kind == "quote" || e.Kind == "stat"
@@ -523,6 +579,9 @@ func ValidateSpec(s *CompSpec, wordCount int, cv Canvas) []string {
 		}
 		boxes = append(boxes, box{i: i, b: specBox{x0, y0, x1, y1}})
 	}
+	if customCount > 2 {
+		errs = append(errs, fmt.Sprintf("custom 元素 %d 个超上限（每段 ≤2 个，其余视觉用注册 kind 组合）", customCount))
+	}
 	// 重叠：交叠面积超过较小方块的 25% 判违规。豁免：
 	//   箭头（职责就是连接/跨越其他元素）；zone（垫底高亮区，天生要圈住元素）；
 	//   形状全包含嵌套（disc/circle 同心构图，如主体+内核）
@@ -579,8 +638,8 @@ func nestedShapes(a *SpecElement, A specBox, b *SpecElement, B specBox) bool {
 func SanitizeSpec(s *CompSpec, wordCount int, cv Canvas) []string {
 	kept := s.Elements[:0]
 	for _, e := range s.Elements {
-		if specKinds[e.Kind] {
-			kept = append(kept, e)
+		if specKinds[e.Kind] && !(e.Kind == "custom" && strings.TrimSpace(e.Html) == "") {
+			kept = append(kept, e) // custom 缺 html 没有降级意义，直接删
 		}
 	}
 	s.Elements = kept
@@ -592,14 +651,30 @@ func SanitizeSpec(s *CompSpec, wordCount int, cv Canvas) []string {
 		if wordCount > 0 && e.Reveal >= wordCount {
 			e.Reveal = wordCount - 1
 		}
+		if e.Exit < 0 {
+			e.Exit = 0
+		}
+		if e.Exit != 0 && wordCount > 0 && e.Exit >= wordCount {
+			e.Exit = wordCount - 1
+		}
 		// 文本/条状类夹进安全区上半段；圆类圆心留出半径余量
 		if e.Kind == "note" || e.Kind == "label" || e.Kind == "big" || e.Kind == "beam" ||
 			e.Kind == "icon" || e.Kind == "chart_bar" || e.Kind == "chart_line" || e.Kind == "chart_pie" ||
 			e.Kind == "image" || e.Kind == "emoji" || e.Kind == "chip" || e.Kind == "panel" ||
 			e.Kind == "timeline" || e.Kind == "bracket" || e.Kind == "strip" || e.Kind == "barrow" ||
-			e.Kind == "table" || e.Kind == "zone" {
+			e.Kind == "table" || e.Kind == "zone" || e.Kind == "custom" {
 			e.X = clamp(e.X, cv.X0+100, cv.X1-260)
 			e.Y = clamp(e.Y, cv.Y0+60, cv.Y1-120)
+		}
+		if e.Kind == "custom" {
+			if e.W == 0 {
+				e.W = 560
+			}
+			if e.H == 0 {
+				e.H = 320
+			}
+			e.W = clamp(e.W, 80, cv.W-2*cv.X0)
+			e.H = clamp(e.H, 60, cv.Y1-cv.Y0-100)
 		}
 		if e.Kind == "panel" {
 			e.W = clamp(e.W, 240, cv.W-2*cv.X0-40)
@@ -662,3 +737,90 @@ func SanitizeSpec(s *CompSpec, wordCount int, cv Canvas) []string {
 }
 
 func clamp(v, lo, hi float64) float64 { return min(max(v, lo), hi) }
+
+// simpleAnimKind 单根、无隐藏子元素的 kind（anim 入场覆盖安全集；与渲染层 SIMPLE_KINDS 对应，custom 单列）。
+func simpleAnimKind(k string) bool {
+	switch k {
+	case "title", "note", "label", "big", "beam", "disc", "circle", "chip",
+		"icon", "image", "emoji", "panel", "zone", "bracket", "barrow", "stat":
+		return true
+	}
+	return false
+}
+
+// custom 防呆禁用清单（渲染层 Python _BAN_PATTERNS/_BAN_JS 同规则再拦一道：
+// 校验→修复轮→Sanitize 降级，任何一路漏进渲染都会被跳过，不炸整段 timeline）。
+var (
+	cssBan = []string{
+		`<script`, `javascript:`, `<iframe`, `<object`, `<embed`, `<link`,
+		`\son\w+\s*=`, `position\s*:\s*fixed`, `url\(\s*['"]?\s*https?:`,
+		`src\s*=\s*['"]?\s*https?:`, `animation\s*:`, `transition\s*:`,
+	}
+	jsBan = []string{
+		`repeat\s*:`, `yoyo\s*:`, `\bwindow\b`, `\bdocument\b`, `\bfetch\s*\(`,
+		`\beval\s*\(`, `\bFunction\s*\(`, `\bDate\b`, `\bMath\.random\b`,
+		`setTimeout`, `setInterval`, `requestAnimationFrame`, `\blocalStorage\b`,
+	}
+	cssBanRe = compileBan(cssBan)
+	jsBanRe  = compileBan(jsBan)
+)
+
+func compileBan(pats []string) []*regexp.Regexp {
+	out := make([]*regexp.Regexp, 0, len(pats))
+	for _, p := range pats {
+		out = append(out, regexp.MustCompile("(?i)" + p))
+	}
+	return out
+}
+
+// validateCustom custom 元素专规：html 必填限长、css/js 限长、命名、容器尺寸、禁用模式。
+func validateCustom(e *SpecElement, tag string) []string {
+	var errs []string
+	if strings.TrimSpace(e.Html) == "" {
+		errs = append(errs, tag+": 缺 html（容器内 HTML）")
+	}
+	if n := utf8.RuneCountInString(e.Html); n > 2000 {
+		errs = append(errs, fmt.Sprintf("%s: html %d 字超长（≤2000）", tag, n))
+	}
+	if n := utf8.RuneCountInString(e.Css); n > 1200 {
+		errs = append(errs, fmt.Sprintf("%s: css %d 字超长（≤1200）", tag, n))
+	}
+	if n := utf8.RuneCountInString(e.Js); n > 1200 {
+		errs = append(errs, fmt.Sprintf("%s: js %d 字超长（≤1200）", tag, n))
+	}
+	if n := utf8.RuneCountInString(e.Text); n > 12 {
+		errs = append(errs, fmt.Sprintf("%s: text「%s」超长（≤12 字，元素命名）", tag, e.Text))
+	}
+	if e.W != 0 && (e.W < 80 || e.W > 1800) {
+		errs = append(errs, fmt.Sprintf("%s: w %v 超范围 80–1800", tag, e.W))
+	}
+	if e.H != 0 && (e.H < 60 || e.H > 1000) {
+		errs = append(errs, fmt.Sprintf("%s: h %v 超范围 60–1000", tag, e.H))
+	}
+	if e.Text == "" {
+		errs = append(errs, tag+": 缺 text（元素命名，素材区可读）")
+	}
+	for _, re := range cssBanRe {
+		if loc := firstMatch(re, e.Html, e.Css); loc != "" {
+			errs = append(errs, fmt.Sprintf("%s: html/css 含禁用内容 %q（禁 script/外链/内联事件/position:fixed/CSS transition·animation——确定性硬规则）", tag, loc))
+			break
+		}
+	}
+	for _, re := range jsBanRe {
+		if loc := firstMatch(re, e.Js); loc != "" {
+			errs = append(errs, fmt.Sprintf("%s: js 含禁用内容 %q（时间线 seek 确定性：禁 repeat/yoyo/DOM/定时器/随机）", tag, loc))
+			break
+		}
+	}
+	return errs
+}
+
+// firstMatch 返回正则在任一候选串里的首个匹配文本（回喂修复时给 LLM 看实据）。
+func firstMatch(re *regexp.Regexp, candidates ...string) string {
+	for _, c := range candidates {
+		if loc := re.FindString(c); loc != "" {
+			return loc
+		}
+	}
+	return ""
+}

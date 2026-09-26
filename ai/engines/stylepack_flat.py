@@ -13,6 +13,7 @@ import re
 
 from stylepack import (  # 动画与数据装载与风格无关，直接复用
     load, pop, fade, rise, draw_x, chars_reveal, stagger_pop, stagger_grow,
+    slide, wipe, blur_in, exit_fade,
 )
 
 # ── 色板（仿参考片：深藏青 + 图解绿 + 雾绿底）─────────────────

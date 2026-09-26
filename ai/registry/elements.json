@@ -180,5 +180,12 @@
   "category": "流程",
   "scene": "起终点连接与指向",
   "menu": "箭头（给起终点）。x1, y1, x2, y2, text(可选), reveal"
+ },
+ {
+  "kind": "custom",
+  "name": "自由设计",
+  "category": "自由",
+  "scene": "注册 kind 组合不出来的视觉效果：斜切大字板/故障标题/氛围光斑/纹理底/创意构图",
+  "menu": "自由设计元素（表达力逃生舱，每段≤2个；纯装饰垫底放 elements 最前）。容器 x,y,w,h（内容裁剪在容器内），text(≤12字=命名)。html(≤2000字,容器内HTML,禁script/iframe/外链img/内联onclick/position:fixed/CSS animation·transition)，css(≤1200字,可选,自动限定在容器内,选择器写自己的类名,@keyframes自动改名)，js(≤1200字,可选GSAP片段:变量 T=本元素揭示秒数、ID=容器选择器、tl=时间线；入场自己负责:先 gsap.set(ID,{opacity:0}) 再 tl.to(...,T)；禁 repeat/yoyo/window/document/定时器/随机)。不给 js 则整容器默认淡入；可用 anim(pop/fade/rise/slide/wipe/blur/hover/none) 换入场。需要图片请用 image 元素另行组合"
  }
 ]

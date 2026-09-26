@@ -88,7 +88,61 @@ def reveal_t(words, idx):
     return max(0.05, round(words[idx]['start'] - 0.12, 2))
 
 
+def exit_t(words, idx):
+    """词位 → 退场时刻（词尾 +0.05s：讲完这个词才退）。"""
+    if not words:
+        return 1.0
+    idx = max(0, min(int(idx), len(words) - 1))
+    return max(0.2, round(words[idx]['end'] + 0.05, 2))
+
+
+# ── 动效词表 v2（Go 契约 anim 白名单与这里一一对应）──────────────
+# anim 入场覆盖只对"单根、无隐藏子元素"的 kind 安全：组合类（表格/清单/时间线/图表）
+# 的子元素被 gsap.set 藏起、靠专属 js 揭示，根级覆盖会让子元素永远 opacity:0。
+SIMPLE_KINDS = {'title', 'note', 'label', 'big', 'beam', 'disc', 'circle', 'chip',
+                'icon', 'image', 'emoji', 'panel', 'zone', 'bracket', 'barrow',
+                'stat', 'custom'}
+ANIM_ENTER = {'pop': 'pop', 'fade': 'fade', 'rise': 'rise', 'slide': 'slide',
+              'wipe': 'wipe', 'blur': 'blur_in'}
+ANIM_CAMERA = {
+    'zoom_in':   lambda sel, dur: f"tl.fromTo('{sel}',{{scale:1}},{{scale:1.05,duration:{dur:.2f},ease:'none'}},0);",
+    'zoom_out':  lambda sel, dur: f"tl.fromTo('{sel}',{{scale:1.05}},{{scale:1,duration:{dur:.2f},ease:'none'}},0);",
+    'pan_left':  lambda sel, dur: f"tl.fromTo('{sel}',{{x:0}},{{x:-36,duration:{dur:.2f},ease:'none'}},0);",
+    'pan_right': lambda sel, dur: f"tl.fromTo('{sel}',{{x:0}},{{x:36,duration:{dur:.2f},ease:'none'}},0);",
+    'drift':     lambda sel, dur: f"tl.fromTo('{sel}',{{scale:1,x:0}},{{scale:1.035,x:-22,duration:{dur:.2f},ease:'none'}},0);",
+}
+
+
 def render_element(f, sid, e, i, words, W=1920):
+    """spec 元素 → (html 片段, js 片段)：kind 分发 + 动效词表后处理（anim 入场覆盖 / exit 退场）。"""
+    kind = e.get('kind')
+    html, js = _render_kind(f, sid, e, i, words, W)
+    if not html:
+        return html, js
+    m = re.search(r'id="([^"]+)"', html)
+    rid = m.group(1) if m else ''
+    # 入场动效覆盖（anim）。chars 只对 title/big 有逐字 span，其余 kind 忽略沿用默认。
+    anim = str(e.get('anim') or '').strip()
+    if anim and kind in SIMPLE_KINDS and rid:
+        sel, t = f'#{rid}', reveal_t(words, e.get('reveal', 0))
+        if anim == 'chars' and kind in ('title', 'big'):
+            js = sp.chars_reveal(sel, t)
+        elif anim == 'none':
+            js = ''  # 直出：不藏不揭（custom 垫底板从 0s 可见）
+        elif anim in ANIM_ENTER:
+            js = getattr(sp, ANIM_ENTER[anim])(sel, t)
+    # 退场（exit = 词序号，0/缺省 = 不退场）
+    ex = int(e.get('exit', 0) or 0)
+    if ex > 0 and rid:
+        sel = f'#{rid}'
+        if kind == 'arrow':  # 箭头头部是伴随元素，同组退场
+            sel += f', [data-{sid}-arr="{i}"]'
+        tail = sp.exit_fade(sel, exit_t(words, ex))
+        js = f'{js}\n      {tail}' if js else tail
+    return html, js
+
+
+def _render_kind(f, sid, e, i, words, W=1920):
     """spec 元素 → (html 片段, js 片段)。id 规则 {sid}-{kind}{i}。"""
     kind = e.get('kind')
     eid = f"{sid}-{kind}{i}"
@@ -98,8 +152,9 @@ def render_element(f, sid, e, i, words, W=1920):
         fs = e.get('fs', 84)
         if W <= 1200 and fs > 72:  # 竖屏窄幅：标题降字号防溢出
             fs = 72
+        body = _char_spans(text) if e.get('anim') == 'chars' else text
         html = (f'<div class="{f}-title {f}-el" id="{eid}" data-hf-name="标题：{text[:12]}" '
-                f'style="top:{e["y"]}px;font-size:{fs}px;">{text}</div>')
+                f'style="top:{e["y"]}px;font-size:{fs}px;">{body}</div>')
         return html, sp.rise(f'#{eid}', t, dy=26)
     if kind == 'note':
         bg, fs, rot = col(e.get('bg'), sp.BUTTER), e.get('fs', 40), e.get('rot', -1.5)
@@ -113,6 +168,11 @@ def render_element(f, sid, e, i, words, W=1920):
     if kind == 'big':
         fs = e.get('fs', 110)
         color = _on_paper(col(e.get('color'), getattr(sp, 'BIG', '#B45309')))
+        if e.get('anim') == 'chars':  # 逐字强调（倒数/关键数字），不走引擎 big 助手
+            html = (f'<div class="{f}-el" id="{eid}" data-hf-name="大字：{text[:8]}" '
+                    f'style="top:{e["y"]}px;left:{e["x"]}px;font-size:{fs}px;font-weight:900;'
+                    f'color:{color};">{_char_spans(text)}</div>')
+            return html, sp.pop(f'#{eid}', t)
         html = sp.big(f, eid, e['x'], e['y'], text, fs=fs, color=color)
         return html, sp.pop(f'#{eid}', t)
     if kind == 'beam':
@@ -171,14 +231,17 @@ def render_element(f, sid, e, i, words, W=1920):
         hw, hw2 = e.get('w', 10) / 2, 34
         c = col(e.get('color'), getattr(sp, 'ARROW', sp.INK))
         name = text[:12] if text else '箭头'
-        # id + 命名挂在箭头线段上（注册表可寻址）；箭头头部为无名伴随元素，同组揭示
+        # 头部 68×68 盒子以 tip(100% 50%) 钉在终点 (x2,y2)，绕 tip 旋转——
+        # 任意角度下尖端都精确落在终点；盒子写小一半会整体悬在直线上方（历史 bug）
         line = (f'<div class="{f}-el" id="{eid}" data-hf-name="箭头：{name}" '
                 f'style="left:{x1}px;top:{y1 - hw}px;width:{ln:.0f}px;height:{hw * 2}px;background:{c};'
                 f'transform:rotate({ang:.1f}deg);transform-origin:left center;border-radius:6px;"></div>')
-        head = (f'<div data-{sid}-arr="{i}" style="position:absolute;left:{x2 - hw2}px;top:{y2 - hw2}px;'
-                f'width:{hw2}px;height:{hw2}px;background:{c};transform:rotate({ang:.1f}deg);'
-                f'clip-path:polygon(0 12%, 100% 50%, 0 88%);"></div>')
+        head = (f'<div data-{sid}-arr="{i}" style="position:absolute;left:{x2 - 2 * hw2}px;top:{y2 - hw2}px;'
+                f'width:{2 * hw2}px;height:{2 * hw2}px;background:{c};transform:rotate({ang:.1f}deg);'
+                f'transform-origin:100% 50%;clip-path:polygon(0 12%, 100% 50%, 0 88%);"></div>')
         return f'{line}\n    {head}', sp.fade(f'#{eid}, [data-{sid}-arr="{i}"]', t)
+    if kind == 'custom':
+        return render_custom(f, sid, e, i, t)
     raise ValueError(f'未知元素 kind: {kind}')
 
 
@@ -187,6 +250,12 @@ def extract_elements(html):
     for m in re.finditer(r'<\w+\b[^>]*?id="([^"]+)"[^>]*?data-hf-name="([^"]+)"[^>]*>', html):
         els.append({'id': m.group(1), 'name': m.group(2)})
     return els
+
+
+def _char_spans(text):
+    """逐字 span（chars_reveal 的着力点；空格占位防 inline-block 折叠）。"""
+    return ''.join(f'<span data-c style="display:inline-block;">{"&nbsp;" if c == " " else c}</span>'
+                   for c in text)
 
 
 # ── image / emoji / 图表（手绘风渲染层）─────────────────────
@@ -678,6 +747,119 @@ def render_chart_pie(f, sid, e, i, t):
     return html, js
 
 
+# ── custom：自由设计元素（LLM 直出容器内 HTML/CSS/GSAP 的表达力逃生舱）───────
+
+# 与 Go 契约 bannedSnippet 同规则；渲染侧再拦一道（Sanitize 降级路径也带病不出帧）。
+_BAN_PATTERNS = [
+    r'<script', r'javascript:', r'<iframe', r'<object', r'<embed', r'<link',
+    r'\son\w+\s*=', r'position\s*:\s*fixed', r'url\(\s*[\'"]?\s*https?:',
+    r'src\s*=\s*[\'"]?\s*https?:', r'animation\s*:', r'transition\s*:',
+]
+_BAN_JS = [r'repeat\s*:', r'yoyo\s*:', r'\bwindow\b', r'\bdocument\b', r'\bfetch\s*\(',
+           r'\beval\s*\(', r'\bFunction\s*\(', r'\bDate\b', r'\bMath\.random\b',
+           r'setTimeout', r'setInterval', r'requestAnimationFrame', r'\blocalStorage\b']
+
+
+def _banned(s, patterns=_BAN_PATTERNS):
+    low = s.lower()
+    for pat in patterns:
+        if re.search(pat, low):
+            return pat
+    return None
+
+
+def scope_css(css, eid):
+    """CSS 自动限定在容器内：规则选择器前缀 #eid；@keyframes 改名防跨元素/跨段撞名；
+    @media 递归。坏规则浏览器直接丢弃（最坏无效果，不会炸渲染）。"""
+    css = re.sub(r'/\*.*?\*/', '', css, flags=re.S)
+    kf_names = re.findall(r'@keyframes\s+([\w-]+)', css)
+
+    def rename(body):
+        for name in kf_names:
+            body = re.sub(r'(animation(?:-name)?\s*:[^;}]*)\b' + re.escape(name) + r'\b',
+                          r'\g<1>kf-' + eid + '-' + name, body)
+        return body
+
+    out, i, n = [], 0, len(css)
+    while i < n:
+        b = css.find('{', i)
+        if b < 0:
+            break
+        sel = css[i:b].strip()
+        depth, j = 1, b + 1
+        while j < n and depth:
+            if css[j] == '{':
+                depth += 1
+            elif css[j] == '}':
+                depth -= 1
+            j += 1
+        body = css[b + 1:j - 1] if j <= n else css[b + 1:]
+        if sel.startswith('@keyframes'):
+            name = sel.split()[-1] if sel.split() else 'k'
+            out.append(f'@keyframes kf-{eid}-{name}{{{rename(body)}}}')
+        elif sel.startswith('@media'):
+            out.append(f'{sel}{{{scope_css(body, eid)}}}')
+        elif sel:
+            parts = ', '.join(f'#{eid} {p.strip()}' for p in sel.split(',') if p.strip())
+            out.append(f'{parts}{{{rename(body)}}}')
+        i = j
+    return '\n'.join(out)
+
+
+def _js_ok(code):
+    """GSAP 片段过 node --check（语法坏了会炸整段 timeline 注册）。无 node 环境跳过。"""
+    import shutil
+    import subprocess
+    import tempfile
+    node = shutil.which('node')
+    if not node:
+        return True
+    wrapper = ('(function(){var tl=gsap.timeline({paused:true});var T=0;var ID="#x";'
+               + code + '\n})();')
+    fh = tempfile.NamedTemporaryFile('w', suffix='.js', delete=False, encoding='utf-8')
+    try:
+        fh.write(wrapper)
+        fh.close()
+        r = subprocess.run([node, '--check', fh.name], capture_output=True, text=True, timeout=15)
+        return r.returncode == 0
+    except Exception:
+        return True
+    finally:
+        pathlib.Path(fh.name).unlink(missing_ok=True)
+
+
+def render_custom(f, sid, e, i, t):
+    """自由设计元素：容器 x/y/w/h（内容裁剪在内），LLM 直出 html（必填）/css（自动
+    scope）/js（可选 GSAP 片段：T=揭示秒、ID=容器选择器、tl=时间线，入场自己负责）。
+    默认无 js 时整容器淡入；js 坏/含禁用模式 → 语法降级或跳过，不炸整段。"""
+    eid = f"{sid}-cx{i}"
+    html_body = str(e.get('html', '') or '')
+    css_raw = str(e.get('css', '') or '')
+    js_raw = str(e.get('js', '') or '')
+    label = str(e.get('text', '') or '').strip() or '自定义'
+    if not html_body.strip():
+        raise ValueError(f'custom#{i} 缺 html')
+    bad = _banned(html_body + css_raw)
+    if not bad and js_raw:
+        bad = _banned(js_raw, _BAN_JS)
+    if bad:
+        raise ValueError(f'custom#{i} 含禁用模式 {bad}')
+    style = ''
+    if css_raw.strip():
+        style = f'<style>{scope_css(css_raw, eid)}</style>'
+    js = ''
+    if js_raw.strip():
+        code = f'var T={t:.2f};var ID="#{eid}";\n{js_raw}'
+        if _js_ok(code):
+            js = code.replace('\n', '\n      ')
+        else:
+            print(f'{sid}: custom#{i} js 语法检查未过，降级静态淡入')
+    html = (f'<div class="{f}-el" id="{eid}" data-hf-name="自定义：{label[:12]}" '
+            f'style="top:{e["y"]}px;left:{e["x"]}px;width:{e.get("w", 560)}px;'
+            f'height:{e.get("h", 320)}px;overflow:hidden;">{style}{html_body}</div>')
+    return html, (js if js else sp.fade(f'#{eid}', t))
+
+
 def main(proj_dir: str) -> int:
     proj = pathlib.Path(proj_dir)
     sb = json.load(open(proj / 'storyboards' / 'storyboard.json', encoding='utf-8'))
@@ -705,7 +887,13 @@ def main(proj_dir: str) -> int:
                 continue
             htmls.append(h)
             jss.append(j)
-        full = sp.wrap(proj, PREFIX, sid, '\n    '.join(htmls), '\n      '.join(jss), W, H)
+        body_html = '\n    '.join(htmls)
+        body_js = '\n      '.join(jss)
+        cam = str((spec.get('camera') or '')).strip()
+        if cam in ANIM_CAMERA:  # 段级镜头缓推：内容包一层 cam（字幕带在 cam 外，保持不动）
+            body_html = f'<div id="{sid}-cam" style="position:absolute;inset:0;">{body_html}</div>'
+            body_js = f'{body_js}\n      {ANIM_CAMERA[cam](f"#{sid}-cam", meta["scene"][sid])}'
+        full = sp.wrap(proj, PREFIX, sid, body_html, body_js, W, H)
         payload = {'html': full, 'elements': extract_elements(full)}
         out = proj / 'llm' / f'comp-{sid}.json'
         json.dump(payload, open(out, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)

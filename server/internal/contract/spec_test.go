@@ -186,3 +186,83 @@ func TestValidateSpecQuoteChecklistStatDonut(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateSpecCustomAnimExitCamera(t *testing.T) {
+	cv := CanvasFor("16:9")
+	// custom + anim/exit/camera 合法
+	s := &CompSpec{
+		Camera: "zoom_in",
+		Elements: []SpecElement{
+			{Kind: "custom", X: 660, Y: 160, W: 600, H: 200, Text: "斜切大字板", Reveal: 0,
+				Html: `<div class="band"></div>`,
+				Css:  `.band{position:absolute;left:0;top:20px;width:100%;height:120px;background:#E30050;transform:skewY(-6deg);}`},
+			{Kind: "title", Y: 420, Text: "画面表达力", Reveal: 2, Anim: "chars"},
+			{Kind: "note", X: 300, Y: 560, Text: "讲完即退", Bg: "sky", Reveal: 3, Exit: 9, Anim: "slide"},
+		},
+	}
+	if errs := ValidateSpec(s, 20, cv); len(errs) != 0 {
+		t.Fatalf("custom/anim/exit/camera 合法布局被拒: %v", errs)
+	}
+	// custom 计入重叠豁免之外仍须守安全区：越界 custom 被拒
+	oob := &CompSpec{Elements: []SpecElement{
+		{Kind: "custom", X: 60, Y: 940, W: 600, H: 200, Text: "越界板", Html: "<b>x</b>"},
+		{Kind: "label", X: 300, Y: 400, Text: "标注"},
+		{Kind: "big", X: 500, Y: 600, Text: "100"},
+	}}
+	if errs := ValidateSpec(oob, 20, cv); len(errs) == 0 || !strings.Contains(strings.Join(errs, "\n"), "越出安全区") {
+		t.Fatalf("custom 越界应被拒: %v", errs)
+	}
+	// 违规矩阵：禁用模式/缺字段/超个数/anim 白名单/exit 顺序/camera 词表
+	bad := &CompSpec{
+		Camera: "fly_by",
+		Elements: []SpecElement{
+			{Kind: "custom", X: 100, Y: 100, W: 600, H: 160, Reveal: 0,
+				Html: `<div onclick="x()">hi</div>`},
+			{Kind: "custom", X: 100, Y: 300, W: 600, H: 160, Text: "坏js", Reveal: 1, Html: "<b>x</b>",
+				Css: `.b{position:fixed;top:0;}`,
+				Js:  `tl.to(ID,{opacity:1,repeat:3},T);`},
+			{Kind: "custom", X: 100, Y: 500, W: 600, H: 160, Text: "第三个", Reveal: 2, Html: "<b>x</b>"},
+			{Kind: "note", X: 900, Y: 300, Text: "普通", Reveal: 3, Anim: "spin", Exit: 2},
+			{Kind: "label", X: 1400, Y: 600, Text: "chars 用错对象", Anim: "chars"},
+			{Kind: "big", X: 500, Y: 700, Text: "100", Anim: "none"},
+		},
+	}
+	errs := ValidateSpec(bad, 20, cv)
+	joined := strings.Join(errs, "\n")
+	for _, want := range []string{"camera", "onclick", "position:fixed", "repeat", "缺 text", "超上限", "anim", "chars 仅", "须晚于 reveal"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("应包含 %q，得到: %v", want, errs)
+		}
+	}
+}
+
+func TestSanitizeSpecCustom(t *testing.T) {
+	cv := CanvasFor("16:9")
+	s := &CompSpec{Elements: []SpecElement{
+		{Kind: "custom", X: 5000, Y: 5000, Html: "<b>夹取</b>", Text: "板"},       // 越界 → 夹回
+		{Kind: "custom", X: 100, Y: 100, Html: "", Text: "缺html"},            // 缺 html → 删
+		{Kind: "unknown", X: 100, Y: 100},                                    // 未知 kind → 删
+		{Kind: "note", X: 300, Y: 400, Text: "普通便签", Reveal: 5, Exit: 99}, // exit 越界 → 夹到词尾
+	}}
+	SanitizeSpec(s, 20, cv)
+	n := 0
+	for _, e := range s.Elements {
+		if e.Kind == "custom" {
+			n++
+			if e.X < cv.X0 || e.Y < cv.Y0 {
+				t.Fatalf("custom 坐标未夹回安全区: %v,%v", e.X, e.Y)
+			}
+			if e.W == 0 || e.H == 0 {
+				t.Fatalf("custom 缺省尺寸未补: %v×%v", e.W, e.H)
+			}
+		}
+	}
+	if n != 1 {
+		t.Fatalf("应剩 1 个 custom，得到 %d（%+v）", n, s.Elements)
+	}
+	for _, e := range s.Elements {
+		if e.Kind == "note" && e.Exit != 19 {
+			t.Fatalf("note exit 应夹到词数-1=19，得到 %d", e.Exit)
+		}
+	}
+}

@@ -159,6 +159,30 @@ def stagger_grow(sel, t, step=.28, origin='center bottom'):
             f"      tl.to('{sel}',{{opacity:1,scaleY:1,duration:.38,stagger:{step},ease:'power2.out'}},{t:.2f});")
 
 
+# ── 动效词表 v2（slide/wipe/blur/退场；全部走 tl，seek 确定性，无 repeat/yoyo）──
+def slide(sel, t, dx=90):
+    """侧滑入场（dx 正=从右，负=从左）。"""
+    return (f"gsap.set('{sel}',{{opacity:0,x:{dx}}});\n      "
+            f"tl.to('{sel}',{{opacity:1,x:0,duration:.5,ease:'power3.out'}},{t:.2f});")
+
+
+def wipe(sel, t, dur=.55):
+    """clip-path 左→右揭示（斜切色带/大字板常用）。"""
+    return (f"gsap.set('{sel}',{{clipPath:'inset(0% 100% 0% 0%)'}});\n      "
+            f"tl.to('{sel}',{{clipPath:'inset(0% 0% 0% 0%)',duration:{dur},ease:'power2.inOut'}},{t:.2f});")
+
+
+def blur_in(sel, t, dur=.5):
+    """失焦到聚焦入场（氛围主视觉）。"""
+    return (f"gsap.set('{sel}',{{opacity:0,filter:'blur(14px)'}});\n      "
+            f"tl.to('{sel}',{{opacity:1,filter:'blur(0px)',duration:{dur},ease:'power2.out'}},{t:.2f});")
+
+
+def exit_fade(sel, t, dur=.35):
+    """退场：上飘淡出（讲完即退，给后续元素腾画面）。"""
+    return f"tl.to('{sel}',{{opacity:0,y:'-=14',duration:{dur},ease:'power1.in'}},{t:.2f});"
+
+
 # ── 元素 HTML 助手 ──────────────────────────────────────────
 def _norm(frame, id=None, prefix=None):
     """防呆：frame 误传项目路径等长串时，从 id（如 'b-l1'）或 prefix 推导真实前缀字母。"""

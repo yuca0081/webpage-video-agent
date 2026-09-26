@@ -583,12 +583,13 @@ scale ruler clipboard lightbulb-off zap-off anchor truck bike train bus ship sen
 ## 布局硬规则（校验器会拒收）
 %s
 - reveal 按讲解顺序递增、铺满词序（别堆在开头；最大词号 %d）
-- 语义呼应画面提示：主体物→image（实体名词首选）或 icon（抽象概念）；数据对比→chart_bar；趋势→chart_line；占比→chart_donut 或 chart_pie；对比→双色便签左右分置或 table；流程/步骤→timeline 或箭头串联；要点/卖点→checklist；金句/名言→quote；关键数字→stat 或 big；指向→barrow；向量/维度/批量→strip；分组圈注→zone(+bracket)；一屏最多一个图表（图表占主视觉位）
+- 动效增强（可选）：元素可加 anim 换入场（pop/fade/rise/slide/wipe=左→右揭示/blur=失焦聚焦/chars=逐字，仅 title·big/none=直出）与 exit=词序号（讲完该词退场，给后续元素腾画面；须大于 reveal）；段级顶层可加 camera（zoom_in/zoom_out/pan_left/pan_right/drift）整屏缓推，一屏最多一个，信息密集段别用
+- 语义呼应画面提示：主体物→image（实体名词首选）或 icon（抽象概念）；数据对比→chart_bar；趋势→chart_line；占比→chart_donut 或 chart_pie；对比→双色便签左右分置或 table；流程/步骤→timeline 或箭头串联；要点/卖点→checklist；金句/名言→quote；关键数字→stat 或 big；指向→barrow；向量/维度/批量→strip；分组圈注→zone(+bracket)；整屏氛围/斜切大字板/故障标题/纹理底→custom（每段≤2个，垫底放 elements 最前）；一屏最多一个图表（图表占主视觉位）
 - 画面丰富度（重要）：每屏至少一个视觉锚点（image / 大 icon / 图表 / big / panel 之一），大小拉开层次（主体 300px+、次级 120–200px），禁止全屏小元素平铺
 %s
 
 ## 输出（只输出 JSON，无围栏）
-{"note":"布局思路一句话","elements":[…]}
+{"note":"布局思路一句话","camera":"（可选）zoom_in/zoom_out/pan_left/pan_right/drift","elements":[…]}
 `, instrBlock, seg.Key, len(v.Words), v.DurationS, seg.Narration, briefLabel, seg.VisualBrief, style,
 		int(cv.W), int(cv.H), map[bool]string{true: " 竖屏 9:16", false: ""}[cv.Aspect == "9:16"],
 		menu,

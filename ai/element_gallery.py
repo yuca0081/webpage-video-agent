@@ -56,7 +56,7 @@ KIND_SPECS = {
                    'name': '风格注册表', 'reveal': 2},
     'checklist':  {'kind': 'checklist', 'x': 560, 'y': 220, 'nodes': ['暗底自动反白', '图表系列色', '相框质感'],
                    'gap': 150, 'reveal': 2},
-    'stat':       {'kind': 'stat', 'x': 640, 'y': 280, 'w': 640, 'text': '26 种', 'title': '元素积木', 'reveal': 2},
+    'stat':       {'kind': 'stat', 'x': 640, 'y': 280, 'w': 640, 'text': '27 种', 'title': '元素积木', 'reveal': 2},
     'label':      {'kind': 'label', 'x': 700, 'y': 400, 'text': '纯文字标注，不带底色', 'fs': 56, 'reveal': 2},
     'big':        {'kind': 'big', 'x': 700, 'y': 340, 'text': '3 秒', 'fs': 170, 'reveal': 2},
     'image':      {'kind': 'image', 'x': 660, 'y': 240, 'w': 600, 'h': 400, 'query': '星空',
@@ -75,6 +75,23 @@ KIND_SPECS = {
     'circle':     {'kind': 'circle', 'cx': 960, 'cy': 440, 'r': 44, 'fill': 'sky', 'reveal': 2},
     'beam':       {'kind': 'beam', 'x': 460, 'y': 420, 'w': 1000, 'h': 28, 'bg': 'sky', 'reveal': 2},
     'arrow':      {'kind': 'arrow', 'x1': 660, 'y1': 440, 'x2': 1260, 'y2': 440, 'reveal': 2},
+    'custom':     {'kind': 'custom', 'x': 470, 'y': 190, 'w': 980, 'h': 520, 'text': '斜切大字板',
+                   'anim': 'wipe', 'reveal': 2,
+                   'html': ('<div class="band"></div><div class="dot"></div>'
+                            '<div class="k">元素库<b>V2</b></div>'
+                            '<div class="sub">FREE-FORM LAYER</div>'),
+                   'css': ('.band{position:absolute;left:-60px;top:130px;width:1100px;height:240px;'
+                           'background:linear-gradient(105deg,#E30050 0%,#B388EB 100%);'
+                           'transform:skewY(-7deg);}'
+                           '.dot{position:absolute;right:-30px;top:-40px;width:340px;height:260px;'
+                           'background:radial-gradient(circle at 4px 4px,rgba(255,255,255,.9) 3px,'
+                           'transparent 4px) 0 0/26px 26px;}'
+                           '.k{position:absolute;left:52px;top:104px;font-size:132px;line-height:1;'
+                           'font-weight:900;font-style:italic;color:#FFFFFF;letter-spacing:2px;}'
+                           '.k b{color:#141A33;}'
+                           '.sub{position:absolute;left:58px;top:266px;font-size:34px;font-weight:700;'
+                           'letter-spacing:12px;color:rgba(255,255,255,.95);}'),
+                   },
 }
 # 多元素组合的 kind：补齐陪衬元素让画面成立（kind 语义才完整）
 COMPANIONS = {
@@ -93,7 +110,7 @@ OVERVIEW_SPEC = {
         {'kind': 'panel', 'x': 1180, 'y': 250, 'w': 560, 'h': 232, 'title': '元素质感', 'bg': 'mint',
          'text': '表面、描边与阴影随风格整套切换', 'reveal': 4},
         {'kind': 'stat', 'x': 170, 'y': 560, 'w': 420, 'text': '13 套', 'title': '注册风格包', 'reveal': 6},
-        {'kind': 'stat', 'x': 640, 'y': 560, 'w': 420, 'text': '26 种', 'title': '元素积木', 'reveal': 8},
+        {'kind': 'stat', 'x': 640, 'y': 560, 'w': 420, 'text': '27 种', 'title': '元素积木', 'reveal': 8},
         {'kind': 'chip', 'x': 1150, 'y': 580, 'text': '逐词高亮', 'bg': 'butter', 'reveal': 9},
     ],
 }
@@ -145,6 +162,8 @@ def build(style_ids):
         for k, kind in enumerate(order, 1):
             sid2 = f'seg{k:02d}'
             spec = {'note': f'{kind} 样张', 'elements': []}
+            if kind == 'custom':
+                spec['camera'] = 'zoom_in'  # 段级镜头缓推随 custom 样张一并演示
             if kind == '__overview':
                 spec = OVERVIEW_SPEC
             elif kind == 'label':
@@ -185,6 +204,19 @@ def sh(cmd, cwd=ROOT, timeout=3600):
                           timeout=timeout)
 
 
+def _inputs_mtime(p):
+    """样张 freshness 基准：specs + storyboard + audio_meta + 渲染代码/注册表。
+    只比 specs 会漏两类过期：registry 加 kind 后 storyboard 段数变了、渲染器代码变了——
+    旧 mp4 比 specs 新就被复用，按新 kind 数切旧段数成片 → 整组样张错位。"""
+    files = (list(p.glob('llm/comp-*.spec.json'))
+             + [p / 'storyboards' / 'storyboard.json', p / 'audio_meta.json',
+                ROOT / 'ai' / 'render_spec.py', ROOT / 'ai' / 'element_gallery.py',
+                ROOT / 'ai' / 'registry' / 'elements.json'])
+    files += list((ROOT / 'ai' / 'engines').glob('*.py'))
+    ts = [f.stat().st_mtime for f in files if f.exists()]
+    return max(ts) if ts else 0.0
+
+
 def frames(style_ids):
     styles = styles_map()
     ids = style_ids or list(styles)
@@ -195,14 +227,19 @@ def frames(style_ids):
         if not p.exists():
             print(f'{sid}: 未 build，跳过')
             continue
+        sb = json.load(open(p / 'storyboards' / 'storyboard.json', encoding='utf-8'))
+        if len(sb['segments']) != len(order):  # registry 加了 kind → 工程自愈重建
+            print(f'{sid}: 样张工程 {len(sb["segments"])} 段 ≠ {len(order)} kind，重建')
+            if build([sid]) != 0:
+                fails.append((sid, 'build'))
+                continue
         out_dir = GALLERY / sid
         out_dir.mkdir(parents=True, exist_ok=True)
         want = {k: out_dir / f'{"_overview" if k == "__overview" else k}.png' for k in order}
-        specs = sorted(p.glob('llm/comp-*.spec.json'))
+        fresh = _inputs_mtime(p)
+        have_all = all(f.exists() and f.stat().st_mtime > fresh for f in want.values())
         mp4 = p / 'renders' / 'main.mp4'
-        specs_mtime = max(f.stat().st_mtime for f in specs)
-        have_all = all(f.exists() and f.stat().st_mtime > specs_mtime for f in want.values())
-        if have_all and mp4.exists() and mp4.stat().st_mtime > specs_mtime:
+        if have_all and mp4.exists() and mp4.stat().st_mtime > fresh:
             print(f'{sid}: 样张未过期，跳过')
             continue
         r = sh([sys.executable, 'ai/render_spec.py', p])
@@ -220,7 +257,7 @@ def frames(style_ids):
         r = sh(['npx', '--offline', '--yes', 'hyperframes@0.8.55', 'check'], cwd=p)
         if r.returncode != 0 or 'Check passed' not in (r.stdout or ''):
             fails.append((sid, 'check')); print(f'{sid}: check FAIL\n{(r.stdout or "")[-800:]}'); continue
-        if not mp4.exists() or mp4.stat().st_mtime < specs_mtime:
+        if not mp4.exists() or mp4.stat().st_mtime < fresh:
             if mp4.exists():
                 mp4.unlink()
             r = sh(['npx', '--offline', '--yes', 'hyperframes@0.8.55', 'render', '-o', 'renders/main.mp4'],
