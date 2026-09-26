@@ -10,9 +10,10 @@ bash deploy/deploy.sh         # 日常发版
 前置（一次性）：
 
 1. **SSH 免密**：开发机 `ssh-copy-id root@47.94.247.12`（服务器只收 publickey）。
-2. **服务器 .env**（`--env` 上传即自动改写）：`PG_DSN`/`MINIO_ENDPOINT` 等本服务器地址
-   自动替换为 `127.0.0.1`（容器 host 网络，本机回环直连宿主机 PG/MinIO，不经安全组）；
+2. **服务器 .env**（`--env` 上传即自动改写）：`PG_DSN` 的 host 自动替换为 `127.0.0.1`
+   （容器 host 网络，本机回环直连宿主机 PG，不经安全组）；
    需有 `LLM_MODE=api`、`LLM_API_KEY`、`SILICONFLOW_API_KEY`（TTS 走 API 免本地模型）。
+   注意：PG 连不上时服务会拒绝启动（fail-fast）；容器内 ffmpeg 在 PATH，无需 FFMPEG_BIN。
 3. **服务器安全组**：放行 8080（试用访问入口）。
 
 形态与取舍：

@@ -1,12 +1,18 @@
 // server — 帧述 M1 HTTP 服务（API + SSE + Agent + 制作编排）。
 //
-//	cd server && go run ./cmd/server   （默认 :8080；DATA_DIR 相对 .env 解析，启动目录无关）
+//	cd server && go run ./cmd/server   （默认 127.0.0.1:8080 仅本机可调；DATA_DIR 相对 .env 解析，启动目录无关）
 package main
 
 import (
+	"context"
+	"errors"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -34,7 +40,10 @@ func main() {
 	pipeline.EnsureFFmpeg()
 	pipeline.SetRootDir(root)
 
-	st := store.Open(cfg.PGDSN)
+	st, err := store.Open(cfg.PGDSN)
+	if err != nil {
+		log.Fatal(err)
+	}
 	hub := events.NewHub()
 	lib := methodlib.New(cfg.DataDir)
 	producer := &produce.Runner{
@@ -47,6 +56,8 @@ func main() {
 	}
 	// 制作终态（成片/失败/取消）必须落进聊天框——异步管线跑完时对话轮早已结束
 	producer.OnDone = ag.NotifyResult
+	// 启动对账：上次进程死在制作中途的项目补写终态+聊天通知（必须先于任何新任务）
+	producer.Reconcile()
 	refs := styleref.NewStore(cfg.DataDir, root)
 	srv := &api.Server{
 		DataDir: cfg.DataDir, RootDir: root, Store: st, Hub: hub, Agent: ag, Producer: producer, Lib: lib, Refs: refs,
@@ -55,8 +66,26 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 	addr := os.Getenv("ADDR")
 	if addr == "" {
-		addr = ":8080"
+		// 默认只绑本机回环：鉴权未上前公网不可达；部署侧 Dockerfile 已显式 ADDR=:8080
+		addr = "127.0.0.1:8080"
 	}
+	httpSrv := &http.Server{Addr: addr, Handler: srv.Router()}
+	go func() {
+		if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatal(err)
+		}
+	}()
 	log.Printf("帧述 M1 服务启动 %s（store=%s llm_mode=%s data=%s）", addr, st.Kind(), cfg.LLMMode, cfg.DataDir)
-	log.Fatal(srv.Router().Run(addr))
+
+	// 优雅停机：先停止接请求，再取消运行中的制作/重做并等终态落盘
+	// （超时强退，残留 start 由下次启动 Reconcile 兜底）。
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	<-ctx.Done()
+	log.Println("收到停机信号，正在收尾…")
+	shutCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	_ = httpSrv.Shutdown(shutCtx)
+	producer.Shutdown(shutCtx)
+	log.Println("已退出")
 }

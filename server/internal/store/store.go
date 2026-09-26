@@ -1,5 +1,7 @@
 // Package store：元数据持久层（PostgreSQL，GORM 只作查询层不迁移表）。
-// PG 不可达时降级内存（仅本进程内聊天记录可用），启动时打警告。
+// PG_DSN 已配置却连不上 = 直接报错拒绝启动（fail-fast）：静默降级内存会丢全部
+// 聊天记录，且用户无感知。开发机临时没库：不配 PG_DSN（内存），或显式
+// STORE_FALLBACK=1 接受降级。
 package store
 
 import (
@@ -7,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"sync"
 	"time"
 
@@ -88,11 +91,12 @@ type Store interface {
 	Kind() string
 }
 
-// Open 先试 PG（3s 超时），失败降级内存。
-func Open(dsn string) Store {
+// Open 先试 PG（3s 超时）。未配 DSN = 内存模式（开发）；配了但连不上 = 报错，
+// 除非 STORE_FALLBACK=1 显式接受降级（重启丢聊天记录）。
+func Open(dsn string) (Store, error) {
 	if dsn == "" {
-		log.Println("[store] PG_DSN 未配置，用内存存储")
-		return newMem()
+		log.Println("[store] PG_DSN 未配置，用内存存储（重启丢聊天记录）")
+		return newMem(), nil
 	}
 	db, err := gorm.Open(postgres.New(postgres.Config{
 		DSN:                  dsn + " connect_timeout=3",
@@ -101,8 +105,11 @@ func Open(dsn string) Store {
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
-		log.Printf("[store] PG 连接失败（%v），降级内存存储", err)
-		return newMem()
+		if os.Getenv("STORE_FALLBACK") == "1" {
+			log.Printf("[store] PG 连接失败（%v），STORE_FALLBACK=1 显式降级内存存储", err)
+			return newMem(), nil
+		}
+		return nil, fmt.Errorf("PG 不可达（%v）：修好数据库再启动，或设 STORE_FALLBACK=1 显式接受内存模式（丢聊天记录）", err)
 	}
 	sqlDB, _ := db.DB()
 	if sqlDB != nil {
@@ -110,7 +117,7 @@ func Open(dsn string) Store {
 		sqlDB.SetConnMaxLifetime(time.Hour)
 	}
 	log.Println("[store] PG 已连接")
-	return &pgStore{db: db}
+	return &pgStore{db: db}, nil
 }
 
 type pgStore struct{ db *gorm.DB }

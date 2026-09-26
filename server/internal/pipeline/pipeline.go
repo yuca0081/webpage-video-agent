@@ -811,10 +811,24 @@ func SetRootDir(dir string) { rootDir = dir }
 func SetExtraPATH(dir string) { extraPATH = dir }
 
 // EnsureFFmpeg hyperframes check/render 与段片拼接需要 ffmpeg。
-// PATH 里没有就找 winget 安装目录并入 PATH（开发机场景；容器内 PATH 自带）。
+// PATH 里没有时：FFMPEG_BIN 指定的目录/可执行文件优先，否则扫 winget 安装目录
+// （开发机场景；容器/服务器内 PATH 自带或设 FFMPEG_BIN）。
 func EnsureFFmpeg() {
 	if _, err := exec.LookPath("ffmpeg"); err == nil {
 		return
+	}
+	if bin := os.Getenv("FFMPEG_BIN"); bin != "" {
+		dir := bin
+		if st, err := os.Stat(bin); err == nil && !st.IsDir() {
+			dir = filepath.Dir(bin)
+		}
+		if ffmpegIn(dir) {
+			os.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+			SetExtraPATH(dir)
+			fmt.Printf("[ffmpeg] 注入 PATH: %s\n", dir)
+			return
+		}
+		fmt.Printf("[ffmpeg] 警告：FFMPEG_BIN=%s 下没有 ffmpeg，回退 winget 扫描\n", bin)
 	}
 	const winget = `C:\Users\86151\AppData\Local\Microsoft\WinGet\Packages`
 	matches, _ := filepath.Glob(filepath.Join(winget, "Gyan.FFmpeg*", "ffmpeg-*", "bin"))
@@ -824,7 +838,16 @@ func EnsureFFmpeg() {
 		fmt.Printf("[ffmpeg] 注入 PATH: %s\n", matches[0])
 		return
 	}
-	fmt.Println("[ffmpeg] 警告：PATH 中找不到 ffmpeg，check/render 将失败（winget install Gyan.FFmpeg）")
+	fmt.Println("[ffmpeg] 警告：PATH 中找不到 ffmpeg，check/render 将失败（装 FFmpeg 或设 FFMPEG_BIN 指向 bin 目录）")
+}
+
+func ffmpegIn(dir string) bool {
+	for _, n := range []string{"ffmpeg", "ffmpeg.exe"} {
+		if _, err := os.Stat(filepath.Join(dir, n)); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // runCLI 在项目目录执行外部命令（hyperframes CLI 等），返回合并输出。

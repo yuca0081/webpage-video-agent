@@ -8,20 +8,15 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// Config 汇总运行时配置。M0 只依赖 DataDir 与 LLMMode；
-// PG/MinIO/Redis 的值先就位（原服务器 47.94.247.12），M1 接入。
+// Config 汇总运行时配置：DataDir / LLMMode / PG。
+// （MinIO/Redis 曾预留字段，从未接入——对象存储走本地磁盘卷，入库时再按需加回。）
 type Config struct {
 	DataDir string
 	LLMMode string // manual（会话模式·文件契约，M0 默认）| api（OpenAI 兼容 LLM：GLM 编码套餐/DeepSeek 等）
 
 	LLMKey string
 
-	PGDSN          string
-	MinIOEndpoint  string
-	MinIOAccessKey string
-	MinIOSecretKey string
-	MinIOBucket    string
-	RedisAddr      string
+	PGDSN string
 }
 
 func Load() (*Config, error) {
@@ -44,15 +39,10 @@ func Load() (*Config, error) {
 	}
 
 	c := &Config{
-		DataDir:        get("DATA_DIR", "data"),
-		LLMMode:        get("LLM_MODE", "manual"),
-		LLMKey:         get("LLM_API_KEY", os.Getenv("DEEPSEEK_API_KEY")),
-		PGDSN:          os.Getenv("PG_DSN"),
-		MinIOEndpoint:  get("MINIO_ENDPOINT", "47.94.247.12:9000"),
-		MinIOAccessKey: os.Getenv("MINIO_ACCESS_KEY"),
-		MinIOSecretKey: os.Getenv("MINIO_SECRET_KEY"),
-		MinIOBucket:    get("MINIO_BUCKET", "zhenshu"),
-		RedisAddr:      get("REDIS_ADDR", "47.94.247.12:6379"),
+		DataDir: get("DATA_DIR", "data"),
+		LLMMode: get("LLM_MODE", "manual"),
+		LLMKey:  get("LLM_API_KEY", os.Getenv("DEEPSEEK_API_KEY")),
+		PGDSN:   os.Getenv("PG_DSN"),
 	}
 
 	// 相对 DATA_DIR 相对 .env 所在目录解析，启动目录无关（envDir 为空=未找到 .env，退回 CWD）

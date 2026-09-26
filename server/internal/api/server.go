@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -36,6 +37,8 @@ type Server struct {
 	Producer *produce.Runner
 	Lib      *methodlib.Library
 	Refs     *styleref.Store
+
+	turnMu sync.Map // projectID → *sync.Mutex：同项目对话轮串行（见 chat）
 }
 
 func (s *Server) Router() *gin.Engine {
@@ -445,7 +448,15 @@ func (s *Server) chat(c *gin.Context) {
 	m := &store.Msg{ProjectID: id, Role: "user", Type: "text", Content: in.Content, Refs: in.Refs}
 	_ = s.Store.SaveMsg(m)
 	s.Hub.Emit(id, "msg", "", in.Content)
-	go s.Agent.Run(id, in.Content, in.Refs)
+	// 同项目对话轮互斥：连发两条消息会并发跑两个 Agent 循环，互相增删共享产物
+	// （如 update_storyboard 删 spec 时另一轮正读）。排队等上一轮结束，不拒绝。
+	mu, _ := s.turnMu.LoadOrStore(id, &sync.Mutex{})
+	go func() {
+		mu := mu.(*sync.Mutex)
+		mu.Lock()
+		defer mu.Unlock()
+		s.Agent.Run(id, in.Content, in.Refs)
+	}()
 	c.JSON(202, gin.H{"ok": true})
 }
 
@@ -766,8 +777,14 @@ func (s *Server) uploadReference(c *gin.Context) {
 		return
 	}
 	name := filepath.Base(fh.Filename)
-	if !strings.ContainsAny(name, ".") {
-		c.JSON(400, gin.H{"error": "文件名要有扩展名（mp4/mov/webm 等）"})
+	var refVideoExt = map[string]bool{".mp4": true, ".mov": true, ".webm": true, ".m4v": true}
+	if !refVideoExt[strings.ToLower(filepath.Ext(name))] {
+		c.JSON(400, gin.H{"error": "只支持 mp4/mov/webm/m4v 视频文件"})
+		return
+	}
+	const refVideoMax = 200 << 20 // 200MB：风格参考片段足够，防超大文件塞满磁盘
+	if fh.Size > refVideoMax {
+		c.JSON(400, gin.H{"error": "视频超过 200MB 上限，请先裁剪再上传"})
 		return
 	}
 	ref, err := s.Refs.Save(name, func(dst string) error {

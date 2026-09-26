@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	openai "github.com/sashabaranov/go-openai"
@@ -38,6 +40,9 @@ type Runner struct {
 	RootDir string // 仓库根（ai/ 脚本所在）
 	Hub     *events.Hub
 	OnDone  func(projectID, status, detail string) // 终态回写（status: video|failed|cancelled；detail 供聊天汇报失败原因等）
+
+	wg       sync.WaitGroup    // 在跑的制作/重做 goroutine（优雅停机等待终态落盘）
+	stopping atomic.Bool       // 停机中：取消语义从「用户取消」改「服务停机中断」
 }
 
 var (
@@ -58,19 +63,26 @@ func (r *Runner) Start(projectID string) (bool, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	running[projectID] = cancel
+	p.Manifest("produce.start", "") // 启动对账依据：有 start 无终态 = 进程死在中途（Reconcile 补写）
+	r.wg.Add(1)
 	go func() {
 		defer func() {
 			mu.Lock()
 			delete(running, projectID)
 			mu.Unlock()
+			r.wg.Done()
 		}()
 		err := r.run(ctx, p)
 		if errors.Is(err, context.Canceled) {
+			detail := "用户取消制作"
+			if r.stopping.Load() {
+				detail = "服务停机，制作中断（产物已保留，重启后重新开工即按段复用）"
+			}
 			r.emit(projectID, "stage", "pipeline", "cancelled")
-			r.emit(projectID, "cancelled", "", "用户取消制作")
-			r.Manifest(p, "produce.cancelled", "")
+			r.emit(projectID, "cancelled", "", detail)
+			r.Manifest(p, "produce.cancelled", detail)
 			if r.OnDone != nil {
-				r.OnDone(projectID, "cancelled", "用户取消制作")
+				r.OnDone(projectID, "cancelled", detail)
 			}
 			return
 		}
@@ -128,19 +140,25 @@ func (r *Runner) Rework(projectID, segID, instruction string) (bool, error) {
 		mu.Unlock()
 		return false, fmt.Errorf("分镜里没有段 %s", segID)
 	}
+	r.wg.Add(1)
 	go func() {
 		defer func() {
 			mu.Lock()
 			delete(running, projectID)
 			mu.Unlock()
+			r.wg.Done()
 		}()
 		err := r.runRework(ctx, p, seg, instruction)
 		if errors.Is(err, context.Canceled) {
+			detail := "用户取消重做"
+			if r.stopping.Load() {
+				detail = "服务停机，重做中断（该段旧画面仍在成片里，重启后可再重做）"
+			}
 			r.emit(projectID, "stage", "pipeline", "cancelled")
-			r.emit(projectID, "cancelled", "", "用户取消重做")
-			r.Manifest(p, "rework.cancelled", seg.ID)
+			r.emit(projectID, "cancelled", "", detail)
+			r.Manifest(p, "rework.cancelled", seg.ID+": "+detail)
 			if r.OnDone != nil {
-				r.OnDone(projectID, "cancelled", "用户取消重做")
+				r.OnDone(projectID, "cancelled", detail)
 			}
 			return
 		}
@@ -230,6 +248,75 @@ func (r *Runner) IsRunning(projectID string) bool {
 	defer mu.Unlock()
 	_, live := running[projectID]
 	return live
+}
+
+// Reconcile 启动对账：running 表在内存里，进程一死就空——manifest 里「有 start
+// 无终态」的项目会永远停在制作中，且 agent 读到的最近终态还是上一轮的（拿旧成片
+// 幻报完成）。启动时扫一遍补写终态 + 聊天通知，用户回来就知道该重新开工。
+// 必须在任何新任务 Start 之前调用（main 里启动 HTTP 前）。
+func (r *Runner) Reconcile() {
+	entries, err := os.ReadDir(filepath.Join(r.DataDir, "projects"))
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		id := e.Name()
+		p := pipeline.NewProject(r.DataDir, id)
+		b, err := os.ReadFile(p.Artifact("manifest.jsonl"))
+		if err != nil {
+			continue
+		}
+		started := "" // 最近一次 start 事件（produce.start / rework.start），遇到终态清空
+		for _, line := range strings.Split(string(b), "\n") {
+			var ev struct {
+				Event string `json:"event"`
+			}
+			if json.Unmarshal([]byte(line), &ev) != nil || ev.Event == "" {
+				continue
+			}
+			switch ev.Event {
+			case "produce.start", "rework.start":
+				started = ev.Event
+			case "produce.done", "produce.error", "produce.cancelled",
+				"rework.done", "rework.error", "rework.cancelled":
+				started = ""
+			}
+		}
+		if started == "" {
+			continue
+		}
+		what := "制作"
+		if strings.HasPrefix(started, "rework") {
+			what = "重做"
+		}
+		detail := fmt.Sprintf("上次服务重启时%s中断（产物已保留，重新开工即按段复用）", what)
+		r.Manifest(p, "produce.error", detail)
+		if r.OnDone != nil {
+			r.OnDone(id, "failed", detail)
+		}
+		log.Printf("[produce] 对账：%s %s中断，已补写终态\n", id, what)
+	}
+}
+
+// Shutdown 优雅停机：取消全部运行中的制作/重做，等它们把终态落盘（超时强退，
+// 残留 start 由下次启动 Reconcile 兜底）。
+func (r *Runner) Shutdown(ctx context.Context) {
+	r.stopping.Store(true)
+	mu.Lock()
+	for _, cancel := range running {
+		cancel()
+	}
+	mu.Unlock()
+	done := make(chan struct{})
+	go func() { r.wg.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-ctx.Done():
+		log.Println("[produce] 停机等待超时，强制退出（中断任务下次启动对账兜底）")
+	}
 }
 
 func (r *Runner) emit(id, typ, stage, detail string) {

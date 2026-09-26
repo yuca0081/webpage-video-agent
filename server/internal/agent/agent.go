@@ -816,7 +816,7 @@ func (a *Agent) formatRefs(p *pipeline.Project, refs []store.Ref) string {
 			line += fmt.Sprintf("「%s」", r.Key)
 		}
 		if r.T > 0 {
-			line += fmt.Sprintf(" · 全片 %.1fs（第 %d 帧）", r.T, int(r.T*30+0.5))
+			line += fmt.Sprintf(" · 全片 %.1fs（第 %d 帧）", r.T, int(r.T*contract.FPS+0.5))
 			if start, ok := starts[r.Idx]; ok && r.T >= start {
 				line += fmt.Sprintf("，该段第 %.1fs", r.T-start)
 			}
@@ -832,7 +832,7 @@ func (a *Agent) formatRefs(p *pipeline.Project, refs []store.Ref) string {
 	return b.String()
 }
 
-// segStarts 段起点表：audio duration_s + 0.35 尾垫累计（与 ai/assemble.py、前端 segtime.ts 同口径）；
+// segStarts 段起点表：audio duration_s + 尾垫累计（contract.SegTail 三端同口径）；
 // 无音频对齐产物时退回分镜 duration_hint。
 func segStarts(p *pipeline.Project) map[int]float64 {
 	sb, err := p.LoadStoryboard()
@@ -848,7 +848,7 @@ func segStarts(p *pipeline.Project) map[int]float64 {
 	}
 	if b, rerr := os.ReadFile(p.Artifact("audio_meta.json")); rerr == nil && json.Unmarshal(b, &meta) == nil {
 		for _, v := range meta.Voices {
-			durs[v.ID] = v.DurationS + 0.35
+			durs[v.ID] = v.DurationS + contract.SegTail
 		}
 	}
 	starts := map[int]float64{}
